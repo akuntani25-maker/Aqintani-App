@@ -963,6 +963,28 @@ async def get_my_orders(current_user: dict = Depends(get_current_user)):
     
     return orders
 
+@api_router.get("/canvassers/notifications")
+async def get_canvasser_notifications(current_user: dict = Depends(get_current_user)):
+    if current_user.get("role") != "canvasser":
+        raise HTTPException(status_code=403, detail="Canvasser access only")
+    
+    canvasser_id = current_user.get("canvasser_id")
+    if not canvasser_id:
+        return {"new_orders": 0, "pending_orders": 0, "total_remaining": 0}
+    
+    pending = await db.partner_orders.count_documents({"canvasser_id": canvasser_id, "status": "pending"})
+    
+    orders = await db.partner_orders.find(
+        {"canvasser_id": canvasser_id},
+        {"_id": 0, "remaining": 1}
+    ).to_list(1000)
+    total_remaining = sum(o.get("remaining", 0) for o in orders)
+    
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    new_today = await db.partner_orders.count_documents({"canvasser_id": canvasser_id, "date": today})
+    
+    return {"new_orders": new_today, "pending_orders": pending, "total_remaining": total_remaining}
+
 @api_router.post("/canvassers", response_model=Canvasser)
 async def create_canvasser(data: CanvasserCreate, admin: dict = Depends(require_admin)):
     canvasser_doc = {
