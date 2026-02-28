@@ -2,7 +2,7 @@ import React from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
-export const PrivateRoute = ({ children, requireAdmin = false }) => {
+export const PrivateRoute = ({ children, requireAdmin = false, requireCanvasser = false }) => {
   const { user, loading } = useAuth();
 
   if (loading) {
@@ -18,7 +18,11 @@ export const PrivateRoute = ({ children, requireAdmin = false }) => {
   }
 
   if (requireAdmin && user.role !== 'admin') {
-    return <Navigate to="/pos" replace />;
+    return <Navigate to={user.role === 'canvasser' ? '/canvasser' : '/pos'} replace />;
+  }
+
+  if (requireCanvasser && user.role !== 'canvasser') {
+    return <Navigate to={user.role === 'admin' ? '/admin/dashboard' : '/pos'} replace />;
   }
 
   return children;
