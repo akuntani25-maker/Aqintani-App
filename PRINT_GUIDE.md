@@ -74,30 +74,44 @@
 
 ---
 
-## 🖨️ Setting Printer di Windows
+## 🖨️ Setting Printer di Windows (Untuk Thermal 48mm)
 
-### Untuk EPSON D58UBT-S:
+### Untuk EPSON D58UBT-S (48mm):
+
+**Step 1: Install Driver**
+1. Download driver EPSON D58 dari website EPSON resmi
+2. Install driver sesuai instruksi
+3. Restart komputer jika diminta
+
+**Step 2: Set Custom Paper Size**
+1. Control Panel → Devices and Printers
+2. Right-click printer **EPSON D58UBT-S**
+3. Pilih **"Printing Preferences"**
+4. Tab **"Page Setup"** atau **"Paper"**
+5. Pilih **"Custom"** paper size
+6. Set ukuran:
+   - **Width: 48mm**
+   - **Height: 210mm** (atau Auto)
+7. Save as **"Thermal48mm"**
+8. Click OK
+
+**Step 3: Set as Default**
+1. Right-click printer EPSON D58UBT-S
+2. **"Set as default printer"**
+3. ✅ Done!
 
 **Via USB:**
 1. Colok kabel USB ke komputer
-2. Windows akan auto-install driver
-3. Jika tidak auto-install:
-   - Download driver EPSON D58 dari website EPSON
-   - Install driver
-   - Restart komputer
+2. Windows akan auto-detect
+3. Follow Step 2 & 3 di atas
 
 **Via Bluetooth:**
 1. Nyalakan Bluetooth printer (tekan tombol BT)
-2. Buka Settings → Bluetooth & Devices
+2. Windows Settings → Bluetooth & Devices
 3. Add Device → Bluetooth
 4. Pilih "EPSON D58" atau "D58UBT"
-5. Pair device
-
-**Set as Default Printer:**
-1. Settings → Printers & Scanners
-2. Klik printer EPSON D58UBT-S
-3. Klik "Set as default"
-4. ✅ Sekarang struk akan otomatis cetak ke printer ini!
+5. Pair device (PIN biasanya: 0000 atau 1234)
+6. Follow Step 2 & 3 di atas
 
 ---
 
