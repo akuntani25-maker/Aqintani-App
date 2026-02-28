@@ -714,7 +714,100 @@ async def pay_purchase(purchase_id: str, amount: float, admin: dict = Depends(re
         return_document=True,
         projection={"_id": 0}
     )
+    
+    # Record payment history
+    await db.payment_history.insert_one({
+        "id": str(uuid.uuid4()),
+        "type": "supplier",
+        "reference_id": purchase_id,
+        "supplier_id": purchase.get("supplier_id", ""),
+        "supplier_name": purchase.get("supplier_name", ""),
+        "amount": amount,
+        "notes": f"Pembayaran pembelian {purchase.get('id', '')}",
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "date": datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    })
+    
     return result
+
+@api_router.delete("/purchases/{purchase_id}")
+async def delete_purchase(purchase_id: str, admin: dict = Depends(require_admin)):
+    result = await db.purchases.delete_one({"id": purchase_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Purchase not found")
+    return {"message": "Purchase deleted"}
+
+# ============= PAYMENT HISTORY =============
+@api_router.get("/payment-history")
+async def get_payment_history(
+    type: Optional[str] = None,
+    reference_id: Optional[str] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    query = {}
+    if type:
+        query["type"] = type
+    if reference_id:
+        query["reference_id"] = reference_id
+    history = await db.payment_history.find(query, {"_id": 0}).sort("created_at", -1).to_list(1000)
+    return history
+
+@api_router.post("/partner-stores/{store_id}/pay")
+async def pay_partner_store(store_id: str, amount: float, notes: str = "", admin: dict = Depends(require_admin)):
+    store = await db.partner_stores.find_one({"id": store_id})
+    if not store:
+        raise HTTPException(status_code=404, detail="Partner store not found")
+    
+    new_debt = max(0, store.get("current_debt", 0) - amount)
+    await db.partner_stores.update_one(
+        {"id": store_id},
+        {"$set": {"current_debt": new_debt}}
+    )
+    
+    payment_doc = {
+        "id": str(uuid.uuid4()),
+        "type": "partner_store",
+        "reference_id": store_id,
+        "partner_store_name": store["name"],
+        "amount": amount,
+        "notes": notes or f"Setoran dari {store['name']}",
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "date": datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    }
+    await db.payment_history.insert_one(payment_doc)
+    
+    return {"message": "Payment recorded", "new_debt": new_debt, "payment": {k: v for k, v in payment_doc.items() if k != "_id"}}
+
+@api_router.get("/partner-stores/{store_id}/payments")
+async def get_partner_store_payments(store_id: str, current_user: dict = Depends(get_current_user)):
+    payments = await db.payment_history.find(
+        {"type": "partner_store", "reference_id": store_id},
+        {"_id": 0}
+    ).sort("created_at", -1).to_list(1000)
+    return payments
+
+@api_router.get("/suppliers/{supplier_id}/payments")
+async def get_supplier_payments(supplier_id: str, current_user: dict = Depends(get_current_user)):
+    payments = await db.payment_history.find(
+        {"type": "supplier", "supplier_id": supplier_id},
+        {"_id": 0}
+    ).sort("created_at", -1).to_list(1000)
+    return payments
+
+# ============= SUPPLIER DEBT SUMMARY =============
+@api_router.get("/suppliers/{supplier_id}/debt")
+async def get_supplier_debt(supplier_id: str, admin: dict = Depends(require_admin)):
+    purchases = await db.purchases.find({"supplier_id": supplier_id}, {"_id": 0}).to_list(1000)
+    total_purchases = sum(p.get("total", 0) for p in purchases)
+    total_paid = sum(p.get("paid", 0) for p in purchases)
+    total_remaining = total_purchases - total_paid
+    return {
+        "supplier_id": supplier_id,
+        "total_purchases": total_purchases,
+        "total_paid": total_paid,
+        "total_remaining": total_remaining,
+        "purchase_count": len(purchases)
+    }
 
 # ============= PARTNER STORES (Kios Mitra) =============
 @api_router.get("/partner-stores", response_model=List[PartnerStore])
