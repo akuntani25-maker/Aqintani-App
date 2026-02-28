@@ -20,6 +20,12 @@ export const Canvassers = () => {
     vehicle_number: '',
     vehicle_type: 'Mobil Box'
   });
+  const [createLoginDialogOpen, setCreateLoginDialogOpen] = useState(false);
+  const [selectedCanvasser, setSelectedCanvasser] = useState(null);
+  const [loginData, setLoginData] = useState({
+    email: '',
+    password: ''
+  });
 
   useEffect(() => {
     fetchCanvassers();
