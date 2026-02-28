@@ -195,20 +195,21 @@ dibeli tidak dapat
 
 ## 🔧 Troubleshooting
 
-### Printer tidak terdeteksi
+### Struk terpotong / tidak pas di kertas 48mm
 **Solusi:**
-1. Pastikan printer ON dan terhubung
-2. Check di Settings → Printers & Scanners
-3. Pastikan status "Ready"
-4. Restart printer jika perlu
-5. Refresh browser (F5)
+1. Di aplikasi: Pastikan sudah pilih **48mm** di Settings → Printer
+2. Di Windows: Set custom paper size 48mm x 210mm di Printing Preferences
+3. Di dialog print: Pilih paper size "Thermal48mm" atau "Custom"
+4. Set margins: Minimum (1-2mm)
+5. Orientation: Portrait
+6. Scale: 100% (jangan zoom in/out)
 
-### Struk terpotong
+### Font terlalu besar untuk thermal 48mm
 **Solusi:**
-1. Pilih ukuran kertas yang sesuai (58mm untuk thermal)
-2. Set orientation: Portrait
-3. Set margins: Minimum
-4. Uncheck "Headers and footers"
+1. Pastikan pilih ukuran **48mm** di aplikasi (bukan 58mm atau A4)
+2. Browser zoom harus 100% (Ctrl+0)
+3. Di print preview, pilih "More settings" → Scale: 100%
+4. Jika masih terlalu besar, coba scale 90-95%
 
 ### Print lambat
 **Solusi:**
