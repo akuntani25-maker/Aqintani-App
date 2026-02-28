@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { toast } from 'sonner';
 import { Search, Plus, Minus, Trash2, ShoppingCart, LogOut, CreditCard, Banknote, Smartphone, Printer } from 'lucide-react';
 import { useReactToPrint } from 'react-to-print';
+import ThermalPrinter from '../utils/ThermalPrinter';
 
 const Receipt = React.forwardRef(({ transaction }, ref) => {
   if (!transaction) return null;
