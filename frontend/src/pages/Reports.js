@@ -61,7 +61,7 @@ export const Reports = () => {
     const doc = new jsPDF();
     
     doc.setFontSize(18);
-    doc.text('AgriPharma POS', 105, 20, { align: 'center' });
+    doc.text('UD. AQIN TANI', 105, 20, { align: 'center' });
     doc.setFontSize(12);
     doc.text(
       reportData.type === 'daily' 
