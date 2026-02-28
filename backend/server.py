@@ -854,6 +854,22 @@ async def get_canvassers(current_user: dict = Depends(get_current_user)):
     canvassers = await db.canvassers.find({}, {"_id": 0}).sort("name", 1).to_list(1000)
     return canvassers
 
+@api_router.get("/canvassers/my-orders", response_model=List[PartnerOrder])
+async def get_my_orders(current_user: dict = Depends(get_current_user)):
+    if current_user.get("role") != "canvasser":
+        raise HTTPException(status_code=403, detail="Canvasser access only")
+    
+    canvasser_id = current_user.get("canvasser_id")
+    if not canvasser_id:
+        raise HTTPException(status_code=400, detail="Canvasser ID not found")
+    
+    orders = await db.partner_orders.find(
+        {"canvasser_id": canvasser_id},
+        {"_id": 0}
+    ).sort("created_at", -1).to_list(1000)
+    
+    return orders
+
 @api_router.post("/canvassers", response_model=Canvasser)
 async def create_canvasser(data: CanvasserCreate, admin: dict = Depends(require_admin)):
     canvasser_doc = {
