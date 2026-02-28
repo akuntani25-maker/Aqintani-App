@@ -217,6 +217,101 @@ class ProfileUpdate(BaseModel):
     current_password: Optional[str] = None
     new_password: Optional[str] = None
 
+class StoreSettings(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    store_name: str
+    address: str
+    phone: str
+    email: str
+    logo_url: Optional[str] = ""
+
+class PurchaseCreate(BaseModel):
+    supplier_id: str
+    items: List[Dict[str, Any]]
+    total: float
+    paid: float = 0
+    notes: Optional[str] = ""
+
+class Purchase(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str
+    supplier_id: str
+    supplier_name: str
+    items: List[Dict[str, Any]]
+    total: float
+    paid: float
+    remaining: float
+    notes: str
+    created_at: str
+    date: str
+
+class PartnerStoreCreate(BaseModel):
+    name: str
+    owner_name: str
+    phone: str
+    address: str
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    credit_limit: float = 0
+
+class PartnerStore(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str
+    name: str
+    owner_name: str
+    phone: str
+    address: str
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    credit_limit: float
+    current_debt: float
+    created_at: str
+
+class PartnerOrderCreate(BaseModel):
+    partner_store_id: str
+    items: List[TransactionItem]
+    subtotal: float
+    discount: float = 0
+    total: float
+    paid: float = 0
+    delivery_date: Optional[str] = ""
+    canvasser_id: Optional[str] = ""
+
+class PartnerOrder(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str
+    order_number: str
+    partner_store_id: str
+    partner_store_name: str
+    items: List[TransactionItem]
+    subtotal: float
+    discount: float
+    total: float
+    paid: float
+    remaining: float
+    delivery_date: str
+    canvasser_id: str
+    canvasser_name: str
+    status: str
+    created_at: str
+    date: str
+
+class CanvasserCreate(BaseModel):
+    name: str
+    phone: str
+    vehicle_number: str
+    vehicle_type: str = "Mobil Box"
+
+class Canvasser(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str
+    name: str
+    phone: str
+    vehicle_number: str
+    vehicle_type: str
+    is_active: bool
+    created_at: str
+
 @api_router.put("/auth/profile", response_model=User)
 async def update_profile(profile_data: ProfileUpdate, current_user: dict = Depends(get_current_user)):
     update_fields = {}
