@@ -639,6 +639,277 @@ async def delete_user(user_id: str, admin: dict = Depends(require_admin)):
         raise HTTPException(status_code=404, detail="User not found")
     return {"message": "User deleted"}
 
+# ============= STORE SETTINGS =============
+@api_router.get("/store-settings")
+async def get_store_settings(current_user: dict = Depends(get_current_user)):
+    settings = await db.store_settings.find_one({}, {"_id": 0})
+    if not settings:
+        # Return default settings
+        return {
+            "store_name": "UD. AQIN TANI",
+            "address": "Jl. Contoh No. 123, Kota Anda",
+            "phone": "(021) 1234-5678",
+            "email": "info@aqintani.com",
+            "logo_url": ""
+        }
+    return settings
+
+@api_router.put("/store-settings")
+async def update_store_settings(settings: StoreSettings, admin: dict = Depends(require_admin)):
+    settings_doc = settings.model_dump()
+    await db.store_settings.delete_many({})
+    await db.store_settings.insert_one(settings_doc)
+    return settings_doc
+
+# ============= PURCHASES (from Suppliers) =============
+@api_router.get("/purchases")
+async def get_purchases(
+    supplier_id: Optional[str] = None,
+    admin: dict = Depends(require_admin)
+):
+    query = {}
+    if supplier_id:
+        query["supplier_id"] = supplier_id
+    purchases = await db.purchases.find(query, {"_id": 0}).sort("created_at", -1).to_list(1000)
+    return purchases
+
+@api_router.post("/purchases", response_model=Purchase)
+async def create_purchase(data: PurchaseCreate, admin: dict = Depends(require_admin)):
+    supplier = await db.suppliers.find_one({"id": data.supplier_id}, {"_id": 0})
+    if not supplier:
+        raise HTTPException(status_code=404, detail="Supplier not found")
+    
+    now = datetime.now(timezone.utc)
+    purchase_doc = {
+        "id": str(uuid.uuid4()),
+        "supplier_id": data.supplier_id,
+        "supplier_name": supplier["name"],
+        "items": data.items,
+        "total": data.total,
+        "paid": data.paid,
+        "remaining": data.total - data.paid,
+        "notes": data.notes,
+        "created_at": now.isoformat(),
+        "date": now.strftime("%Y-%m-%d")
+    }
+    
+    await db.purchases.insert_one(purchase_doc)
+    return purchase_doc
+
+@api_router.post("/purchases/{purchase_id}/pay")
+async def pay_purchase(purchase_id: str, amount: float, admin: dict = Depends(require_admin)):
+    purchase = await db.purchases.find_one({"id": purchase_id})
+    if not purchase:
+        raise HTTPException(status_code=404, detail="Purchase not found")
+    
+    new_paid = purchase["paid"] + amount
+    new_remaining = purchase["total"] - new_paid
+    
+    result = await db.purchases.find_one_and_update(
+        {"id": purchase_id},
+        {"$set": {"paid": new_paid, "remaining": new_remaining}},
+        return_document=True,
+        projection={"_id": 0}
+    )
+    return result
+
+# ============= PARTNER STORES (Kios Mitra) =============
+@api_router.get("/partner-stores", response_model=List[PartnerStore])
+async def get_partner_stores(current_user: dict = Depends(get_current_user)):
+    stores = await db.partner_stores.find({}, {"_id": 0}).sort("name", 1).to_list(1000)
+    return stores
+
+@api_router.post("/partner-stores", response_model=PartnerStore)
+async def create_partner_store(data: PartnerStoreCreate, admin: dict = Depends(require_admin)):
+    store_doc = {
+        "id": str(uuid.uuid4()),
+        **data.model_dump(),
+        "current_debt": 0,
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.partner_stores.insert_one(store_doc)
+    return store_doc
+
+@api_router.put("/partner-stores/{store_id}", response_model=PartnerStore)
+async def update_partner_store(store_id: str, data: PartnerStoreCreate, admin: dict = Depends(require_admin)):
+    result = await db.partner_stores.find_one_and_update(
+        {"id": store_id},
+        {"$set": data.model_dump()},
+        return_document=True,
+        projection={"_id": 0}
+    )
+    if not result:
+        raise HTTPException(status_code=404, detail="Partner store not found")
+    return result
+
+@api_router.delete("/partner-stores/{store_id}")
+async def delete_partner_store(store_id: str, admin: dict = Depends(require_admin)):
+    result = await db.partner_stores.delete_one({"id": store_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Partner store not found")
+    return {"message": "Partner store deleted"}
+
+# ============= PARTNER ORDERS =============
+@api_router.get("/partner-orders", response_model=List[PartnerOrder])
+async def get_partner_orders(
+    partner_store_id: Optional[str] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    query = {}
+    if partner_store_id:
+        query["partner_store_id"] = partner_store_id
+    orders = await db.partner_orders.find(query, {"_id": 0}).sort("created_at", -1).to_list(1000)
+    return orders
+
+@api_router.post("/partner-orders", response_model=PartnerOrder)
+async def create_partner_order(data: PartnerOrderCreate, current_user: dict = Depends(get_current_user)):
+    partner_store = await db.partner_stores.find_one({"id": data.partner_store_id}, {"_id": 0})
+    if not partner_store:
+        raise HTTPException(status_code=404, detail="Partner store not found")
+    
+    canvasser_name = ""
+    if data.canvasser_id:
+        canvasser = await db.canvassers.find_one({"id": data.canvasser_id}, {"_id": 0})
+        if canvasser:
+            canvasser_name = canvasser["name"]
+    
+    now = datetime.now(timezone.utc)
+    order_number = f"PO{now.strftime('%Y%m%d%H%M%S')}"
+    
+    order_doc = {
+        "id": str(uuid.uuid4()),
+        "order_number": order_number,
+        "partner_store_id": data.partner_store_id,
+        "partner_store_name": partner_store["name"],
+        "items": [item.model_dump() for item in data.items],
+        "subtotal": data.subtotal,
+        "discount": data.discount,
+        "total": data.total,
+        "paid": data.paid,
+        "remaining": data.total - data.paid,
+        "delivery_date": data.delivery_date or now.strftime("%Y-%m-%d"),
+        "canvasser_id": data.canvasser_id or "",
+        "canvasser_name": canvasser_name,
+        "status": "pending",
+        "created_at": now.isoformat(),
+        "date": now.strftime("%Y-%m-%d")
+    }
+    
+    await db.partner_orders.insert_one(order_doc)
+    
+    # Update partner store debt
+    new_debt = partner_store.get("current_debt", 0) + order_doc["remaining"]
+    await db.partner_stores.update_one(
+        {"id": data.partner_store_id},
+        {"$set": {"current_debt": new_debt}}
+    )
+    
+    return order_doc
+
+@api_router.put("/partner-orders/{order_id}/status")
+async def update_order_status(order_id: str, status: str, current_user: dict = Depends(get_current_user)):
+    result = await db.partner_orders.find_one_and_update(
+        {"id": order_id},
+        {"$set": {"status": status}},
+        return_document=True,
+        projection={"_id": 0}
+    )
+    if not result:
+        raise HTTPException(status_code=404, detail="Order not found")
+    return result
+
+@api_router.post("/partner-orders/{order_id}/pay")
+async def pay_partner_order(order_id: str, amount: float, current_user: dict = Depends(get_current_user)):
+    order = await db.partner_orders.find_one({"id": order_id})
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    
+    new_paid = order["paid"] + amount
+    new_remaining = order["total"] - new_paid
+    
+    result = await db.partner_orders.find_one_and_update(
+        {"id": order_id},
+        {"$set": {"paid": new_paid, "remaining": new_remaining}},
+        return_document=True,
+        projection={"_id": 0}
+    )
+    
+    # Update partner store debt
+    partner_store = await db.partner_stores.find_one({"id": order["partner_store_id"]})
+    if partner_store:
+        new_debt = max(0, partner_store.get("current_debt", 0) - amount)
+        await db.partner_stores.update_one(
+            {"id": order["partner_store_id"]},
+            {"$set": {"current_debt": new_debt}}
+        )
+    
+    return result
+
+# ============= CANVASSERS =============
+@api_router.get("/canvassers", response_model=List[Canvasser])
+async def get_canvassers(current_user: dict = Depends(get_current_user)):
+    canvassers = await db.canvassers.find({}, {"_id": 0}).sort("name", 1).to_list(1000)
+    return canvassers
+
+@api_router.post("/canvassers", response_model=Canvasser)
+async def create_canvasser(data: CanvasserCreate, admin: dict = Depends(require_admin)):
+    canvasser_doc = {
+        "id": str(uuid.uuid4()),
+        **data.model_dump(),
+        "is_active": True,
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    await db.canvassers.insert_one(canvasser_doc)
+    return canvasser_doc
+
+@api_router.put("/canvassers/{canvasser_id}", response_model=Canvasser)
+async def update_canvasser(canvasser_id: str, data: CanvasserCreate, admin: dict = Depends(require_admin)):
+    result = await db.canvassers.find_one_and_update(
+        {"id": canvasser_id},
+        {"$set": data.model_dump()},
+        return_document=True,
+        projection={"_id": 0}
+    )
+    if not result:
+        raise HTTPException(status_code=404, detail="Canvasser not found")
+    return result
+
+@api_router.delete("/canvassers/{canvasser_id}")
+async def delete_canvasser(canvasser_id: str, admin: dict = Depends(require_admin)):
+    result = await db.canvassers.delete_one({"id": canvasser_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Canvasser not found")
+    return {"message": "Canvasser deleted"}
+
+# ============= PRODUCT ANALYTICS =============
+@api_router.get("/analytics/products")
+async def get_product_analytics(admin: dict = Depends(require_admin)):
+    # Fast moving products (top 10 by sales quantity in last 30 days)
+    thirty_days_ago = (datetime.now(timezone.utc) - timedelta(days=30)).strftime("%Y-%m-%d")
+    
+    transactions = await db.transactions.find(
+        {"date": {"$gte": thirty_days_ago}},
+        {"_id": 0, "items": 1}
+    ).to_list(10000)
+    
+    product_sales = {}
+    for trans in transactions:
+        for item in trans.get("items", []):
+            pid = item.get("product_id")
+            if pid:
+                if pid not in product_sales:
+                    product_sales[pid] = {"id": pid, "name": item.get("product_name"), "quantity": 0, "revenue": 0}
+                product_sales[pid]["quantity"] += item.get("quantity", 0)
+                product_sales[pid]["revenue"] += item.get("subtotal", 0)
+    
+    fast_moving = sorted(product_sales.values(), key=lambda x: x["quantity"], reverse=True)[:10]
+    slow_moving = sorted(product_sales.values(), key=lambda x: x["quantity"])[:10]
+    
+    return {
+        "fast_moving": fast_moving,
+        "slow_moving": slow_moving
+    }
+
 app.include_router(api_router)
 
 app.add_middleware(
