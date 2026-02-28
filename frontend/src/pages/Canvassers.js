@@ -346,10 +346,68 @@ export const Canvassers = () => {
             <p className="text-sm text-blue-800">
               Kelola data kanvaser dan armada untuk pengiriman ke kios mitra. 
               Setiap pesanan dapat diassign ke kanvaser tertentu untuk tracking pengiriman.
+              Klik icon <Key className="w-3 h-3 inline" /> untuk membuat akun login kanvaser.
             </p>
           </div>
         </div>
       </Card>
+
+      {/* Create Login Dialog */}
+      <Dialog open={createLoginDialogOpen} onOpenChange={setCreateLoginDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Buat Akun Login Kanvaser</DialogTitle>
+          </DialogHeader>
+          {selectedCanvasser && (
+            <div className="space-y-4">
+              <div className="p-4 bg-accent rounded-lg">
+                <p className="text-sm text-muted-foreground">Kanvaser</p>
+                <p className="font-semibold">{selectedCanvasser.name}</p>
+                <p className="text-sm text-muted-foreground">{selectedCanvasser.phone}</p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="login-email">Email Login</Label>
+                <Input
+                  id="login-email"
+                  type="email"
+                  value={loginData.email}
+                  onChange={(e) => setLoginData({ ...loginData, email: e.target.value })}
+                  placeholder="kanvaser@aqintani.com"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="login-password">Password</Label>
+                <Input
+                  id="login-password"
+                  type="password"
+                  value={loginData.password}
+                  onChange={(e) => setLoginData({ ...loginData, password: e.target.value })}
+                  placeholder="Minimal 6 karakter"
+                />
+              </div>
+
+              <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
+                <p className="text-sm text-blue-800">
+                  💡 Kanvaser dapat login di aplikasi untuk melihat pesanan yang diassign, 
+                  update status delivery, dan catat pembayaran dari kios mitra.
+                </p>
+              </div>
+
+              <div className="flex gap-2 justify-end">
+                <Button variant="outline" onClick={() => setCreateLoginDialogOpen(false)}>
+                  Batal
+                </Button>
+                <Button onClick={submitCreateLogin}>
+                  <Key className="w-4 h-4 mr-2" />
+                  Buat Akun
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
