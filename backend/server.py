@@ -192,6 +192,7 @@ async def register(user_data: UserCreate, admin: dict = Depends(require_admin)):
         "password": hash_password(user_data.password),
         "name": user_data.name,
         "role": user_data.role,
+        "canvasser_id": user_data.canvasser_id,
         "created_at": datetime.now(timezone.utc).isoformat()
     }
     
