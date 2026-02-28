@@ -98,13 +98,13 @@ export const Login = () => {
           </div>
 
           <div>
-            <h2 className="text-2xl font-semibold tracking-tight text-foreground">Selamat Datang</h2>
-            <p className="text-sm text-muted-foreground mt-2">Masuk ke akun Anda untuk melanjutkan</p>
+            <h2 className="text-3xl font-bold tracking-tight text-foreground">Selamat Datang</h2>
+            <p className="text-base text-muted-foreground mt-2">Masuk ke akun Anda untuk melanjutkan</p>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-6" data-testid="login-form">
             <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
+              <Label htmlFor="email" className="text-sm font-medium">Email</Label>
               <Input
                 id="email"
                 type="email"
@@ -113,12 +113,12 @@ export const Login = () => {
                 onChange={(e) => setEmail(e.target.value)}
                 required
                 data-testid="login-email-input"
-                className="h-11"
+                className="h-12 text-base rounded-xl border-2"
               />
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
+              <Label htmlFor="password" className="text-sm font-medium">Password</Label>
               <Input
                 id="password"
                 type="password"
@@ -127,33 +127,33 @@ export const Login = () => {
                 onChange={(e) => setPassword(e.target.value)}
                 required
                 data-testid="login-password-input"
-                className="h-11"
+                className="h-12 text-base rounded-xl border-2"
               />
             </div>
 
             <Button
               type="submit"
-              className="w-full h-11"
+              className="w-full h-12 text-base rounded-xl shadow-lg shadow-primary/20 hover:shadow-xl hover:shadow-primary/30"
               disabled={loading}
               data-testid="login-submit-button"
             >
               {loading ? (
                 <span className="flex items-center gap-2">
-                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
                   Memproses...
                 </span>
               ) : (
                 <span className="flex items-center gap-2">
-                  <LogIn className="w-4 h-4" />
+                  <LogIn className="w-5 h-5" />
                   Masuk
                 </span>
               )}
             </Button>
           </form>
 
-          <div className="mt-6 p-4 bg-accent rounded-lg border border-border">
-            <p className="text-xs text-muted-foreground mb-2 font-medium">Akun Demo:</p>
-            <p className="text-sm text-foreground">Admin: admin@agripharma.com / admin123</p>
+          <div className="mt-8 p-5 bg-gradient-to-br from-accent to-accent/50 rounded-2xl border-2 border-primary/10">
+            <p className="text-xs text-muted-foreground mb-2 font-semibold uppercase tracking-wide">Akun Demo:</p>
+            <p className="text-sm text-foreground font-medium">admin@agripharma.com / admin123</p>
           </div>
         </div>
       </div>
