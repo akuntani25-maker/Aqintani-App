@@ -24,6 +24,8 @@ export const Login = () => {
       
       if (user.role === 'admin') {
         navigate('/admin/dashboard');
+      } else if (user.role === 'canvasser') {
+        navigate('/canvasser');
       } else {
         navigate('/pos');
       }
