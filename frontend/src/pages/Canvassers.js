@@ -306,6 +306,15 @@ export const Canvassers = () => {
                         <Button
                           size="sm"
                           variant="ghost"
+                          onClick={() => handleCreateLogin(canvasser)}
+                          data-testid={`create-login-${canvasser.id}`}
+                          title="Buat Akun Login"
+                        >
+                          <Key className="w-4 h-4 text-primary" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
                           onClick={() => handleEdit(canvasser)}
                           data-testid={`edit-canvasser-${canvasser.id}`}
                         >
