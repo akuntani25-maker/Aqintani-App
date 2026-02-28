@@ -67,6 +67,7 @@ class UserCreate(BaseModel):
     password: str
     name: str
     role: str = "cashier"
+    canvasser_id: Optional[str] = None
 
 class UserLogin(BaseModel):
     email: EmailStr
@@ -78,6 +79,7 @@ class User(BaseModel):
     email: str
     name: str
     role: str
+    canvasser_id: Optional[str] = None
     created_at: str
 
 class TokenResponse(BaseModel):
