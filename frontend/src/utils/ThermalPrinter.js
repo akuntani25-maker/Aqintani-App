@@ -32,9 +32,12 @@ class ThermalPrinter {
 
       this.device = await navigator.usb.requestDevice({
         filters: [
-          { vendorId: 0x0416 }, // Common thermal printer vendor IDs
+          { vendorId: 0x04b8 }, // EPSON
+          { vendorId: 0x0416 }, // Common thermal printer
           { vendorId: 0x0483 },
           { vendorId: 0x1a86 },
+          { vendorId: 0x067b }, // Prolific
+          { vendorId: 0x1504 }, // Other thermal printers
         ]
       });
 
