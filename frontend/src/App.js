@@ -13,6 +13,7 @@ import { Users } from './pages/Users';
 import { Profile } from './pages/Profile';
 import { Settings } from './pages/Settings';
 import { POS } from './pages/POS';
+import { ReceiptPreview } from './pages/ReceiptPreview';
 import { Toaster } from './components/ui/sonner';
 import './App.css';
 
@@ -42,6 +43,12 @@ function App() {
           <Route path="/pos" element={
             <PrivateRoute>
               <POS />
+            </PrivateRoute>
+          } />
+
+          <Route path="/receipt-preview" element={
+            <PrivateRoute>
+              <ReceiptPreview />
             </PrivateRoute>
           } />
 
