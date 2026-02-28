@@ -212,9 +212,26 @@ export const POS = () => {
       setLastTransaction(response.data);
       toast.success('Transaksi berhasil!');
       
-      setTimeout(() => {
-        handlePrint();
-      }, 500);
+      // Auto print dengan thermal printer jika terhubung dan auto print aktif
+      const autoPrint = localStorage.getItem('autoPrint') === 'true';
+      if (autoPrint && thermalPrinter.isConnected()) {
+        try {
+          const printSuccess = await thermalPrinter.printReceipt(response.data);
+          if (printSuccess) {
+            toast.success('Struk dicetak ke printer thermal');
+          } else {
+            toast.warning('Gagal cetak ke thermal printer, gunakan print biasa');
+            setTimeout(() => handlePrint(), 500);
+          }
+        } catch (error) {
+          console.error('Thermal print error:', error);
+          toast.warning('Print thermal gagal, gunakan print biasa');
+          setTimeout(() => handlePrint(), 500);
+        }
+      } else {
+        // Fallback ke print biasa jika thermal printer tidak tersedia
+        setTimeout(() => handlePrint(), 500);
+      }
 
       setCart([]);
       setShowPayment(false);
