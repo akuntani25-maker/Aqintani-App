@@ -566,14 +566,14 @@ async def startup_db():
     if not admin_exists:
         default_admin = {
             "id": str(uuid.uuid4()),
-            "email": "admin@agripharma.com",
+            "email": "admin@aqintani.com",
             "password": hash_password("admin123"),
             "name": "Administrator",
             "role": "admin",
             "created_at": datetime.now(timezone.utc).isoformat()
         }
         await db.users.insert_one(default_admin)
-        logger.info("Default admin created: admin@agripharma.com / admin123")
+        logger.info("Default admin created: admin@aqintani.com / admin123")
 
 @app.on_event("shutdown")
 async def shutdown_db_client():
