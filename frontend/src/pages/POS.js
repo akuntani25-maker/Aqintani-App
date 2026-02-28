@@ -93,6 +93,7 @@ export const POS = () => {
   const [showPayment, setShowPayment] = useState(false);
   const [lastTransaction, setLastTransaction] = useState(null);
   const receiptRef = useRef();
+  const [thermalPrinter] = useState(() => new ThermalPrinter());
 
   const handlePrint = useReactToPrint({
     content: () => receiptRef.current,
