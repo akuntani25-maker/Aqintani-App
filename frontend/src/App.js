@@ -10,6 +10,7 @@ import { Categories } from './pages/Categories';
 import { Suppliers } from './pages/Suppliers';
 import { Reports } from './pages/Reports';
 import { Users } from './pages/Users';
+import { Profile } from './pages/Profile';
 import { POS } from './pages/POS';
 import { Toaster } from './components/ui/sonner';
 import './App.css';
@@ -33,6 +34,7 @@ function App() {
             <Route path="suppliers" element={<Suppliers />} />
             <Route path="reports" element={<Reports />} />
             <Route path="users" element={<Users />} />
+            <Route path="profile" element={<Profile />} />
           </Route>
 
           <Route path="/pos" element={
