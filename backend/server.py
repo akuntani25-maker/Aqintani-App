@@ -1046,7 +1046,6 @@ async def get_product_analytics(admin: dict = Depends(require_admin)):
 @api_router.get("/analytics/summary")
 async def get_analytics_summary(admin: dict = Depends(require_admin)):
     now = datetime.now(timezone.utc)
-    today = now.strftime("%Y-%m-%d")
     this_month_start = now.strftime("%Y-%m-01")
     thirty_days_ago = (now - timedelta(days=30)).strftime("%Y-%m-%d")
     
