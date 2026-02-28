@@ -1,14 +1,14 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api, useAuth } from '../context/AuthContext';
 import { Button } from '../components/ui/button';
 import { Card } from '../components/ui/card';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../components/ui/dialog';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../components/ui/dialog';
 import { toast } from 'sonner';
-import { Package, MapPin, DollarSign, CheckCircle, Truck, LogOut } from 'lucide-react';
+import { Package, MapPin, DollarSign, CheckCircle, Truck, LogOut, Search, Bell, Filter, X } from 'lucide-react';
 
 export const CanvasserDashboard = () => {
   const { user, logout } = useAuth();
@@ -19,9 +19,17 @@ export const CanvasserDashboard = () => {
   const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
   const [paymentAmount, setPaymentAmount] = useState(0);
   const [paymentType, setPaymentType] = useState('cash');
+  const [notifications, setNotifications] = useState({ new_orders: 0, pending_orders: 0, total_remaining: 0 });
+
+  // Search & filter
+  const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
 
   useEffect(() => {
     fetchMyOrders();
+    fetchNotifications();
+    const interval = setInterval(fetchNotifications, 30000);
+    return () => clearInterval(interval);
   }, []);
 
   const fetchMyOrders = async () => {
@@ -35,11 +43,19 @@ export const CanvasserDashboard = () => {
     }
   };
 
+  const fetchNotifications = async () => {
+    try {
+      const res = await api.get('/canvassers/notifications');
+      setNotifications(res.data);
+    } catch {}
+  };
+
   const updateOrderStatus = async (orderId, newStatus) => {
     try {
       await api.put(`/partner-orders/${orderId}/status?status=${newStatus}`);
       toast.success('Status berhasil diperbarui');
       fetchMyOrders();
+      fetchNotifications();
     } catch (error) {
       toast.error('Gagal memperbarui status');
     }
@@ -50,7 +66,6 @@ export const CanvasserDashboard = () => {
       toast.error('Masukkan jumlah pembayaran yang valid');
       return;
     }
-
     try {
       await api.post(`/partner-orders/${selectedOrder.id}/pay?amount=${paymentAmount}`);
       toast.success(`Pembayaran ${paymentType === 'cash' ? 'tunai' : 'bon'} berhasil dicatat`);
@@ -58,6 +73,7 @@ export const CanvasserDashboard = () => {
       setPaymentAmount(0);
       setSelectedOrder(null);
       fetchMyOrders();
+      fetchNotifications();
     } catch (error) {
       toast.error('Gagal mencatat pembayaran');
     }
@@ -68,13 +84,7 @@ export const CanvasserDashboard = () => {
     navigate('/login');
   };
 
-  const formatCurrency = (value) => {
-    return new Intl.NumberFormat('id-ID', {
-      style: 'currency',
-      currency: 'IDR',
-      minimumFractionDigits: 0
-    }).format(value);
-  };
+  const formatCurrency = (value) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(value);
 
   const getStatusColor = (status) => {
     const colors = {
@@ -84,6 +94,15 @@ export const CanvasserDashboard = () => {
     };
     return colors[status] || colors.pending;
   };
+
+  // Filtered orders
+  const filteredOrders = orders.filter(o => {
+    const matchSearch = !searchQuery ||
+      o.partner_store_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      o.order_number?.toLowerCase().includes(searchQuery.toLowerCase());
+    const matchStatus = statusFilter === 'all' || o.status === statusFilter;
+    return matchSearch && matchStatus;
+  });
 
   if (loading) {
     return (
@@ -99,28 +118,43 @@ export const CanvasserDashboard = () => {
   return (
     <div className="min-h-screen bg-gradient-mesh">
       {/* Header */}
-      <div className="bg-white border-b shadow-sm">
+      <div className="bg-white border-b shadow-sm sticky top-0 z-10">
         <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 bg-primary rounded-xl flex items-center justify-center">
               <Truck className="w-6 h-6 text-white" />
             </div>
             <div>
-              <h1 className="text-xl font-bold">Dashboard Kanvaser</h1>
+              <h1 className="text-xl font-bold" data-testid="canvasser-title">Dashboard Kanvaser</h1>
               <p className="text-sm text-muted-foreground">{user?.name}</p>
             </div>
           </div>
-          <Button variant="outline" onClick={handleLogout}>
-            <LogOut className="w-4 h-4 mr-2" />
-            Keluar
-          </Button>
+          <div className="flex items-center gap-3">
+            {/* Notification Badge */}
+            {notifications.pending_orders > 0 && (
+              <div className="relative flex items-center gap-2 px-3 py-2 bg-yellow-50 rounded-xl border border-yellow-200" data-testid="notification-badge">
+                <Bell className="w-4 h-4 text-yellow-600" />
+                <span className="text-sm font-medium text-yellow-800">{notifications.pending_orders} pending</span>
+              </div>
+            )}
+            {notifications.total_remaining > 0 && (
+              <div className="hidden md:flex items-center gap-2 px-3 py-2 bg-orange-50 rounded-xl border border-orange-200" data-testid="remaining-badge">
+                <DollarSign className="w-4 h-4 text-orange-600" />
+                <span className="text-sm font-medium text-orange-800">{formatCurrency(notifications.total_remaining)}</span>
+              </div>
+            )}
+            <Button variant="outline" onClick={handleLogout} data-testid="canvasser-logout-button">
+              <LogOut className="w-4 h-4 mr-2" />
+              Keluar
+            </Button>
+          </div>
         </div>
       </div>
 
       <div className="max-w-7xl mx-auto px-4 py-6 space-y-6">
         {/* Summary Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <Card className="p-6">
+          <Card className="p-6" data-testid="pending-count-card">
             <div className="flex items-center gap-3">
               <div className="w-12 h-12 bg-yellow-100 rounded-xl flex items-center justify-center">
                 <Package className="w-6 h-6 text-yellow-600" />
@@ -132,44 +166,78 @@ export const CanvasserDashboard = () => {
             </div>
           </Card>
 
-          <Card className="p-6">
+          <Card className="p-6" data-testid="delivered-count-card">
             <div className="flex items-center gap-3">
               <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center">
                 <CheckCircle className="w-6 h-6 text-green-600" />
               </div>
               <div>
-                <p className="text-xs text-muted-foreground uppercase tracking-wider">Delivered</p>
+                <p className="text-xs text-muted-foreground uppercase tracking-wider">Terkirim</p>
                 <p className="text-3xl font-bold">{deliveredOrders.length}</p>
               </div>
             </div>
           </Card>
 
-          <Card className="p-6">
+          <Card className="p-6" data-testid="total-remaining-card">
             <div className="flex items-center gap-3">
-              <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
-                <Package className="w-6 h-6 text-blue-600" />
+              <div className="w-12 h-12 bg-orange-100 rounded-xl flex items-center justify-center">
+                <DollarSign className="w-6 h-6 text-orange-600" />
               </div>
               <div>
-                <p className="text-xs text-muted-foreground uppercase tracking-wider">Total Order</p>
-                <p className="text-3xl font-bold">{orders.length}</p>
+                <p className="text-xs text-muted-foreground uppercase tracking-wider">Sisa Tagihan</p>
+                <p className="text-2xl font-bold text-orange-600">{formatCurrency(notifications.total_remaining)}</p>
               </div>
             </div>
           </Card>
         </div>
 
+        {/* Search & Filter */}
+        <div className="flex flex-col md:flex-row gap-3">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <Input
+              placeholder="Cari nama kios atau nomor order..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-10"
+              data-testid="canvasser-search-input"
+            />
+            {searchQuery && (
+              <button className="absolute right-3 top-1/2 -translate-y-1/2" onClick={() => setSearchQuery('')}>
+                <X className="w-4 h-4 text-muted-foreground hover:text-foreground" />
+              </button>
+            )}
+          </div>
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <SelectTrigger className="w-full md:w-48" data-testid="canvasser-status-filter">
+              <Filter className="w-4 h-4 mr-2" />
+              <SelectValue placeholder="Semua Status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Semua Status</SelectItem>
+              <SelectItem value="pending">Pending</SelectItem>
+              <SelectItem value="delivered">Terkirim</SelectItem>
+              <SelectItem value="cancelled">Dibatalkan</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
         {/* Orders List */}
         <Card className="p-6">
-          <h2 className="text-xl font-bold mb-4">Pesanan Saya</h2>
-          
-          {orders.length === 0 ? (
-            <div className="text-center py-12 text-muted-foreground">
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-bold" data-testid="orders-heading">Pesanan Saya</h2>
+            <span className="text-sm text-muted-foreground">{filteredOrders.length} pesanan</span>
+          </div>
+
+          {filteredOrders.length === 0 ? (
+            <div className="text-center py-12 text-muted-foreground" data-testid="empty-orders">
               <Package className="w-16 h-16 mx-auto mb-3 opacity-20" />
-              <p>Belum ada pesanan yang diassign</p>
+              <p>{searchQuery || statusFilter !== 'all' ? 'Tidak ada pesanan yang cocok' : 'Belum ada pesanan yang diassign'}</p>
             </div>
           ) : (
             <div className="space-y-4">
-              {orders.map((order) => (
-                <Card key={order.id} className="p-6 border-2 hover:border-primary transition-colors">
+              {filteredOrders.map((order) => (
+                <Card key={order.id} className="p-6 border-2 hover:border-primary/50 transition-colors" data-testid={`order-card-${order.id}`}>
                   <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
                     <div className="flex-1 space-y-3">
                       <div className="flex items-start justify-between">
@@ -177,8 +245,8 @@ export const CanvasserDashboard = () => {
                           <p className="font-mono text-sm text-muted-foreground">{order.order_number}</p>
                           <h3 className="text-xl font-bold mt-1">{order.partner_store_name}</h3>
                         </div>
-                        <span className={`px-3 py-1 rounded-full text-sm font-medium border-2 ${getStatusColor(order.status)}`}>
-                          {order.status.toUpperCase()}
+                        <span className={`px-3 py-1 rounded-full text-sm font-medium border-2 ${getStatusColor(order.status)}`} data-testid={`order-status-${order.id}`}>
+                          {order.status === 'pending' ? 'PENDING' : order.status === 'delivered' ? 'TERKIRIM' : 'BATAL'}
                         </span>
                       </div>
 
@@ -206,7 +274,6 @@ export const CanvasserDashboard = () => {
                         </div>
                       </div>
 
-                      {/* Items List */}
                       <details className="mt-3">
                         <summary className="cursor-pointer text-sm font-medium text-primary hover:underline">
                           Lihat Detail Produk ({order.items.length} item)
@@ -226,18 +293,11 @@ export const CanvasserDashboard = () => {
                     <div className="flex flex-col gap-2 md:w-48">
                       {order.status === 'pending' && (
                         <>
-                          <Button
-                            onClick={() => updateOrderStatus(order.id, 'delivered')}
-                            className="w-full"
-                          >
+                          <Button onClick={() => updateOrderStatus(order.id, 'delivered')} className="w-full" data-testid={`deliver-btn-${order.id}`}>
                             <CheckCircle className="w-4 h-4 mr-2" />
                             Terkirim
                           </Button>
-                          <Button
-                            variant="destructive"
-                            onClick={() => updateOrderStatus(order.id, 'cancelled')}
-                            className="w-full"
-                          >
+                          <Button variant="destructive" onClick={() => updateOrderStatus(order.id, 'cancelled')} className="w-full" data-testid={`cancel-btn-${order.id}`}>
                             Batalkan
                           </Button>
                         </>
@@ -252,6 +312,7 @@ export const CanvasserDashboard = () => {
                             setPaymentDialogOpen(true);
                           }}
                           className="w-full"
+                          data-testid={`pay-btn-${order.id}`}
                         >
                           <DollarSign className="w-4 h-4 mr-2" />
                           Catat Bayar
@@ -278,7 +339,7 @@ export const CanvasserDashboard = () => {
                 <p className="text-sm text-muted-foreground">Kios Mitra</p>
                 <p className="text-lg font-semibold">{selectedOrder.partner_store_name}</p>
               </div>
-              
+
               <div className="p-4 bg-orange-50 rounded-lg border border-orange-200">
                 <p className="text-sm text-orange-800 mb-1">Sisa Tagihan</p>
                 <p className="text-2xl font-bold text-orange-600">{formatCurrency(selectedOrder.remaining)}</p>
@@ -287,7 +348,7 @@ export const CanvasserDashboard = () => {
               <div className="space-y-2">
                 <Label>Jenis Pembayaran</Label>
                 <Select value={paymentType} onValueChange={setPaymentType}>
-                  <SelectTrigger>
+                  <SelectTrigger data-testid="payment-type-select">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -306,6 +367,7 @@ export const CanvasserDashboard = () => {
                     value={paymentAmount}
                     onChange={(e) => setPaymentAmount(parseFloat(e.target.value) || 0)}
                     max={selectedOrder.remaining}
+                    data-testid="canvasser-payment-amount"
                   />
                   <p className="text-xs text-muted-foreground">
                     Maksimal: {formatCurrency(selectedOrder.remaining)}
@@ -316,18 +378,17 @@ export const CanvasserDashboard = () => {
               {paymentType === 'bon' && (
                 <div className="p-3 bg-yellow-50 rounded-lg border border-yellow-200">
                   <p className="text-sm text-yellow-800">
-                    ⚠️ Pembayaran akan dicatat sebagai tempo/bon. Sisa tagihan tetap akan bertambah pada piutang kios mitra.
+                    Pembayaran akan dicatat sebagai tempo/bon. Sisa tagihan tetap pada piutang kios mitra.
                   </p>
                 </div>
               )}
 
               <div className="flex gap-2 justify-end pt-2">
-                <Button variant="outline" onClick={() => setPaymentDialogOpen(false)}>
-                  Batal
-                </Button>
-                <Button 
+                <Button variant="outline" onClick={() => setPaymentDialogOpen(false)}>Batal</Button>
+                <Button
                   onClick={handlePayment}
                   disabled={paymentType === 'cash' && paymentAmount <= 0}
+                  data-testid="confirm-canvasser-payment"
                 >
                   {paymentType === 'cash' ? 'Catat Bayar Tunai' : 'Catat Bon'}
                 </Button>
