@@ -12,6 +12,7 @@ export const Settings = () => {
   const [connectionType, setConnectionType] = useState(localStorage.getItem('printerType') || 'usb');
   const [loading, setLoading] = useState(false);
   const [autoPrint, setAutoPrint] = useState(localStorage.getItem('autoPrint') === 'true');
+  const [paperSize, setPaperSize] = useState(localStorage.getItem('paperSize') || '58mm');
 
   useEffect(() => {
     setIsConnected(printer.isConnected());
