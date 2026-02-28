@@ -115,46 +115,42 @@
 
 ---
 
-## 📋 Format Struk yang Dicetak
+## 📋 Format Struk (Thermal 48mm)
 
 ```
-         🌾
     UD. AQIN TANI
 Toko Obat & Alat Pertanian
-  Jl. Contoh No. 123, Kota Anda
-     Telp: (021) 1234-5678
-=====================================
+Jl. Contoh No. 123
+Telp: (021) 1234-5678
+------------------------
+No: TRX20260228140530
+Tgl: 28/02/26 14:05
+Kasir: Ahmad
+------------------------
+Paracetamol 500mg
+2 x 5.000      10.000
 
-No. Transaksi: TRX20260228140530
-Tanggal: 28 Feb 2026, 14:05
-Kasir: Nama Kasir
-Metode Bayar: Tunai
-
-=====================================
-Produk            Qty  Harga  Subtotal
--------------------------------------
-Paracetamol        2   5.000    10.000
-500mg
-
-Obat Batuk         1  25.000    25.000
-Herbal
--------------------------------------
-
-Subtotal:                      35.000
-                              --------
-TOTAL:                    Rp  35.000
-                              ========
-
-Jumlah Bayar:             Rp  50.000
-Kembalian:                Rp  15.000
-
-=====================================
-   Terima kasih atas kunjungan Anda!
-    Barang yang sudah dibeli tidak
-       dapat ditukar/dikembalikan
-  Simpan struk ini sebagai bukti
-         pembelian yang sah
+Obat Batuk Herbal
+1 x 25.000     25.000
+------------------------
+Subtotal:      35.000
+TOTAL:         35.000
+------------------------
+Bayar (tunai): 50.000
+Kembali:       15.000
+------------------------
+   Terima kasih!
+Barang yang sudah
+dibeli tidak dapat
+      ditukar
 ```
+
+**Catatan Thermal 48mm:**
+- Font sangat kecil (7-9px)
+- Layout super compact
+- Text sepanjang ~18-20 karakter
+- Dashed line untuk separator
+- No logo/icon (menghemat space)
 
 ---
 
