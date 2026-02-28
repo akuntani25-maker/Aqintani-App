@@ -1018,7 +1018,6 @@ async def delete_canvasser(canvasser_id: str, admin: dict = Depends(require_admi
 # ============= PRODUCT ANALYTICS =============
 @api_router.get("/analytics/products")
 async def get_product_analytics(admin: dict = Depends(require_admin)):
-    # Fast moving products (top 10 by sales quantity in last 30 days)
     thirty_days_ago = (datetime.now(timezone.utc) - timedelta(days=30)).strftime("%Y-%m-%d")
     
     transactions = await db.transactions.find(
@@ -1042,6 +1041,77 @@ async def get_product_analytics(admin: dict = Depends(require_admin)):
     return {
         "fast_moving": fast_moving,
         "slow_moving": slow_moving
+    }
+
+@api_router.get("/analytics/summary")
+async def get_analytics_summary(admin: dict = Depends(require_admin)):
+    now = datetime.now(timezone.utc)
+    today = now.strftime("%Y-%m-%d")
+    this_month_start = now.strftime("%Y-%m-01")
+    thirty_days_ago = (now - timedelta(days=30)).strftime("%Y-%m-%d")
+    
+    # Monthly sales
+    month_transactions = await db.transactions.find(
+        {"date": {"$gte": this_month_start}}, {"_id": 0}
+    ).to_list(10000)
+    monthly_sales = sum(t["total"] for t in month_transactions)
+    monthly_cost = sum(
+        sum(item.get("price", 0) * item.get("quantity", 0) * 0.7 for item in t.get("items", []))
+        for t in month_transactions
+    )
+    
+    # Monthly purchases (from suppliers)
+    month_purchases = await db.purchases.find(
+        {"date": {"$gte": this_month_start}}, {"_id": 0}
+    ).to_list(10000)
+    monthly_purchases_total = sum(p.get("total", 0) for p in month_purchases)
+    monthly_purchases_unpaid = sum(p.get("remaining", 0) for p in month_purchases)
+    
+    # Partner store stats
+    all_partner_orders = await db.partner_orders.find({}, {"_id": 0}).to_list(10000)
+    total_partner_sales = sum(o.get("total", 0) for o in all_partner_orders)
+    total_partner_unpaid = sum(o.get("remaining", 0) for o in all_partner_orders)
+    
+    # Daily sales for chart (last 30 days)
+    daily_sales = {}
+    for i in range(29, -1, -1):
+        date = (now - timedelta(days=i)).strftime("%Y-%m-%d")
+        daily_sales[date] = {"sales": 0, "transactions": 0}
+    
+    all_30_transactions = await db.transactions.find(
+        {"date": {"$gte": thirty_days_ago}}, {"_id": 0}
+    ).to_list(10000)
+    for t in all_30_transactions:
+        d = t.get("date", "")
+        if d in daily_sales:
+            daily_sales[d]["sales"] += t.get("total", 0)
+            daily_sales[d]["transactions"] += 1
+    
+    chart_data = [{"date": k, **v} for k, v in daily_sales.items()]
+    
+    # Category breakdown
+    products = await db.products.find({}, {"_id": 0}).to_list(10000)
+    categories = await db.categories.find({}, {"_id": 0}).to_list(1000)
+    cat_map = {c["id"]: c["name"] for c in categories}
+    
+    category_stock = {}
+    for p in products:
+        cat_name = cat_map.get(p.get("category_id", ""), "Tanpa Kategori")
+        if cat_name not in category_stock:
+            category_stock[cat_name] = {"name": cat_name, "count": 0, "stock_value": 0}
+        category_stock[cat_name]["count"] += 1
+        category_stock[cat_name]["stock_value"] += p.get("stock", 0) * p.get("cost_price", 0)
+    
+    return {
+        "monthly_sales": monthly_sales,
+        "monthly_transactions": len(month_transactions),
+        "monthly_purchases": monthly_purchases_total,
+        "monthly_purchases_unpaid": monthly_purchases_unpaid,
+        "total_partner_sales": total_partner_sales,
+        "total_partner_unpaid": total_partner_unpaid,
+        "estimated_margin": monthly_sales - monthly_cost,
+        "chart_data": chart_data,
+        "category_breakdown": list(category_stock.values())
     }
 
 app.include_router(api_router)
