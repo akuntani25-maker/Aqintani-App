@@ -211,6 +211,47 @@ async def login(credentials: UserLogin):
 async def get_me(current_user: dict = Depends(get_current_user)):
     return current_user
 
+class ProfileUpdate(BaseModel):
+    name: Optional[str] = None
+    email: Optional[EmailStr] = None
+    current_password: Optional[str] = None
+    new_password: Optional[str] = None
+
+@api_router.put("/auth/profile", response_model=User)
+async def update_profile(profile_data: ProfileUpdate, current_user: dict = Depends(get_current_user)):
+    update_fields = {}
+    
+    if profile_data.name:
+        update_fields["name"] = profile_data.name
+    
+    if profile_data.email:
+        existing = await db.users.find_one({"email": profile_data.email, "id": {"$ne": current_user["id"]}}, {"_id": 0})
+        if existing:
+            raise HTTPException(status_code=400, detail="Email already in use")
+        update_fields["email"] = profile_data.email
+    
+    if profile_data.new_password:
+        if not profile_data.current_password:
+            raise HTTPException(status_code=400, detail="Current password required")
+        
+        user_full = await db.users.find_one({"id": current_user["id"]})
+        if not verify_password(profile_data.current_password, user_full["password"]):
+            raise HTTPException(status_code=400, detail="Current password incorrect")
+        
+        update_fields["password"] = hash_password(profile_data.new_password)
+    
+    if not update_fields:
+        raise HTTPException(status_code=400, detail="No fields to update")
+    
+    result = await db.users.find_one_and_update(
+        {"id": current_user["id"]},
+        {"$set": update_fields},
+        return_document=True,
+        projection={"_id": 0, "password": 0}
+    )
+    
+    return result
+
 @api_router.get("/categories", response_model=List[Category])
 async def get_categories(current_user: dict = Depends(get_current_user)):
     categories = await db.categories.find({}, {"_id": 0}).sort("name", 1).to_list(1000)
