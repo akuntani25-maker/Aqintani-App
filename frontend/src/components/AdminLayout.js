@@ -12,7 +12,12 @@ import {
   LogOut,
   Sprout,
   UserCog,
-  Printer
+  Printer,
+  Store,
+  ShoppingCart,
+  Truck,
+  TrendingUp,
+  ShoppingBag
 } from 'lucide-react';
 
 export const AdminLayout = () => {
