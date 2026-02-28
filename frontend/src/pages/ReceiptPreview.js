@@ -89,61 +89,63 @@ export const ReceiptPreview = () => {
       </div>
 
       {/* Receipt Content */}
-      <div className="max-w-4xl mx-auto p-6 print:p-0">
+      <div className="max-w-4xl mx-auto p-6 print:p-0 print:max-w-none">
         <div 
           id="receipt-content" 
-          className="bg-white rounded-xl shadow-lg p-8 print:shadow-none print:rounded-none"
+          className="bg-white rounded-xl shadow-lg p-8 print:shadow-none print:rounded-none print:p-2 print:text-xs"
           data-testid="receipt-content"
         >
           {/* Receipt Header */}
-          <div className="text-center mb-8 border-b-2 border-dashed border-gray-300 pb-6">
-            <div className="inline-flex items-center gap-3 mb-3">
+          <div className="text-center mb-6 print:mb-3 border-b-2 border-dashed border-gray-300 pb-4 print:pb-2">
+            <div className="inline-flex items-center gap-3 mb-3 print:hidden">
               <div className="w-16 h-16 bg-primary rounded-2xl flex items-center justify-center">
                 <span className="text-3xl">🌾</span>
               </div>
             </div>
-            <h1 className="text-3xl font-bold mb-2">UD. AQIN TANI</h1>
-            <p className="text-gray-600">Toko Obat & Alat Pertanian</p>
-            <p className="text-sm text-gray-500 mt-2">
-              Jl. Contoh No. 123, Kota Anda<br />
-              Telp: (021) 1234-5678
+            <h1 className="text-3xl print:text-base font-bold mb-2 print:mb-1">UD. AQIN TANI</h1>
+            <p className="text-gray-600 print:text-[10px] print:leading-tight">Toko Obat & Alat Pertanian</p>
+            <p className="text-sm print:text-[9px] text-gray-500 mt-2 print:mt-1 print:leading-tight">
+              Jl. Contoh No. 123, Kota<br className="print:hidden" />
+              <span className="hidden print:inline"> </span>Telp: (021) 1234-5678
             </p>
           </div>
 
-          {/* Transaction Info */}
-          <div className="mb-6 text-sm">
-            <div className="grid grid-cols-2 gap-2">
-              <div>
-                <span className="text-gray-600">No. Transaksi:</span>
-                <p className="font-mono font-semibold">{transaction.transaction_number}</p>
+          {/* Transaction Info - Compact for thermal */}
+          <div className="mb-4 print:mb-2 text-sm print:text-[9px] print:leading-tight">
+            <div className="space-y-1 print:space-y-0">
+              <div className="flex justify-between print:block">
+                <span className="text-gray-600 print:inline">No:</span>
+                <p className="font-mono font-semibold print:inline print:ml-1">{transaction.transaction_number}</p>
               </div>
-              <div className="text-right">
-                <span className="text-gray-600">Tanggal:</span>
-                <p className="font-semibold">
+              <div className="flex justify-between print:block">
+                <span className="text-gray-600 print:inline">Tgl:</span>
+                <p className="font-semibold print:inline print:ml-1">
                   {new Date(transaction.created_at).toLocaleString('id-ID', {
-                    dateStyle: 'medium',
-                    timeStyle: 'short'
+                    day: '2-digit',
+                    month: '2-digit', 
+                    year: '2-digit',
+                    hour: '2-digit',
+                    minute: '2-digit'
                   })}
                 </p>
               </div>
-              <div>
-                <span className="text-gray-600">Kasir:</span>
-                <p className="font-semibold">{transaction.cashier_name}</p>
-              </div>
-              <div className="text-right">
-                <span className="text-gray-600">Metode Bayar:</span>
-                <p className="font-semibold capitalize">{transaction.payment_method}</p>
+              <div className="flex justify-between print:block">
+                <span className="text-gray-600 print:inline">Kasir:</span>
+                <p className="font-semibold print:inline print:ml-1">{transaction.cashier_name}</p>
               </div>
             </div>
           </div>
 
-          {/* Items Table */}
-          <div className="mb-6">
-            <table className="w-full text-sm">
+          <div className="border-t border-dashed border-gray-300 print:border-gray-400 mb-3 print:mb-2"></div>
+
+          {/* Items - Compact layout for thermal */}
+          <div className="mb-4 print:mb-2">
+            {/* Desktop/A4 Table */}
+            <table className="w-full text-sm print:hidden">
               <thead>
                 <tr className="border-b-2 border-gray-300">
                   <th className="text-left py-2">Produk</th>
-                  <th className="text-center py-2">Qty</th>
+                  <th className="text-center py-2 w-16">Qty</th>
                   <th className="text-right py-2">Harga</th>
                   <th className="text-right py-2">Subtotal</th>
                 </tr>
@@ -159,11 +161,26 @@ export const ReceiptPreview = () => {
                 ))}
               </tbody>
             </table>
+
+            {/* Thermal Compact List */}
+            <div className="hidden print:block text-[9px] space-y-1">
+              {transaction.items.map((item, index) => (
+                <div key={index} className="leading-tight">
+                  <div className="font-semibold">{item.product_name}</div>
+                  <div className="flex justify-between">
+                    <span>{item.quantity} x {formatCurrency(item.price).replace('Rp ', '')}</span>
+                    <span className="font-semibold">{formatCurrency(item.subtotal).replace('Rp ', '')}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
 
-          {/* Totals */}
-          <div className="border-t-2 border-gray-300 pt-4 mb-6">
-            <div className="space-y-2 text-sm">
+          <div className="border-t border-dashed border-gray-300 print:border-gray-400 mb-3 print:mb-2"></div>
+
+          {/* Totals - Compact for thermal */}
+          <div className="mb-4 print:mb-2">
+            <div className="space-y-2 print:space-y-0 text-sm print:text-[9px] print:leading-tight">
               <div className="flex justify-between">
                 <span className="text-gray-600">Subtotal:</span>
                 <span className="font-semibold">{formatCurrency(transaction.subtotal)}</span>
@@ -180,32 +197,34 @@ export const ReceiptPreview = () => {
                   <span className="font-semibold">{formatCurrency(transaction.tax)}</span>
                 </div>
               )}
-              <div className="flex justify-between text-xl font-bold border-t-2 border-gray-300 pt-3 mt-3">
+              <div className="flex justify-between text-xl print:text-[10px] font-bold border-t-2 print:border-t border-gray-300 print:border-gray-400 pt-2 print:pt-1 mt-2 print:mt-1">
                 <span>TOTAL:</span>
                 <span className="text-primary">{formatCurrency(transaction.total)}</span>
               </div>
             </div>
           </div>
 
-          {/* Payment Details */}
-          <div className="bg-gray-50 rounded-lg p-4 mb-6">
-            <div className="space-y-2">
-              <div className="flex justify-between text-sm">
-                <span className="text-gray-600">Jumlah Bayar:</span>
+          {/* Payment Details - Compact */}
+          <div className="bg-gray-50 print:bg-transparent rounded-lg print:rounded-none p-4 print:p-0 mb-4 print:mb-2">
+            <div className="space-y-2 print:space-y-0 print:text-[9px] print:leading-tight">
+              <div className="flex justify-between text-sm print:text-[9px]">
+                <span className="text-gray-600">Bayar ({transaction.payment_method}):</span>
                 <span className="font-semibold">{formatCurrency(transaction.payment_amount)}</span>
               </div>
-              <div className="flex justify-between text-lg font-bold text-green-600">
-                <span>Kembalian:</span>
+              <div className="flex justify-between text-lg print:text-[10px] font-bold text-green-600">
+                <span>Kembali:</span>
                 <span>{formatCurrency(transaction.change)}</span>
               </div>
             </div>
           </div>
 
-          {/* Footer */}
-          <div className="text-center text-sm border-t-2 border-dashed border-gray-300 pt-6">
-            <p className="font-semibold mb-2">Terima kasih atas kunjungan Anda!</p>
-            <p className="text-gray-600 text-xs mb-1">Barang yang sudah dibeli tidak dapat ditukar/dikembalikan</p>
-            <p className="text-gray-500 text-xs">Simpan struk ini sebagai bukti pembelian yang sah</p>
+          <div className="border-t border-dashed border-gray-300 print:border-gray-400 mb-3 print:mb-2"></div>
+
+          {/* Footer - Compact for thermal */}
+          <div className="text-center text-sm print:text-[8px] print:leading-tight">
+            <p className="font-semibold mb-2 print:mb-1">Terima kasih!</p>
+            <p className="text-gray-600 text-xs print:text-[7px] print:leading-tight mb-1">Barang yang sudah dibeli<br className="hidden print:inline" /> tidak dapat ditukar</p>
+            <p className="text-gray-500 text-xs print:text-[7px] print:leading-tight print:hidden">Simpan struk sebagai bukti pembelian</p>
           </div>
         </div>
 
