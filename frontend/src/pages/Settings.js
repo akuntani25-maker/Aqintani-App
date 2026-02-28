@@ -95,6 +95,12 @@ export const Settings = () => {
     toast.success(newValue ? 'Auto print diaktifkan' : 'Auto print dinonaktifkan');
   };
 
+  const handlePaperSizeChange = (size) => {
+    setPaperSize(size);
+    localStorage.setItem('paperSize', size);
+    toast.success(`Ukuran kertas diubah ke ${size}`);
+  };
+
   return (
     <div className="p-6 md:p-8 space-y-6" data-testid="settings-page">
       <div>
