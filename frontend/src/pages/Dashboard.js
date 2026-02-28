@@ -75,7 +75,7 @@ export const Dashboard = () => {
     <div className="p-6 md:p-8 space-y-8" data-testid="dashboard-page">
       <div>
         <h1 className="text-3xl md:text-4xl font-bold tracking-tight">Dashboard</h1>
-        <p className="text-sm text-muted-foreground mt-2">Selamat datang di AgriPharma POS</p>
+        <p className="text-sm text-muted-foreground mt-2">Selamat datang di UD. Aqin Tani</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">

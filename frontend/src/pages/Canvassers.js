@@ -305,12 +305,14 @@ export const Canvassers = () => {
                       <div className="flex items-center justify-center gap-2">
                         <Button
                           size="sm"
-                          variant="ghost"
+                          variant="outline"
                           onClick={() => handleCreateLogin(canvasser)}
                           data-testid={`create-login-${canvasser.id}`}
                           title="Buat Akun Login"
+                          className="border-primary/30 hover:bg-primary/10"
                         >
                           <Key className="w-4 h-4 text-primary" />
+                          <span className="ml-1 text-xs text-primary">Login</span>
                         </Button>
                         <Button
                           size="sm"
