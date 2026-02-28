@@ -243,12 +243,74 @@ export const ReceiptPreview = () => {
             margin: 0;
             padding: 0;
           }
+          
+          /* Default A4 Print */
           @page {
-            margin: 1cm;
+            margin: 10mm;
             size: A4 portrait;
           }
-          .no-print, button {
+          
+          /* Thermal Printer 48mm */
+          @page thermal {
+            margin: 2mm 1mm;
+            size: 48mm 210mm;
+          }
+          
+          @media (max-width: 50mm) {
+            @page {
+              margin: 2mm 1mm;
+              size: 48mm auto;
+            }
+            
+            #receipt-content {
+              width: 44mm !important;
+              max-width: 44mm !important;
+              font-size: 7px !important;
+              line-height: 1.2 !important;
+            }
+          }
+          
+          /* Thermal Printer 58mm - Alternative */
+          @page thermal58 {
+            margin: 2mm 1mm;
+            size: 58mm 210mm;
+          }
+          
+          #receipt-content {
+            page-break-inside: avoid;
+          }
+          
+          .no-print, 
+          button,
+          .print\\:hidden {
             display: none !important;
+          }
+          
+          /* Compact spacing for thermal */
+          h1 {
+            margin: 0 !important;
+            padding: 0 !important;
+            line-height: 1.1 !important;
+          }
+          
+          p, div {
+            margin: 0 !important;
+          }
+          
+          /* Remove colors for better thermal print */
+          * {
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
+        }
+        
+        /* Browser print preview optimization */
+        @media screen {
+          @media (prefers-color-scheme: dark) {
+            #receipt-content {
+              background: white !important;
+              color: black !important;
+            }
           }
         }
       `}</style>
