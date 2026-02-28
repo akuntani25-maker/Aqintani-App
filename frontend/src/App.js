@@ -12,6 +12,11 @@ import { Reports } from './pages/Reports';
 import { Users } from './pages/Users';
 import { Profile } from './pages/Profile';
 import { Settings } from './pages/Settings';
+import { StoreSettings } from './pages/StoreSettings';
+import { PartnerStores } from './pages/PartnerStores';
+import { PartnerStoreDetail } from './pages/PartnerStoreDetail';
+import { PartnerOrders } from './pages/PartnerOrders';
+import { Canvassers } from './pages/Canvassers';
 import { POS } from './pages/POS';
 import { ReceiptPreview } from './pages/ReceiptPreview';
 import { Toaster } from './components/ui/sonner';
@@ -34,8 +39,15 @@ function App() {
             <Route path="products" element={<Products />} />
             <Route path="categories" element={<Categories />} />
             <Route path="suppliers" element={<Suppliers />} />
+            <Route path="purchases" element={<div className="p-8">Purchases page - Coming soon</div>} />
+            <Route path="partner-stores" element={<PartnerStores />} />
+            <Route path="partner-stores/:storeId" element={<PartnerStoreDetail />} />
+            <Route path="partner-orders" element={<PartnerOrders />} />
+            <Route path="canvassers" element={<Canvassers />} />
+            <Route path="analytics" element={<div className="p-8">Analytics page - Coming soon</div>} />
             <Route path="reports" element={<Reports />} />
             <Route path="users" element={<Users />} />
+            <Route path="store-settings" element={<StoreSettings />} />
             <Route path="settings" element={<Settings />} />
             <Route path="profile" element={<Profile />} />
           </Route>
