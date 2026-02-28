@@ -19,6 +19,7 @@ import { PartnerOrders } from './pages/PartnerOrders';
 import { Canvassers } from './pages/Canvassers';
 import { POS } from './pages/POS';
 import { ReceiptPreview } from './pages/ReceiptPreview';
+import { CanvasserDashboard } from './pages/CanvasserDashboard';
 import { Toaster } from './components/ui/sonner';
 import './App.css';
 
