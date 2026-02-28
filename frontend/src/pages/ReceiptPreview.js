@@ -9,22 +9,27 @@ export const ReceiptPreview = () => {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const [transaction, setTransaction] = useState(null);
+  const [storeSettings, setStoreSettings] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const transactionId = searchParams.get('id');
     if (transactionId) {
-      fetchTransaction(transactionId);
+      fetchData(transactionId);
     } else {
       toast.error('Transaction ID tidak ditemukan');
       navigate('/pos');
     }
   }, [searchParams]);
 
-  const fetchTransaction = async (id) => {
+  const fetchData = async (id) => {
     try {
-      const response = await api.get(`/transactions/${id}`);
-      setTransaction(response.data);
+      const [transRes, settingsRes] = await Promise.all([
+        api.get(`/transactions/${id}`),
+        api.get('/store-settings')
+      ]);
+      setTransaction(transRes.data);
+      setStoreSettings(settingsRes.data);
     } catch (error) {
       toast.error('Gagal memuat data transaksi');
       navigate('/pos');
