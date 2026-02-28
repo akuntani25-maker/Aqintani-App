@@ -31,6 +31,7 @@ export const AdminLayout = () => {
     { to: '/admin/suppliers', icon: Users, label: 'Supplier' },
     { to: '/admin/reports', icon: FileText, label: 'Laporan' },
     { to: '/admin/users', icon: UserCog, label: 'Pengguna' },
+    { to: '/admin/profile', icon: Settings, label: 'Profil' },
   ];
 
   return (
