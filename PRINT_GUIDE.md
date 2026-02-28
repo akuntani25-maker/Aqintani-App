@@ -26,6 +26,17 @@
 
 ## 🎯 Cara Print Struk (Print Preview)
 
+### Setup Awal - Pilih Ukuran Kertas:
+
+1. Login sebagai **Admin**
+2. Buka menu **"Printer"** di sidebar
+3. Scroll ke **"Ukuran Kertas Printer"**
+4. Pilih ukuran sesuai printer Anda:
+   - **48mm** → EPSON D58UBT-S / Thermal Mini
+   - **58mm** → Thermal Standard POS
+   - **A4** → Laser / Inkjet
+5. ✅ Setting tersimpan otomatis
+
 ### Flow Transaksi:
 
 1. **Tambah Produk ke Keranjang**
