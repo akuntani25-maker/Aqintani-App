@@ -297,19 +297,29 @@ export const Settings = () => {
         {/* Printer Info */}
         <Card className="p-6 lg:col-span-2 bg-gradient-to-br from-accent to-accent/50">
           <h3 className="font-semibold mb-3">Informasi Printer</h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4 text-sm">
             <div>
               <p className="text-muted-foreground">Model</p>
-              <p className="font-medium">POS 58 RPP02N</p>
+              <p className="font-medium">EPSON D58UBT-S</p>
             </div>
             <div>
-              <p className="text-muted-foreground">Lebar Kertas</p>
-              <p className="font-medium">58mm (32 karakter)</p>
+              <p className="text-muted-foreground">Koneksi</p>
+              <p className="font-medium">USB + Bluetooth</p>
+            </div>
+            <div>
+              <p className="text-muted-foreground">Ukuran Dipilih</p>
+              <p className="font-medium">{paperSize.toUpperCase()}</p>
             </div>
             <div>
               <p className="text-muted-foreground">Format</p>
               <p className="font-medium">ESC/POS</p>
             </div>
+          </div>
+          
+          <div className="mt-4 pt-4 border-t border-primary/20">
+            <p className="text-xs text-muted-foreground mb-2">
+              <strong>Catatan:</strong> Untuk printer thermal 48mm, pastikan di printer settings Windows sudah diset ke custom size 48mm x 210mm
+            </p>
           </div>
         </Card>
       </div>
