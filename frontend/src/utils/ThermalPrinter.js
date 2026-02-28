@@ -71,6 +71,9 @@ class ThermalPrinter {
           { namePrefix: 'RPP' },
           { namePrefix: 'POS' },
           { namePrefix: 'Printer' },
+          { namePrefix: 'EPSON' },
+          { namePrefix: 'D58' },
+          { namePrefix: 'TM-' },
         ],
         optionalServices: ['000018f0-0000-1000-8000-00805f9b34fb', 'e7810a71-73ae-499d-8c15-faa9aef0c3f2']
       });
