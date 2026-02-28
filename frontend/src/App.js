@@ -59,6 +59,12 @@ function App() {
             </PrivateRoute>
           } />
 
+          <Route path="/canvasser" element={
+            <PrivateRoute requireCanvasser={true}>
+              <CanvasserDashboard />
+            </PrivateRoute>
+          } />
+
           <Route path="/receipt-preview" element={
             <PrivateRoute>
               <ReceiptPreview />
