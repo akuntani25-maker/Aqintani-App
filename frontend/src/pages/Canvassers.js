@@ -7,7 +7,7 @@ import { Card } from '../components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '../components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
 import { toast } from 'sonner';
-import { Plus, Pencil, Trash2, Truck, User } from 'lucide-react';
+import { Plus, Pencil, Trash2, Truck, User, Key } from 'lucide-react';
 
 export const Canvassers = () => {
   const [canvassers, setCanvassers] = useState([]);
