@@ -218,22 +218,79 @@ export const Settings = () => {
 
         {/* Auto Print Settings */}
         <Card className="p-6 lg:col-span-2">
-          <h2 className="text-xl font-semibold mb-6">Pengaturan Auto Print</h2>
+          <h2 className="text-xl font-semibold mb-6">Pengaturan Cetak</h2>
           
-          <div className="flex items-start justify-between">
-            <div>
-              <Label className="text-base font-medium">Cetak Otomatis Setelah Transaksi</Label>
-              <p className="text-sm text-muted-foreground mt-1">
-                Struk akan dicetak secara otomatis setelah transaksi berhasil
-              </p>
+          <div className="space-y-6">
+            <div className="flex items-start justify-between">
+              <div>
+                <Label className="text-base font-medium">Cetak Otomatis Setelah Transaksi</Label>
+                <p className="text-sm text-muted-foreground mt-1">
+                  Struk akan dicetak secara otomatis setelah transaksi berhasil
+                </p>
+              </div>
+              <Button
+                onClick={handleToggleAutoPrint}
+                variant={autoPrint ? "default" : "outline"}
+                data-testid="auto-print-toggle"
+              >
+                {autoPrint ? 'Aktif' : 'Nonaktif'}
+              </Button>
             </div>
-            <Button
-              onClick={handleToggleAutoPrint}
-              variant={autoPrint ? "default" : "outline"}
-              data-testid="auto-print-toggle"
-            >
-              {autoPrint ? 'Aktif' : 'Nonaktif'}
-            </Button>
+
+            <div className="border-t pt-6">
+              <Label className="text-base font-medium mb-3 block">Ukuran Kertas Printer</Label>
+              <p className="text-sm text-muted-foreground mb-4">
+                Pilih ukuran kertas sesuai dengan printer Anda untuk hasil print optimal
+              </p>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <Button
+                  variant={paperSize === '48mm' ? 'default' : 'outline'}
+                  onClick={() => handlePaperSizeChange('48mm')}
+                  className="h-auto py-4 flex flex-col items-start"
+                  data-testid="paper-size-48mm"
+                >
+                  <span className="font-bold text-lg">48mm</span>
+                  <span className="text-xs opacity-80">Thermal Mini (48x210mm)</span>
+                  <span className="text-xs opacity-60 mt-1">~18-20 karakter</span>
+                </Button>
+                <Button
+                  variant={paperSize === '58mm' ? 'default' : 'outline'}
+                  onClick={() => handlePaperSizeChange('58mm')}
+                  className="h-auto py-4 flex flex-col items-start"
+                  data-testid="paper-size-58mm"
+                >
+                  <span className="font-bold text-lg">58mm</span>
+                  <span className="text-xs opacity-80">Thermal Standard (58mm)</span>
+                  <span className="text-xs opacity-60 mt-1">~32 karakter</span>
+                </Button>
+                <Button
+                  variant={paperSize === 'a4' ? 'default' : 'outline'}
+                  onClick={() => handlePaperSizeChange('a4')}
+                  className="h-auto py-4 flex flex-col items-start"
+                  data-testid="paper-size-a4"
+                >
+                  <span className="font-bold text-lg">A4</span>
+                  <span className="text-xs opacity-80">Laser/Inkjet (210x297mm)</span>
+                  <span className="text-xs opacity-60 mt-1">Full page</span>
+                </Button>
+              </div>
+              
+              {paperSize === '48mm' && (
+                <div className="mt-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
+                  <p className="text-xs text-blue-800">
+                    <strong>Tips 48mm:</strong> Layout sangat compact. Font size 7-9px. Cocok untuk EPSON D58UBT-S dan thermal mini lainnya.
+                  </p>
+                </div>
+              )}
+              
+              {paperSize === '58mm' && (
+                <div className="mt-4 p-3 bg-green-50 rounded-lg border border-green-200">
+                  <p className="text-xs text-green-800">
+                    <strong>Tips 58mm:</strong> Ukuran thermal standard. Font size 9-10px. Paling umum digunakan di POS retail.
+                  </p>
+                </div>
+              )}
+            </div>
           </div>
         </Card>
 
