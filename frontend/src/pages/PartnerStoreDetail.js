@@ -5,20 +5,24 @@ import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Card } from '../components/ui/card';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '../components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
 import { toast } from 'sonner';
-import { ArrowLeft, DollarSign, ShoppingBag, MapPin, Phone, User } from 'lucide-react';
+import { ArrowLeft, DollarSign, ShoppingBag, MapPin, Phone, User, CreditCard, Clock } from 'lucide-react';
 
 export const PartnerStoreDetail = () => {
   const { storeId } = useParams();
   const navigate = useNavigate();
   const [store, setStore] = useState(null);
   const [orders, setOrders] = useState([]);
+  const [payments, setPayments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [paymentAmount, setPaymentAmount] = useState(0);
+  const [storePayDialogOpen, setStorePayDialogOpen] = useState(false);
+  const [storePayAmount, setStorePayAmount] = useState(0);
+  const [storePayNotes, setStorePayNotes] = useState('');
 
   useEffect(() => {
     fetchData();
@@ -26,14 +30,16 @@ export const PartnerStoreDetail = () => {
 
   const fetchData = async () => {
     try {
-      const [storeRes, ordersRes] = await Promise.all([
+      const [storeRes, ordersRes, paymentsRes] = await Promise.all([
         api.get(`/partner-stores`),
-        api.get(`/partner-orders?partner_store_id=${storeId}`)
+        api.get(`/partner-orders?partner_store_id=${storeId}`),
+        api.get(`/partner-stores/${storeId}/payments`)
       ]);
       
       const foundStore = storeRes.data.find(s => s.id === storeId);
       setStore(foundStore);
       setOrders(ordersRes.data);
+      setPayments(paymentsRes.data);
     } catch (error) {
       toast.error('Gagal memuat data');
       navigate('/admin/partner-stores');
@@ -47,7 +53,6 @@ export const PartnerStoreDetail = () => {
       toast.error('Masukkan jumlah pembayaran yang valid');
       return;
     }
-
     try {
       await api.post(`/partner-orders/${selectedOrder.id}/pay?amount=${paymentAmount}`);
       toast.success('Pembayaran berhasil dicatat');
@@ -60,13 +65,24 @@ export const PartnerStoreDetail = () => {
     }
   };
 
-  const formatCurrency = (value) => {
-    return new Intl.NumberFormat('id-ID', {
-      style: 'currency',
-      currency: 'IDR',
-      minimumFractionDigits: 0
-    }).format(value);
+  const handleStorePay = async () => {
+    if (storePayAmount <= 0) {
+      toast.error('Masukkan jumlah setoran yang valid');
+      return;
+    }
+    try {
+      await api.post(`/partner-stores/${storeId}/pay?amount=${storePayAmount}&notes=${encodeURIComponent(storePayNotes)}`);
+      toast.success('Setoran berhasil dicatat');
+      setStorePayDialogOpen(false);
+      setStorePayAmount(0);
+      setStorePayNotes('');
+      fetchData();
+    } catch (error) {
+      toast.error('Gagal mencatat setoran');
+    }
   };
+
+  const formatCurrency = (value) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(value);
 
   const getStatusBadge = (status) => {
     const styles = {
@@ -76,7 +92,7 @@ export const PartnerStoreDetail = () => {
     };
     return (
       <span className={`px-2 py-1 rounded-full text-xs font-medium ${styles[status] || styles.pending}`}>
-        {status}
+        {status === 'pending' ? 'Pending' : status === 'delivered' ? 'Terkirim' : 'Batal'}
       </span>
     );
   };
@@ -89,25 +105,28 @@ export const PartnerStoreDetail = () => {
     );
   }
 
-  if (!store) {
-    return null;
-  }
+  if (!store) return null;
+
+  const totalOrders = orders.reduce((s, o) => s + o.total, 0);
+  const totalPaid = orders.reduce((s, o) => s + o.paid, 0);
 
   return (
-    <div className="p-6 md:p-8 space-y-6">
+    <div className="p-6 md:p-8 space-y-6" data-testid="partner-store-detail-page">
       <div className="flex items-center gap-4">
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={() => navigate('/admin/partner-stores')}
-        >
+        <Button variant="outline" size="sm" onClick={() => navigate('/admin/partner-stores')} data-testid="back-button">
           <ArrowLeft className="w-4 h-4 mr-2" />
           Kembali
         </Button>
-        <div>
+        <div className="flex-1">
           <h1 className="text-3xl md:text-4xl font-bold tracking-tight">{store.name}</h1>
-          <p className="text-sm text-muted-foreground mt-1">Detail kios mitra dan riwayat transaksi</p>
+          <p className="text-sm text-muted-foreground mt-1">Detail kios mitra, riwayat transaksi & setoran</p>
         </div>
+        {store.current_debt > 0 && (
+          <Button onClick={() => { setStorePayAmount(store.current_debt); setStorePayDialogOpen(true); }} data-testid="store-pay-button">
+            <DollarSign className="w-4 h-4 mr-2" />
+            Catat Setoran
+          </Button>
+        )}
       </div>
 
       {/* Store Info */}
@@ -119,7 +138,6 @@ export const PartnerStoreDetail = () => {
           </div>
           <p className="font-semibold">{store.owner_name}</p>
         </Card>
-
         <Card className="p-6">
           <div className="flex items-center gap-3 mb-2">
             <Phone className="w-5 h-5 text-muted-foreground" />
@@ -127,18 +145,16 @@ export const PartnerStoreDetail = () => {
           </div>
           <p className="font-semibold">{store.phone}</p>
         </Card>
-
         <Card className="p-6">
           <div className="flex items-center gap-3 mb-2">
-            <DollarSign className="w-5 h-5 text-muted-foreground" />
-            <span className="text-xs text-muted-foreground uppercase tracking-wider">Limit Kredit</span>
+            <ShoppingBag className="w-5 h-5 text-muted-foreground" />
+            <span className="text-xs text-muted-foreground uppercase tracking-wider">Total Pesanan</span>
           </div>
-          <p className="font-semibold">{formatCurrency(store.credit_limit)}</p>
+          <p className="font-semibold">{formatCurrency(totalOrders)}</p>
         </Card>
-
         <Card className="p-6 bg-orange-50 border-orange-200">
           <div className="flex items-center gap-3 mb-2">
-            <ShoppingBag className="w-5 h-5 text-orange-600" />
+            <CreditCard className="w-5 h-5 text-orange-600" />
             <span className="text-xs text-orange-600 uppercase tracking-wider font-semibold">Sisa Piutang</span>
           </div>
           <p className="font-bold text-xl text-orange-600">{formatCurrency(store.current_debt || 0)}</p>
@@ -146,26 +162,48 @@ export const PartnerStoreDetail = () => {
       </div>
 
       <Card className="p-6">
-        <div className="flex items-center gap-3 mb-4">
+        <div className="flex items-center gap-3 mb-2">
           <MapPin className="w-5 h-5 text-muted-foreground" />
           <span className="text-sm font-semibold">Alamat</span>
         </div>
         <p className="text-sm">{store.address}</p>
-        {store.latitude && store.longitude && (
-          <p className="text-xs text-muted-foreground mt-2">
-            Koordinat: {store.latitude.toFixed(6)}, {store.longitude.toFixed(6)}
-          </p>
-        )}
       </Card>
 
-      {/* Orders History */}
-      <Card className="p-6">
-        <h2 className="text-xl font-semibold mb-4">Riwayat Pesanan</h2>
-        
-        {orders.length === 0 ? (
-          <div className="text-center py-8 text-muted-foreground">
-            Belum ada pesanan
+      {/* Payment History */}
+      {payments.length > 0 && (
+        <Card className="p-6" data-testid="payment-history-card">
+          <div className="flex items-center gap-2 mb-4">
+            <Clock className="w-5 h-5 text-green-600" />
+            <h2 className="text-xl font-semibold">Riwayat Setoran</h2>
           </div>
+          <div className="rounded-lg border overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Tanggal</TableHead>
+                  <TableHead className="text-right">Jumlah</TableHead>
+                  <TableHead>Catatan</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {payments.map(p => (
+                  <TableRow key={p.id}>
+                    <TableCell>{new Date(p.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}</TableCell>
+                    <TableCell className="text-right font-semibold text-green-600">{formatCurrency(p.amount)}</TableCell>
+                    <TableCell>{p.notes || '-'}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </Card>
+      )}
+
+      {/* Orders History */}
+      <Card className="p-6" data-testid="orders-history-card">
+        <h2 className="text-xl font-semibold mb-4">Riwayat Pesanan</h2>
+        {orders.length === 0 ? (
+          <div className="text-center py-8 text-muted-foreground">Belum ada pesanan</div>
         ) : (
           <div className="rounded-lg border overflow-x-auto">
             <Table>
@@ -198,14 +236,7 @@ export const PartnerStoreDetail = () => {
                     <TableCell>
                       <div className="flex items-center justify-center gap-2">
                         {order.remaining > 0 && (
-                          <Button
-                            size="sm"
-                            onClick={() => {
-                              setSelectedOrder(order);
-                              setPaymentAmount(order.remaining);
-                              setPaymentDialogOpen(true);
-                            }}
-                          >
+                          <Button size="sm" onClick={() => { setSelectedOrder(order); setPaymentAmount(order.remaining); setPaymentDialogOpen(true); }} data-testid={`pay-order-${order.id}`}>
                             <DollarSign className="w-4 h-4 mr-1" />
                             Bayar
                           </Button>
@@ -220,42 +251,59 @@ export const PartnerStoreDetail = () => {
         )}
       </Card>
 
-      {/* Payment Dialog */}
+      {/* Order Payment Dialog */}
       <Dialog open={paymentDialogOpen} onOpenChange={setPaymentDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Catat Pembayaran</DialogTitle>
+            <DialogTitle>Bayar Pesanan</DialogTitle>
           </DialogHeader>
           {selectedOrder && (
             <div className="space-y-4">
-              <div>
-                <p className="text-sm text-muted-foreground">No. Order</p>
-                <p className="font-semibold">{selectedOrder.order_number}</p>
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Sisa Tagihan</p>
+              <div><p className="text-sm text-muted-foreground">No. Order</p><p className="font-semibold">{selectedOrder.order_number}</p></div>
+              <div className="p-4 bg-orange-50 rounded-lg border border-orange-200">
+                <p className="text-sm text-orange-800">Sisa Tagihan</p>
                 <p className="text-xl font-bold text-orange-600">{formatCurrency(selectedOrder.remaining)}</p>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="payment-amount">Jumlah Pembayaran</Label>
-                <Input
-                  id="payment-amount"
-                  type="number"
-                  value={paymentAmount}
-                  onChange={(e) => setPaymentAmount(parseFloat(e.target.value) || 0)}
-                  max={selectedOrder.remaining}
-                />
+                <Label>Jumlah Pembayaran</Label>
+                <Input type="number" value={paymentAmount} onChange={(e) => setPaymentAmount(parseFloat(e.target.value) || 0)} max={selectedOrder.remaining} />
               </div>
               <div className="flex gap-2 justify-end">
-                <Button variant="outline" onClick={() => setPaymentDialogOpen(false)}>
-                  Batal
-                </Button>
-                <Button onClick={handlePayment}>
-                  Simpan Pembayaran
-                </Button>
+                <Button variant="outline" onClick={() => setPaymentDialogOpen(false)}>Batal</Button>
+                <Button onClick={handlePayment}>Simpan Pembayaran</Button>
               </div>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Store Direct Payment Dialog */}
+      <Dialog open={storePayDialogOpen} onOpenChange={setStorePayDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Catat Setoran dari {store.name}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="p-4 bg-orange-50 rounded-lg border border-orange-200">
+              <p className="text-sm text-orange-800">Sisa Piutang Saat Ini</p>
+              <p className="text-2xl font-bold text-orange-600">{formatCurrency(store.current_debt || 0)}</p>
+            </div>
+            <div className="space-y-2">
+              <Label>Jumlah Setoran</Label>
+              <Input type="number" value={storePayAmount} onChange={(e) => setStorePayAmount(parseFloat(e.target.value) || 0)} data-testid="store-pay-amount" />
+            </div>
+            <div className="space-y-2">
+              <Label>Catatan (opsional)</Label>
+              <Input value={storePayNotes} onChange={(e) => setStorePayNotes(e.target.value)} placeholder="Misal: Setoran tunai via kanvaser" data-testid="store-pay-notes" />
+            </div>
+            <div className="flex gap-2 justify-end">
+              <Button variant="outline" onClick={() => setStorePayDialogOpen(false)}>Batal</Button>
+              <Button onClick={handleStorePay} data-testid="confirm-store-payment">
+                <DollarSign className="w-4 h-4 mr-2" />
+                Simpan Setoran
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
