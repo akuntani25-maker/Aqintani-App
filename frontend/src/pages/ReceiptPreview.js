@@ -107,11 +107,19 @@ export const ReceiptPreview = () => {
                 <span className="text-3xl">🌾</span>
               </div>
             </div>
-            <h1 className="text-3xl print:text-base font-bold mb-2 print:mb-1">UD. AQIN TANI</h1>
-            <p className="text-gray-600 print:text-[10px] print:leading-tight">Toko Obat & Alat Pertanian</p>
+            <h1 className="text-3xl print:text-base font-bold mb-2 print:mb-1">
+              {storeSettings?.store_name || 'UD. AQIN TANI'}
+            </h1>
+            <p className="text-gray-600 print:text-[10px] print:leading-tight">
+              {storeSettings?.address || 'Toko Obat & Alat Pertanian'}
+            </p>
             <p className="text-sm print:text-[9px] text-gray-500 mt-2 print:mt-1 print:leading-tight">
-              Jl. Contoh No. 123, Kota<br className="print:hidden" />
-              <span className="hidden print:inline"> </span>Telp: (021) 1234-5678
+              Telp: {storeSettings?.phone || '(021) 1234-5678'}
+              {storeSettings?.email && (
+                <><br className="print:hidden" />
+                <span className="hidden print:inline"> | </span>
+                Email: {storeSettings.email}</>
+              )}
             </p>
           </div>
 
