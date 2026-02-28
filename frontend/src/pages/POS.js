@@ -23,7 +23,7 @@ const Receipt = React.forwardRef(({ transaction }, ref) => {
   return (
     <div ref={ref} className="p-8 bg-white" style={{ width: '80mm' }}>
       <div className="text-center mb-4">
-        <h2 className="text-xl font-bold">AgriPharma POS</h2>
+        <h2 className="text-xl font-bold">UD. AQIN TANI</h2>
         <p className="text-xs">Toko Obat & Alat Pertanian</p>
         <p className="text-xs mt-2">{new Date(transaction.created_at).toLocaleString('id-ID')}</p>
         <p className="text-xs font-mono">{transaction.transaction_number}</p>
