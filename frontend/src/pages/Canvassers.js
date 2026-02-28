@@ -92,6 +92,38 @@ export const Canvassers = () => {
     });
   };
 
+  const handleCreateLogin = (canvasser) => {
+    setSelectedCanvasser(canvasser);
+    setLoginData({
+      email: `${canvasser.name.toLowerCase().replace(/\s/g, '')}@aqintani.com`,
+      password: ''
+    });
+    setCreateLoginDialogOpen(true);
+  };
+
+  const submitCreateLogin = async () => {
+    if (!loginData.email || !loginData.password) {
+      toast.error('Email dan password harus diisi');
+      return;
+    }
+
+    try {
+      await api.post('/auth/register', {
+        email: loginData.email,
+        password: loginData.password,
+        name: selectedCanvasser.name,
+        role: 'canvasser',
+        canvasser_id: selectedCanvasser.id
+      });
+      toast.success('Akun kanvaser berhasil dibuat');
+      setCreateLoginDialogOpen(false);
+      setLoginData({ email: '', password: '' });
+      setSelectedCanvasser(null);
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Gagal membuat akun');
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
