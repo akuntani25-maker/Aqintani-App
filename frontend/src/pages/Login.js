@@ -153,7 +153,7 @@ export const Login = () => {
 
           <div className="mt-8 p-5 bg-gradient-to-br from-accent to-accent/50 rounded-2xl border-2 border-primary/10">
             <p className="text-xs text-muted-foreground mb-2 font-semibold uppercase tracking-wide">Akun Demo:</p>
-            <p className="text-sm text-foreground font-medium">admin@agripharma.com / admin123</p>
+            <p className="text-sm text-foreground font-medium">admin@aqintani.com / admin123</p>
           </div>
         </div>
       </div>
