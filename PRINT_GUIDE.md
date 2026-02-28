@@ -1,12 +1,26 @@
 # Panduan Print Struk - UD. AQIN TANI
 
-## ✅ Metode Print yang Tersedia
+## ✅ Ukuran Kertas yang Didukung
 
-### 1. **Print Preview (RECOMMENDED)** ⭐
-Metode paling reliable yang bekerja dengan **semua jenis printer** (thermal, laser, inkjet)
+### 1. **Thermal 48mm** (EPSON D58UBT-S)
+- Ukuran: 48mm x 210mm
+- Lebar efektif: ~44mm (dengan margin)
+- Karakter per baris: ~18-20 karakter
+- Font size: 7-9px (sangat compact)
+- **Cocok untuk**: EPSON D58UBT-S, thermal mini
 
-### 2. Thermal Printer Direct (Optional)
-Untuk EPSON D58UBT-S atau thermal printer lainnya via USB/Bluetooth
+### 2. **Thermal 58mm** (Standard POS)
+- Ukuran: 58mm x variable
+- Lebar efektif: ~54mm
+- Karakter per baris: ~32 karakter
+- Font size: 9-10px
+- **Cocok untuk**: Thermal printer standard, POS 58 RPP02N
+
+### 3. **A4** (Laser/Inkjet)
+- Ukuran: 210mm x 297mm
+- Full page receipt
+- Font size: Normal (14-16px)
+- **Cocok untuk**: Printer laser, inkjet, office printer
 
 ---
 
