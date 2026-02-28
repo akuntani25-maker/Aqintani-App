@@ -39,46 +39,62 @@ export const Login = () => {
       <div 
         className="hidden lg:flex lg:w-1/2 bg-cover bg-center relative"
         style={{ 
-          backgroundImage: 'url(https://images.unsplash.com/photo-1758573467057-955f803660a9?q=85&w=1920&auto=format&fit=crop)'
+          backgroundImage: 'url(https://images.unsplash.com/photo-1625246333195-78d9c38ad449?q=85&w=1920&auto=format&fit=crop)'
         }}
       >
-        <div className="absolute inset-0 bg-primary/80 backdrop-blur-sm"></div>
-        <div className="relative z-10 p-12 flex flex-col justify-center text-white">
-          <div className="flex items-center gap-3 mb-8">
-            <Pill className="w-10 h-10" />
-            <Sprout className="w-10 h-10" />
+        <div className="absolute inset-0 bg-gradient-to-br from-primary/95 via-primary/90 to-primary/85"></div>
+        <div className="relative z-10 p-12 flex flex-col justify-center text-white max-w-xl">
+          <div className="mb-8">
+            <div className="inline-flex items-center gap-3 mb-6 bg-white/10 backdrop-blur-sm px-5 py-3 rounded-2xl border border-white/20">
+              <Sprout className="w-8 h-8 text-secondary" />
+              <span className="text-2xl font-bold tracking-tight">UD. AQIN TANI</span>
+            </div>
           </div>
-          <h1 className="text-4xl md:text-5xl font-bold tracking-tight mb-4">
-            AgriPharma POS
+          <h1 className="text-5xl md:text-6xl font-bold tracking-tight mb-6 leading-tight">
+            Sistem Manajemen<br />Toko Modern
           </h1>
-          <p className="text-lg leading-relaxed opacity-90">
-            Sistem Manajemen Toko Obat & Alat Pertanian Modern
+          <p className="text-xl leading-relaxed opacity-90 mb-12">
+            Kelola toko obat & alat pertanian Anda dengan mudah, cepat, dan profesional
           </p>
-          <div className="mt-12 space-y-4">
-            <div className="flex items-start gap-3">
-              <div className="w-2 h-2 bg-secondary rounded-full mt-2"></div>
-              <p className="text-base">Kelola inventori dengan mudah</p>
+          <div className="space-y-5">
+            <div className="flex items-start gap-4 group">
+              <div className="w-12 h-12 rounded-xl bg-secondary/20 flex items-center justify-center flex-shrink-0 group-hover:bg-secondary/30 transition-colors">
+                <div className="w-3 h-3 bg-secondary rounded-full"></div>
+              </div>
+              <div>
+                <p className="text-lg font-medium mb-1">Manajemen Inventori Cerdas</p>
+                <p className="text-sm opacity-75">Tracking stok real-time dengan alert otomatis</p>
+              </div>
             </div>
-            <div className="flex items-start gap-3">
-              <div className="w-2 h-2 bg-secondary rounded-full mt-2"></div>
-              <p className="text-base">Transaksi cepat dan akurat</p>
+            <div className="flex items-start gap-4 group">
+              <div className="w-12 h-12 rounded-xl bg-secondary/20 flex items-center justify-center flex-shrink-0 group-hover:bg-secondary/30 transition-colors">
+                <div className="w-3 h-3 bg-secondary rounded-full"></div>
+              </div>
+              <div>
+                <p className="text-lg font-medium mb-1">Transaksi Super Cepat</p>
+                <p className="text-sm opacity-75">POS dengan barcode scanner & multiple payment</p>
+              </div>
             </div>
-            <div className="flex items-start gap-3">
-              <div className="w-2 h-2 bg-secondary rounded-full mt-2"></div>
-              <p className="text-base">Laporan lengkap real-time</p>
+            <div className="flex items-start gap-4 group">
+              <div className="w-12 h-12 rounded-xl bg-secondary/20 flex items-center justify-center flex-shrink-0 group-hover:bg-secondary/30 transition-colors">
+                <div className="w-3 h-3 bg-secondary rounded-full"></div>
+              </div>
+              <div>
+                <p className="text-lg font-medium mb-1">Laporan Komprehensif</p>
+                <p className="text-sm opacity-75">Analisis penjualan harian & bulanan otomatis</p>
+              </div>
             </div>
           </div>
         </div>
       </div>
 
-      <div className="w-full lg:w-1/2 flex items-center justify-center p-8 bg-background">
+      <div className="w-full lg:w-1/2 flex items-center justify-center p-8 bg-gradient-mesh">
         <div className="w-full max-w-md space-y-8">
           <div className="text-center lg:hidden mb-8">
-            <div className="flex items-center justify-center gap-2 mb-4">
-              <Pill className="w-8 h-8 text-primary" />
-              <Sprout className="w-8 h-8 text-secondary" />
+            <div className="inline-flex items-center gap-2 mb-4 bg-primary/10 px-4 py-2 rounded-xl">
+              <Sprout className="w-6 h-6 text-primary" />
+              <span className="text-xl font-bold text-primary">UD. AQIN TANI</span>
             </div>
-            <h2 className="text-3xl font-bold tracking-tight text-primary">AgriPharma POS</h2>
           </div>
 
           <div>
