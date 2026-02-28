@@ -11,7 +11,8 @@ import {
   Settings, 
   LogOut,
   Sprout,
-  UserCog
+  UserCog,
+  Printer
 } from 'lucide-react';
 
 export const AdminLayout = () => {
