@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
 import { toast } from 'sonner';
-import { Plus, Search, Package, Trash2, ShoppingCart } from 'lucide-react';
+import { Plus, Search, Package, Trash2, ShoppingCart, Warehouse } from 'lucide-react';
 
 export const PartnerOrders = () => {
   const [orders, setOrders] = useState([]);
@@ -19,7 +19,7 @@ export const PartnerOrders = () => {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [selectedPartner, setSelectedPartner] = useState('');
   const [selectedCanvasser, setSelectedCanvasser] = useState('');
-  const [selectedWarehouse, setSelectedWarehouse] = useState('gudang_utama');
+  const [defaultWarehouse, setDefaultWarehouse] = useState('gudang_utama');
   const [deliveryDate, setDeliveryDate] = useState(new Date().toISOString().split('T')[0]);
   const [cart, setCart] = useState([]);
   const [searchProduct, setSearchProduct] = useState('');
@@ -28,9 +28,7 @@ export const PartnerOrders = () => {
   const [warehouseStock, setWarehouseStock] = useState([]);
   const [partnerPrices, setPartnerPrices] = useState([]);
 
-  useEffect(() => {
-    fetchData();
-  }, []);
+  useEffect(() => { fetchData(); }, []);
 
   const fetchData = async () => {
     try {
@@ -50,12 +48,9 @@ export const PartnerOrders = () => {
       setWarehouseStock(whStockRes.data);
     } catch (error) {
       toast.error('Gagal memuat data');
-    } finally {
-      setLoading(false);
-    }
+    } finally { setLoading(false); }
   };
 
-  // Fetch partner prices when partner changes
   useEffect(() => {
     if (selectedPartner) {
       api.get(`/partner-prices?partner_store_id=${selectedPartner}`).then(res => setPartnerPrices(res.data)).catch(() => {});
@@ -74,13 +69,25 @@ export const PartnerOrders = () => {
     return entry ? entry.stock : 0;
   };
 
-  const addToCart = (product) => {
+  const getWarehouseUnit = (warehouseId) => {
+    const wh = warehouses.find(w => w.id === warehouseId);
+    return wh?.unit || 'satuan';
+  };
+
+  const getPriceForWarehouse = (product, warehouseId) => {
     const customPrice = getPartnerPrice(product.id);
-    const price = customPrice !== null ? customPrice : product.price;
-    const existing = cart.find(item => item.product_id === product.id);
+    if (customPrice !== null) return customPrice;
+    const unit = getWarehouseUnit(warehouseId);
+    return unit === 'dus' ? (product.box_price || product.price) : product.price;
+  };
+
+  const addToCart = (product) => {
+    const whId = defaultWarehouse;
+    const price = getPriceForWarehouse(product, whId);
+    const existing = cart.find(item => item.product_id === product.id && item.warehouse_id === whId);
     if (existing) {
       setCart(cart.map(item =>
-        item.product_id === product.id
+        (item.product_id === product.id && item.warehouse_id === whId)
           ? { ...item, quantity: item.quantity + 1, subtotal: (item.quantity + 1) * item.price }
           : item
       ));
@@ -90,41 +97,45 @@ export const PartnerOrders = () => {
         product_name: product.name,
         quantity: 1,
         price,
-        subtotal: price
+        subtotal: price,
+        warehouse_id: whId
       }]);
     }
   };
 
-  const updateQuantity = (productId, newQuantity) => {
+  const updateQuantity = (productId, warehouseId, newQuantity) => {
     if (newQuantity <= 0) {
-      setCart(cart.filter(item => item.product_id !== productId));
+      setCart(cart.filter(item => !(item.product_id === productId && item.warehouse_id === warehouseId)));
     } else {
       setCart(cart.map(item =>
-        item.product_id === productId
+        (item.product_id === productId && item.warehouse_id === warehouseId)
           ? { ...item, quantity: newQuantity, subtotal: newQuantity * item.price }
           : item
       ));
     }
   };
 
+  const changeItemWarehouse = (productId, oldWhId, newWhId) => {
+    if (oldWhId === newWhId) return;
+    const product = products.find(p => p.id === productId);
+    if (!product) return;
+    const newPrice = getPriceForWarehouse(product, newWhId);
+    setCart(cart.map(item =>
+      (item.product_id === productId && item.warehouse_id === oldWhId)
+        ? { ...item, warehouse_id: newWhId, price: newPrice, subtotal: item.quantity * newPrice }
+        : item
+    ));
+  };
+
   const calculateTotal = () => {
     const subtotal = cart.reduce((sum, item) => sum + item.subtotal, 0);
-    const total = subtotal - discount;
-    return { subtotal, total };
+    return { subtotal, total: subtotal - discount };
   };
 
   const handleSubmit = async () => {
-    if (!selectedPartner) {
-      toast.error('Pilih kios mitra');
-      return;
-    }
-    if (cart.length === 0) {
-      toast.error('Keranjang kosong');
-      return;
-    }
-
+    if (!selectedPartner) { toast.error('Pilih kios mitra'); return; }
+    if (cart.length === 0) { toast.error('Keranjang kosong'); return; }
     const { subtotal, total } = calculateTotal();
-
     try {
       await api.post('/partner-orders', {
         partner_store_id: selectedPartner,
@@ -135,7 +146,7 @@ export const PartnerOrders = () => {
         paid: 0,
         delivery_date: deliveryDate,
         canvasser_id: selectedCanvasser,
-        warehouse_id: selectedWarehouse
+        warehouse_id: defaultWarehouse
       });
       toast.success('Pesanan berhasil dibuat');
       resetForm();
@@ -149,7 +160,7 @@ export const PartnerOrders = () => {
   const resetForm = () => {
     setSelectedPartner('');
     setSelectedCanvasser('');
-    setSelectedWarehouse('gudang_utama');
+    setDefaultWarehouse('gudang_utama');
     setCart([]);
     setDiscount(0);
     setDeliveryDate(new Date().toISOString().split('T')[0]);
@@ -165,24 +176,14 @@ export const PartnerOrders = () => {
     }
   };
 
-  const formatCurrency = (value) => {
-    return new Intl.NumberFormat('id-ID', {
-      style: 'currency',
-      currency: 'IDR',
-      minimumFractionDigits: 0
-    }).format(value);
-  };
+  const fmt = (v) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(v);
 
   const filteredProducts = products.filter(p =>
     p.name.toLowerCase().includes(searchProduct.toLowerCase())
   );
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
-      </div>
-    );
+    return <div className="flex items-center justify-center min-h-screen"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div></div>;
   }
 
   const { subtotal, total } = calculateTotal();
@@ -194,14 +195,10 @@ export const PartnerOrders = () => {
           <h1 className="text-3xl md:text-4xl font-bold tracking-tight">Pesanan Kios Mitra</h1>
           <p className="text-sm text-muted-foreground mt-2">Buat dan kelola pesanan untuk kios mitra</p>
         </div>
-        <Dialog open={isDialogOpen} onOpenChange={(open) => {
-          setIsDialogOpen(open);
-          if (!open) resetForm();
-        }}>
+        <Dialog open={isDialogOpen} onOpenChange={(open) => { setIsDialogOpen(open); if (!open) resetForm(); }}>
           <DialogTrigger asChild>
             <Button data-testid="create-order-button">
-              <Plus className="w-4 h-4 mr-2" />
-              Buat Pesanan Baru
+              <Plus className="w-4 h-4 mr-2" />Buat Pesanan Baru
             </Button>
           </DialogTrigger>
           <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
@@ -214,14 +211,10 @@ export const PartnerOrders = () => {
                 <div className="space-y-2">
                   <Label>Pilih Kios Mitra *</Label>
                   <Select value={selectedPartner} onValueChange={setSelectedPartner}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Pilih kios mitra" />
-                    </SelectTrigger>
+                    <SelectTrigger data-testid="order-partner-select"><SelectValue placeholder="Pilih kios mitra" /></SelectTrigger>
                     <SelectContent>
-                      {partnerStores.map((store) => (
-                        <SelectItem key={store.id} value={store.id}>
-                          {store.name} - {store.owner_name}
-                        </SelectItem>
+                      {partnerStores.map(store => (
+                        <SelectItem key={store.id} value={store.id}>{store.name} - {store.owner_name}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -231,39 +224,24 @@ export const PartnerOrders = () => {
                   <div className="space-y-2">
                     <Label>Kanvaser</Label>
                     <Select value={selectedCanvasser} onValueChange={setSelectedCanvasser}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Pilih kanvaser" />
-                      </SelectTrigger>
+                      <SelectTrigger data-testid="order-canvasser-select"><SelectValue placeholder="Pilih kanvaser" /></SelectTrigger>
                       <SelectContent>
-                        {canvassers.map((canvasser) => (
-                          <SelectItem key={canvasser.id} value={canvasser.id}>
-                            {canvasser.name}
-                          </SelectItem>
-                        ))}
+                        {canvassers.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
                       </SelectContent>
                     </Select>
                   </div>
-
                   <div className="space-y-2">
                     <Label>Tanggal Kirim</Label>
-                    <Input
-                      type="date"
-                      value={deliveryDate}
-                      onChange={(e) => setDeliveryDate(e.target.value)}
-                    />
+                    <Input type="date" value={deliveryDate} onChange={(e) => setDeliveryDate(e.target.value)} data-testid="order-delivery-date" />
                   </div>
                 </div>
 
                 <div className="space-y-2">
-                  <Label>Gudang Sumber *</Label>
-                  <Select value={selectedWarehouse} onValueChange={setSelectedWarehouse}>
-                    <SelectTrigger data-testid="order-warehouse-select">
-                      <SelectValue placeholder="Pilih gudang" />
-                    </SelectTrigger>
+                  <Label>Gudang Default (untuk item baru)</Label>
+                  <Select value={defaultWarehouse} onValueChange={setDefaultWarehouse}>
+                    <SelectTrigger data-testid="order-warehouse-select"><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      {warehouses.map(wh => (
-                        <SelectItem key={wh.id} value={wh.id}>{wh.name} ({wh.unit})</SelectItem>
-                      ))}
+                      {warehouses.map(wh => <SelectItem key={wh.id} value={wh.id}>{wh.name} ({wh.unit})</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>
@@ -272,32 +250,29 @@ export const PartnerOrders = () => {
                   <Label>Cari Produk</Label>
                   <div className="relative">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-                    <Input
-                      placeholder="Cari produk..."
-                      value={searchProduct}
-                      onChange={(e) => setSearchProduct(e.target.value)}
-                      className="pl-10"
-                    />
+                    <Input placeholder="Cari produk..." value={searchProduct} onChange={(e) => setSearchProduct(e.target.value)} className="pl-10" data-testid="order-search-product" />
                   </div>
                 </div>
 
                 <div className="border rounded-lg max-h-64 overflow-y-auto">
-                  {filteredProducts.slice(0, 10).map((product) => {
-                    const whStock = getWarehouseStockQty(product.id, selectedWarehouse);
+                  {filteredProducts.slice(0, 10).map(product => {
+                    const whStock = getWarehouseStockQty(product.id, defaultWarehouse);
+                    const unit = getWarehouseUnit(defaultWarehouse);
+                    const displayPrice = getPriceForWarehouse(product, defaultWarehouse);
                     const customPrice = getPartnerPrice(product.id);
-                    const displayPrice = customPrice !== null ? customPrice : product.price;
                     return (
                       <div
                         key={product.id}
                         className="p-3 hover:bg-accent cursor-pointer border-b last:border-b-0 flex justify-between items-center"
                         onClick={() => addToCart(product)}
+                        data-testid={`product-item-${product.id}`}
                       >
                         <div>
                           <p className="font-medium text-sm">{product.name}</p>
-                          <p className="text-xs text-muted-foreground">Stok gudang: {whStock} {warehouses.find(w => w.id === selectedWarehouse)?.unit || ''}</p>
+                          <p className="text-xs text-muted-foreground">Stok: {whStock} {unit}</p>
                         </div>
                         <div className="text-right">
-                          <p className="font-semibold">{formatCurrency(displayPrice)}</p>
+                          <p className="font-semibold">{fmt(displayPrice)}<span className="text-xs font-normal text-muted-foreground">/{unit}</span></p>
                           {customPrice !== null && <p className="text-xs text-green-600">Harga mitra</p>}
                         </div>
                       </div>
@@ -313,77 +288,77 @@ export const PartnerOrders = () => {
                   <span className="text-sm text-muted-foreground">{cart.length} item</span>
                 </div>
 
-                <div className="border rounded-lg max-h-64 overflow-y-auto">
+                <div className="border rounded-lg max-h-80 overflow-y-auto">
                   {cart.length === 0 ? (
                     <div className="p-8 text-center text-muted-foreground">
                       <ShoppingCart className="w-12 h-12 mx-auto mb-2 opacity-20" />
                       <p className="text-sm">Keranjang kosong</p>
                     </div>
-                  ) : (
-                    cart.map((item) => (
-                      <div key={item.product_id} className="p-3 border-b last:border-b-0">
-                        <div className="flex justify-between items-start mb-2">
+                  ) : cart.map(item => {
+                    const unit = getWarehouseUnit(item.warehouse_id);
+                    const whName = warehouses.find(w => w.id === item.warehouse_id)?.name || '';
+                    const stock = getWarehouseStockQty(item.product_id, item.warehouse_id);
+                    return (
+                      <div key={`${item.product_id}-${item.warehouse_id}`} className="p-3 border-b last:border-b-0 space-y-2">
+                        <div className="flex justify-between items-start">
                           <p className="text-sm font-medium flex-1">{item.product_name}</p>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            onClick={() => updateQuantity(item.product_id, 0)}
-                          >
+                          <Button size="sm" variant="ghost" onClick={() => updateQuantity(item.product_id, item.warehouse_id, 0)}>
                             <Trash2 className="w-3 h-3 text-destructive" />
                           </Button>
                         </div>
+                        <div className="flex items-center gap-1">
+                          <Warehouse className="w-3 h-3 text-muted-foreground" />
+                          <Select value={item.warehouse_id} onValueChange={(v) => changeItemWarehouse(item.product_id, item.warehouse_id, v)}>
+                            <SelectTrigger className="h-7 text-xs" data-testid={`cart-warehouse-${item.product_id}`}>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {warehouses.map(wh => (
+                                <SelectItem key={wh.id} value={wh.id}>
+                                  {wh.name} ({getWarehouseStockQty(item.product_id, wh.id)} {wh.unit})
+                                </SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => updateQuantity(item.product_id, item.quantity - 1)}
-                            >
-                              -
-                            </Button>
+                            <Button size="sm" variant="outline" onClick={() => updateQuantity(item.product_id, item.warehouse_id, item.quantity - 1)}>-</Button>
                             <span className="w-8 text-center text-sm">{item.quantity}</span>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => updateQuantity(item.product_id, item.quantity + 1)}
-                            >
-                              +
-                            </Button>
+                            <Button size="sm" variant="outline" onClick={() => updateQuantity(item.product_id, item.warehouse_id, item.quantity + 1)}>+</Button>
+                            <span className="text-xs text-muted-foreground">{unit}</span>
                           </div>
-                          <span className="text-sm font-semibold">{formatCurrency(item.subtotal)}</span>
+                          <div className="text-right">
+                            <span className="text-sm font-semibold">{fmt(item.subtotal)}</span>
+                            <p className="text-xs text-muted-foreground">{fmt(item.price)}/{unit}</p>
+                          </div>
                         </div>
+                        {item.quantity > stock && (
+                          <p className="text-xs text-red-600">Stok tidak cukup! ({stock} {unit})</p>
+                        )}
                       </div>
-                    ))
-                  )}
+                    );
+                  })}
                 </div>
 
                 <div className="space-y-2 pt-2 border-t">
                   <div className="flex justify-between text-sm">
                     <span>Subtotal:</span>
-                    <span className="font-semibold">{formatCurrency(subtotal)}</span>
+                    <span className="font-semibold">{fmt(subtotal)}</span>
                   </div>
                   <div className="space-y-2">
                     <Label>Diskon</Label>
-                    <Input
-                      type="number"
-                      value={discount}
-                      onChange={(e) => setDiscount(parseFloat(e.target.value) || 0)}
-                      placeholder="0"
-                    />
+                    <Input type="number" value={discount} onChange={(e) => setDiscount(parseFloat(e.target.value) || 0)} placeholder="0" data-testid="order-discount" />
                   </div>
                   <div className="flex justify-between text-lg font-bold border-t pt-2">
                     <span>Total:</span>
-                    <span className="text-primary">{formatCurrency(total)}</span>
+                    <span className="text-primary">{fmt(total)}</span>
                   </div>
                 </div>
 
                 <div className="flex gap-2 pt-2">
-                  <Button variant="outline" onClick={() => setIsDialogOpen(false)} className="flex-1">
-                    Batal
-                  </Button>
-                  <Button onClick={handleSubmit} className="flex-1" disabled={cart.length === 0}>
-                    Buat Pesanan
-                  </Button>
+                  <Button variant="outline" onClick={() => setIsDialogOpen(false)} className="flex-1">Batal</Button>
+                  <Button onClick={handleSubmit} className="flex-1" disabled={cart.length === 0} data-testid="submit-order-button">Buat Pesanan</Button>
                 </div>
               </div>
             </div>
@@ -415,46 +390,33 @@ export const PartnerOrders = () => {
                     <p>Belum ada pesanan</p>
                   </TableCell>
                 </TableRow>
-              ) : (
-                orders.map((order) => (
-                  <TableRow key={order.id}>
-                    <TableCell className="font-mono text-sm">{order.order_number}</TableCell>
-                    <TableCell>{new Date(order.created_at).toLocaleDateString('id-ID')}</TableCell>
-                    <TableCell>{order.partner_store_name}</TableCell>
-                    <TableCell>{order.canvasser_name || '-'}</TableCell>
-                    <TableCell className="text-right font-semibold">{formatCurrency(order.total)}</TableCell>
-                    <TableCell className="text-right">
-                      <span className={order.remaining > 0 ? 'text-orange-600 font-semibold' : 'text-green-600'}>
-                        {formatCurrency(order.remaining)}
-                      </span>
-                    </TableCell>
-                    <TableCell>
-                      <Select
-                        value={order.status}
-                        onValueChange={(value) => updateOrderStatus(order.id, value)}
-                      >
-                        <SelectTrigger className="w-32">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="pending">Pending</SelectItem>
-                          <SelectItem value="delivered">Delivered</SelectItem>
-                          <SelectItem value="cancelled">Cancelled</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </TableCell>
-                    <TableCell className="text-center">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => {/* View detail */}}
-                      >
-                        Detail
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                ))
-              )}
+              ) : orders.map(order => (
+                <TableRow key={order.id} data-testid={`order-row-${order.id}`}>
+                  <TableCell className="font-mono text-sm">{order.order_number}</TableCell>
+                  <TableCell>{new Date(order.created_at).toLocaleDateString('id-ID')}</TableCell>
+                  <TableCell>{order.partner_store_name}</TableCell>
+                  <TableCell>{order.canvasser_name || '-'}</TableCell>
+                  <TableCell className="text-right font-semibold">{fmt(order.total)}</TableCell>
+                  <TableCell className="text-right">
+                    <span className={order.remaining > 0 ? 'text-orange-600 font-semibold' : 'text-green-600'}>
+                      {fmt(order.remaining)}
+                    </span>
+                  </TableCell>
+                  <TableCell>
+                    <Select value={order.status} onValueChange={(value) => updateOrderStatus(order.id, value)}>
+                      <SelectTrigger className="w-32"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="pending">Pending</SelectItem>
+                        <SelectItem value="delivered">Delivered</SelectItem>
+                        <SelectItem value="cancelled">Cancelled</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </TableCell>
+                  <TableCell className="text-center">
+                    <Button size="sm" variant="outline" onClick={() => {}} data-testid={`order-detail-${order.id}`}>Detail</Button>
+                  </TableCell>
+                </TableRow>
+              ))}
             </TableBody>
           </Table>
         </div>
