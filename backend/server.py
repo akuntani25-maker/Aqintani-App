@@ -472,23 +472,45 @@ async def get_product(product_id: str, current_user: dict = Depends(get_current_
 @api_router.post("/products", response_model=Product)
 async def create_product(data: ProductCreate, admin: dict = Depends(require_admin)):
     now = datetime.now(timezone.utc).isoformat()
+    items_per_box = data.items_per_box or 1
+    warehouse_id = data.warehouse_id or "gudang_utama"
+    
+    # Stock input is in dus, convert to total satuan for product.stock
+    total_satuan = data.stock * items_per_box
+    
+    product_data = data.model_dump()
+    product_data.pop("warehouse_id", None)
+    product_data["stock"] = total_satuan
+    
     product_doc = {
         "id": str(uuid.uuid4()),
-        **data.model_dump(),
+        **product_data,
         "box_price": data.box_price or 0,
-        "items_per_box": data.items_per_box or 1,
+        "items_per_box": items_per_box,
         "created_at": now,
         "updated_at": now
     }
     await db.products.insert_one(product_doc)
-    # Create warehouse stock entries
+    
+    # Create warehouse stock entries for all warehouses
     await ensure_warehouse_stock(product_doc["id"])
-    # If initial stock provided, put it in Gudang Toko
+    
+    # Put stock in the selected warehouse
     if data.stock > 0:
-        await db.warehouse_stock.update_one(
-            {"product_id": product_doc["id"], "warehouse_id": "gudang_toko"},
-            {"$set": {"stock": data.stock}}
-        )
+        wh = await db.warehouses.find_one({"id": warehouse_id}, {"_id": 0})
+        if wh and wh.get("unit") == "satuan":
+            # Gudang Toko: store as satuan
+            await db.warehouse_stock.update_one(
+                {"product_id": product_doc["id"], "warehouse_id": warehouse_id},
+                {"$set": {"stock": total_satuan}}
+            )
+        else:
+            # Gudang Utama/Lainnya: store as dus
+            await db.warehouse_stock.update_one(
+                {"product_id": product_doc["id"], "warehouse_id": warehouse_id},
+                {"$set": {"stock": data.stock}}
+            )
+    
     return product_doc
 
 @api_router.put("/products/{product_id}", response_model=Product)
