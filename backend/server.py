@@ -283,6 +283,7 @@ class PartnerOrderCreate(BaseModel):
     paid: float = 0
     delivery_date: Optional[str] = ""
     canvasser_id: Optional[str] = ""
+    warehouse_id: Optional[str] = ""
 
 class PartnerOrder(BaseModel):
     model_config = ConfigDict(extra="ignore")
