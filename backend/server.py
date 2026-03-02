@@ -125,6 +125,7 @@ class ProductCreate(BaseModel):
     cost_price: float
     box_price: Optional[float] = 0
     items_per_box: int = 1
+    initial_paid: Optional[float] = 0
     expiry_date: Optional[str] = ""
     batch_number: Optional[str] = ""
     description: Optional[str] = ""
