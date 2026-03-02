@@ -19,10 +19,14 @@ export const PartnerOrders = () => {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [selectedPartner, setSelectedPartner] = useState('');
   const [selectedCanvasser, setSelectedCanvasser] = useState('');
+  const [selectedWarehouse, setSelectedWarehouse] = useState('gudang_utama');
   const [deliveryDate, setDeliveryDate] = useState(new Date().toISOString().split('T')[0]);
   const [cart, setCart] = useState([]);
   const [searchProduct, setSearchProduct] = useState('');
   const [discount, setDiscount] = useState(0);
+  const [warehouses, setWarehouses] = useState([]);
+  const [warehouseStock, setWarehouseStock] = useState([]);
+  const [partnerPrices, setPartnerPrices] = useState([]);
 
   useEffect(() => {
     fetchData();
