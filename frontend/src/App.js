@@ -16,6 +16,7 @@ import { StoreSettings } from './pages/StoreSettings';
 import { PartnerStores } from './pages/PartnerStores';
 import { PartnerStoreDetail } from './pages/PartnerStoreDetail';
 import { PartnerOrders } from './pages/PartnerOrders';
+import { PartnerOrderReceipt } from './pages/PartnerOrderReceipt';
 import { Canvassers } from './pages/Canvassers';
 import { POS } from './pages/POS';
 import { ReceiptPreview } from './pages/ReceiptPreview';
@@ -70,6 +71,12 @@ function App() {
           <Route path="/receipt-preview" element={
             <PrivateRoute>
               <ReceiptPreview />
+            </PrivateRoute>
+          } />
+
+          <Route path="/partner-receipt" element={
+            <PrivateRoute>
+              <PartnerOrderReceipt />
             </PrivateRoute>
           } />
 
