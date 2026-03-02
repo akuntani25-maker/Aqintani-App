@@ -511,13 +511,18 @@ async def create_transaction(data: TransactionCreate, current_user: dict = Depen
         product = await db.products.find_one({"id": item.product_id})
         if not product:
             raise HTTPException(status_code=404, detail=f"Product {item.product_name} not found")
-        if product["stock"] < item.quantity:
-            raise HTTPException(status_code=400, detail=f"Insufficient stock for {item.product_name}")
         
-        await db.products.update_one(
-            {"id": item.product_id},
+        # Deduct from Gudang Toko (satuan)
+        toko_stock = await db.warehouse_stock.find_one({"product_id": item.product_id, "warehouse_id": "gudang_toko"})
+        toko_qty = toko_stock["stock"] if toko_stock else 0
+        if toko_qty < item.quantity:
+            raise HTTPException(status_code=400, detail=f"Stok Gudang Toko tidak cukup untuk {item.product_name} (tersedia: {toko_qty} satuan)")
+        
+        await db.warehouse_stock.update_one(
+            {"product_id": item.product_id, "warehouse_id": "gudang_toko"},
             {"$inc": {"stock": -item.quantity}}
         )
+        await recalculate_product_stock(item.product_id)
     
     transaction_doc = {
         "id": str(uuid.uuid4()),
