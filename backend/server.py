@@ -516,6 +516,7 @@ async def create_product(data: ProductCreate, admin: dict = Depends(require_admi
 @api_router.put("/products/{product_id}", response_model=Product)
 async def update_product(product_id: str, data: ProductCreate, admin: dict = Depends(require_admin)):
     update_data = data.model_dump()
+    update_data.pop("warehouse_id", None)
     update_data["updated_at"] = datetime.now(timezone.utc).isoformat()
     
     result = await db.products.find_one_and_update(
@@ -526,6 +527,12 @@ async def update_product(product_id: str, data: ProductCreate, admin: dict = Dep
     )
     if not result:
         raise HTTPException(status_code=404, detail="Product not found")
+    
+    await ensure_warehouse_stock(product_id)
+    await recalculate_product_stock(product_id)
+    
+    # Re-fetch with updated stock
+    result = await db.products.find_one({"id": product_id}, {"_id": 0})
     return result
 
 @api_router.delete("/products/{product_id}")
