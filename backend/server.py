@@ -472,7 +472,7 @@ async def get_product(product_id: str, current_user: dict = Depends(get_current_
 
 @api_router.post("/products", response_model=Product)
 async def create_product(data: ProductCreate, admin: dict = Depends(require_admin)):
-    now = datetime.now(timezone.utc).isoformat()
+    now = datetime.now(timezone.utc)
     items_per_box = data.items_per_box or 1
     warehouse_id = data.warehouse_id or "gudang_utama"
     
@@ -488,8 +488,8 @@ async def create_product(data: ProductCreate, admin: dict = Depends(require_admi
         **product_data,
         "box_price": data.box_price or 0,
         "items_per_box": items_per_box,
-        "created_at": now,
-        "updated_at": now
+        "created_at": now.isoformat(),
+        "updated_at": now.isoformat()
     }
     await db.products.insert_one(product_doc)
     
@@ -500,17 +500,44 @@ async def create_product(data: ProductCreate, admin: dict = Depends(require_admi
     if data.stock > 0:
         wh = await db.warehouses.find_one({"id": warehouse_id}, {"_id": 0})
         if wh and wh.get("unit") == "satuan":
-            # Gudang Toko: store as satuan
             await db.warehouse_stock.update_one(
                 {"product_id": product_doc["id"], "warehouse_id": warehouse_id},
                 {"$set": {"stock": total_satuan}}
             )
         else:
-            # Gudang Utama/Lainnya: store as dus
             await db.warehouse_stock.update_one(
                 {"product_id": product_doc["id"], "warehouse_id": warehouse_id},
                 {"$set": {"stock": data.stock}}
             )
+        
+        # Auto-create purchase record for the supplier
+        if data.supplier_id:
+            supplier = await db.suppliers.find_one({"id": data.supplier_id}, {"_id": 0})
+            supplier_name = supplier["name"] if supplier else ""
+            purchase_total = data.cost_price * data.stock  # cost_price per dus * jumlah dus
+            
+            purchase_doc = {
+                "id": str(uuid.uuid4()),
+                "supplier_id": data.supplier_id,
+                "supplier_name": supplier_name,
+                "items": [{
+                    "product_id": product_doc["id"],
+                    "product_name": data.name,
+                    "quantity": data.stock,
+                    "cost_price": data.cost_price,
+                    "subtotal": purchase_total
+                }],
+                "total": purchase_total,
+                "paid": purchase_total,
+                "remaining": 0,
+                "warehouse_id": warehouse_id,
+                "notes": f"Pembelian awal - {data.name}",
+                "created_at": now.isoformat(),
+                "date": now.strftime("%Y-%m-%d")
+            }
+            await db.purchases.insert_one(purchase_doc)
+    
+    return product_doc
     
     return product_doc
 
