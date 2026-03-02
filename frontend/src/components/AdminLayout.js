@@ -17,8 +17,7 @@ import {
   ShoppingCart,
   Truck,
   TrendingUp,
-  ShoppingBag,
-  Warehouse
+  ShoppingBag
 } from 'lucide-react';
 
 export const AdminLayout = () => {
@@ -36,7 +35,6 @@ export const AdminLayout = () => {
     { to: '/admin/categories', icon: Layers, label: 'Kategori' },
     { to: '/admin/suppliers', icon: Users, label: 'Supplier' },
     { to: '/admin/purchases', icon: ShoppingBag, label: 'Pembelian' },
-    { to: '/admin/warehouse', icon: Warehouse, label: 'Gudang' },
     { to: '/admin/partner-stores', icon: Store, label: 'Kios Mitra' },
     { to: '/admin/partner-orders', icon: ShoppingCart, label: 'Pesanan Kios' },
     { to: '/admin/canvassers', icon: Truck, label: 'Kanvaser' },
