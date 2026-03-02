@@ -954,6 +954,19 @@ async def get_partner_orders(
     orders = await db.partner_orders.find(query, {"_id": 0}).sort("created_at", -1).to_list(1000)
     return orders
 
+@api_router.get("/partner-orders/{order_id}")
+async def get_partner_order(order_id: str, current_user: dict = Depends(get_current_user)):
+    order = await db.partner_orders.find_one({"id": order_id}, {"_id": 0})
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    # Attach partner store current_debt for receipt
+    partner_store = await db.partner_stores.find_one({"id": order["partner_store_id"]}, {"_id": 0})
+    order["partner_debt_total"] = partner_store.get("current_debt", 0) if partner_store else 0
+    order["partner_phone"] = partner_store.get("phone", "") if partner_store else ""
+    order["partner_address"] = partner_store.get("address", "") if partner_store else ""
+    return order
+
+
 @api_router.post("/partner-orders", response_model=PartnerOrder)
 async def create_partner_order(data: PartnerOrderCreate, current_user: dict = Depends(get_current_user)):
     partner_store = await db.partner_stores.find_one({"id": data.partner_store_id}, {"_id": 0})
