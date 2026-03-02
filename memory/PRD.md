@@ -58,6 +58,7 @@ Build a responsive web application for a pharmacy and agriculture store named "U
 - Laporan (Reports) page with two detailed report tabs:
   - **Penjualan POS**: Rincian per produk — tanggal, produk, qty, HPP/unit, jual/unit, total jual, total HPP, margin
   - **Penjualan Kios Mitra**: Rincian per produk — tanggal, produk, kios mitra, qty (satuan), HPP/unit, jual/unit, total jual, total HPP, margin
+  - **Produk Terlaris**: Ranking produk berdasarkan revenue — gabungan POS + Mitra, qty breakdown, revenue breakdown, HPP, margin, progress bar visual
 - Summary cards: Total Penjualan, Total HPP, Total Margin, Margin %
 - Date range filter and CSV export
 - Footer row with totals per table
