@@ -284,6 +284,8 @@ export const Products = () => {
                   </p>
                 </div>
               )}
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="cost_price">Harga Beli/Dus *</Label>
                   <Input
@@ -295,9 +297,6 @@ export const Products = () => {
                     data-testid="product-cost-input"
                   />
                 </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="price">Harga Jual Satuan *</Label>
                   <Input
