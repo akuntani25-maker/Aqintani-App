@@ -368,18 +368,19 @@ export const Products = () => {
             <TableHeader>
               <TableRow>
                 <TableHead>Nama Produk</TableHead>
-                <TableHead>Barcode</TableHead>
                 <TableHead>Kategori</TableHead>
                 <TableHead>Supplier</TableHead>
-                <TableHead className="text-right">Stok</TableHead>
-                <TableHead className="text-right">Harga</TableHead>
+                <TableHead className="text-center">Isi/Dus</TableHead>
+                <TableHead className="text-right">Stok (satuan)</TableHead>
+                <TableHead className="text-right">Harga Satuan</TableHead>
+                <TableHead className="text-right">Harga Dus</TableHead>
                 <TableHead className="text-center">Aksi</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {filteredProducts.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
                     <Package className="w-12 h-12 mx-auto mb-2 opacity-50" />
                     <p>Tidak ada produk</p>
                   </TableCell>
@@ -388,15 +389,16 @@ export const Products = () => {
                 filteredProducts.map((product) => (
                   <TableRow key={product.id} data-testid={`product-row-${product.id}`}>
                     <TableCell className="font-medium">{product.name}</TableCell>
-                    <TableCell>{product.barcode || '-'}</TableCell>
                     <TableCell>{getCategoryName(product.category_id)}</TableCell>
                     <TableCell>{getSupplierName(product.supplier_id)}</TableCell>
+                    <TableCell className="text-center">{product.items_per_box || 1}</TableCell>
                     <TableCell className="text-right">
                       <span className={product.stock <= product.min_stock_alert ? 'text-orange-600 font-semibold' : ''}>
                         {product.stock}
                       </span>
                     </TableCell>
                     <TableCell className="text-right">{formatCurrency(product.price)}</TableCell>
+                    <TableCell className="text-right">{product.box_price ? formatCurrency(product.box_price) : '-'}</TableCell>
                     <TableCell>
                       <div className="flex items-center justify-center gap-2">
                         <Button
