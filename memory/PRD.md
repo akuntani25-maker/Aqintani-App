@@ -42,6 +42,7 @@ Build a responsive web application for a pharmacy and agriculture store named "U
 - Auto-create purchase when adding new product with initial stock
 - **Bayar di Muka (Partial Payment)**: When creating product, admin can specify upfront payment amount. Remaining balance tracked as debt. Purchase status shows "Tempo" for outstanding debt.
 - Purchases page to view all supplier purchase records
+- **Filter-aware summary cards**: Total Pembelian, Sisa Hutang, Sudah Dibayar now dynamically update based on supplier filter selection
 
 ### Analytics & Reports (DONE - Basic)
 - Analytics page with basic charts
