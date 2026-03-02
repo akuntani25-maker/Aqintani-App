@@ -315,7 +315,7 @@ export const POS = () => {
               </div>
               <h3 className="font-semibold text-sm mb-1 line-clamp-2">{product.name}</h3>
               <p className="text-lg font-bold text-primary">{formatCurrency(product.price)}</p>
-              <p className="text-xs text-muted-foreground">Stok: {product.stock}</p>
+              <p className="text-xs text-muted-foreground">Stok Toko: {product.toko_stock || product.stock}</p>
             </Card>
           ))}
         </div>
