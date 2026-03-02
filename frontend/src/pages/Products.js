@@ -96,6 +96,7 @@ export const Products = () => {
       category_id: product.category_id,
       supplier_id: product.supplier_id,
       stock: product.stock,
+      warehouse_id: 'gudang_utama',
       price: product.price,
       cost_price: product.cost_price,
       box_price: product.box_price || 0,
