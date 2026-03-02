@@ -122,6 +122,8 @@ class ProductCreate(BaseModel):
     stock: int = 0
     price: float
     cost_price: float
+    box_price: Optional[float] = 0
+    items_per_box: int = 1
     expiry_date: Optional[str] = ""
     batch_number: Optional[str] = ""
     description: Optional[str] = ""
@@ -138,6 +140,8 @@ class Product(BaseModel):
     stock: int
     price: float
     cost_price: float
+    box_price: float = 0
+    items_per_box: int = 1
     expiry_date: str
     batch_number: str
     description: str
