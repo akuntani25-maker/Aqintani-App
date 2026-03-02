@@ -683,6 +683,132 @@ async def get_monthly_report(year: int, month: int, admin: dict = Depends(requir
         "daily_sales": daily_sales
     }
 
+
+@api_router.get("/reports/sales-detail")
+async def get_sales_detail_report(date_from: str, date_to: str, admin: dict = Depends(require_admin)):
+    """Detailed per-product sales report from POS transactions"""
+    transactions = await db.transactions.find(
+        {"date": {"$gte": date_from, "$lte": date_to}}, {"_id": 0}
+    ).to_list(10000)
+
+    # Build product lookup for cost data
+    product_ids = set()
+    for t in transactions:
+        for item in t.get("items", []):
+            product_ids.add(item["product_id"])
+    products = {}
+    if product_ids:
+        for p in await db.products.find({"id": {"$in": list(product_ids)}}, {"_id": 0}).to_list(10000):
+            products[p["id"]] = p
+
+    rows = []
+    total_sales = 0
+    total_cost = 0
+    total_margin = 0
+    for t in transactions:
+        for item in t.get("items", []):
+            product = products.get(item["product_id"], {})
+            ipb = product.get("items_per_box", 1) or 1
+            cost_per_unit = (product.get("cost_price", 0) or 0) / ipb
+            sell_price = item["price"]
+            qty = item["quantity"]
+            total_sell = sell_price * qty
+            total_cost_item = cost_per_unit * qty
+            margin = total_sell - total_cost_item
+            rows.append({
+                "date": t["date"],
+                "time": t.get("created_at", ""),
+                "transaction_number": t.get("transaction_number", ""),
+                "product_name": item["product_name"],
+                "quantity": qty,
+                "cost_price": round(cost_per_unit, 2),
+                "sell_price": sell_price,
+                "total_sell": total_sell,
+                "total_cost": round(total_cost_item, 2),
+                "margin": round(margin, 2)
+            })
+            total_sales += total_sell
+            total_cost += total_cost_item
+            total_margin += margin
+
+    return {
+        "date_from": date_from,
+        "date_to": date_to,
+        "rows": rows,
+        "total_sales": round(total_sales, 2),
+        "total_cost": round(total_cost, 2),
+        "total_margin": round(total_margin, 2),
+        "total_items": len(rows)
+    }
+
+@api_router.get("/reports/partner-sales-detail")
+async def get_partner_sales_detail_report(date_from: str, date_to: str, admin: dict = Depends(require_admin)):
+    """Detailed per-product partner order sales report"""
+    orders = await db.partner_orders.find(
+        {"date": {"$gte": date_from, "$lte": date_to}}, {"_id": 0}
+    ).to_list(10000)
+
+    product_ids = set()
+    for o in orders:
+        for item in o.get("items", []):
+            product_ids.add(item["product_id"])
+    products = {}
+    if product_ids:
+        for p in await db.products.find({"id": {"$in": list(product_ids)}}, {"_id": 0}).to_list(10000):
+            products[p["id"]] = p
+
+    warehouses_list = await db.warehouses.find({}, {"_id": 0}).to_list(100)
+    wh_map = {w["id"]: w for w in warehouses_list}
+
+    rows = []
+    total_sales = 0
+    total_cost = 0
+    total_margin = 0
+    for o in orders:
+        for item in o.get("items", []):
+            product = products.get(item["product_id"], {})
+            ipb = product.get("items_per_box", 1) or 1
+            item_wh_id = item.get("warehouse_id") or o.get("warehouse_id", "gudang_utama")
+            wh = wh_map.get(item_wh_id, {})
+            wh_unit = wh.get("unit", "satuan")
+
+            # Convert quantity to satuan for consistent reporting
+            qty_satuan = item["quantity"] * ipb if wh_unit == "dus" else item["quantity"]
+
+            cost_per_unit = (product.get("cost_price", 0) or 0) / ipb
+            sell_price_per_unit = item["price"] / ipb if wh_unit == "dus" else item["price"]
+            total_sell = item["price"] * item["quantity"]
+            total_cost_item = cost_per_unit * qty_satuan
+            margin = total_sell - total_cost_item
+
+            rows.append({
+                "date": o["date"],
+                "order_number": o.get("order_number", ""),
+                "partner_store_name": o.get("partner_store_name", ""),
+                "product_name": item["product_name"],
+                "quantity_original": item["quantity"],
+                "unit_original": wh_unit,
+                "quantity_satuan": qty_satuan,
+                "cost_price_per_unit": round(cost_per_unit, 2),
+                "sell_price_per_unit": round(sell_price_per_unit, 2),
+                "total_sell": round(total_sell, 2),
+                "total_cost": round(total_cost_item, 2),
+                "margin": round(margin, 2)
+            })
+            total_sales += total_sell
+            total_cost += total_cost_item
+            total_margin += margin
+
+    return {
+        "date_from": date_from,
+        "date_to": date_to,
+        "rows": rows,
+        "total_sales": round(total_sales, 2),
+        "total_cost": round(total_cost, 2),
+        "total_margin": round(total_margin, 2),
+        "total_items": len(rows)
+    }
+
 @api_router.get("/dashboard/stats")
 async def get_dashboard_stats(admin: dict = Depends(require_admin)):
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
