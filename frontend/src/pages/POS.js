@@ -128,8 +128,9 @@ export const POS = () => {
     try {
       const response = await api.get(`/products/barcode/${barcodeInput}`);
       const product = response.data;
-      if (product.stock > 0) {
-        addToCart(product);
+      const maxStock = product.toko_stock || product.stock;
+      if (maxStock > 0) {
+        addToCart({...product, toko_stock: maxStock});
         setBarcodeInput('');
       } else {
         toast.error('Produk stok habis');
