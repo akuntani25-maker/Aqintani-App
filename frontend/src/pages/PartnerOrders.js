@@ -282,19 +282,27 @@ export const PartnerOrders = () => {
                 </div>
 
                 <div className="border rounded-lg max-h-64 overflow-y-auto">
-                  {filteredProducts.slice(0, 10).map((product) => (
-                    <div
-                      key={product.id}
-                      className="p-3 hover:bg-accent cursor-pointer border-b last:border-b-0 flex justify-between items-center"
-                      onClick={() => addToCart(product)}
-                    >
-                      <div>
-                        <p className="font-medium text-sm">{product.name}</p>
-                        <p className="text-xs text-muted-foreground">Stok: {product.stock}</p>
+                  {filteredProducts.slice(0, 10).map((product) => {
+                    const whStock = getWarehouseStockQty(product.id, selectedWarehouse);
+                    const customPrice = getPartnerPrice(product.id);
+                    const displayPrice = customPrice !== null ? customPrice : product.price;
+                    return (
+                      <div
+                        key={product.id}
+                        className="p-3 hover:bg-accent cursor-pointer border-b last:border-b-0 flex justify-between items-center"
+                        onClick={() => addToCart(product)}
+                      >
+                        <div>
+                          <p className="font-medium text-sm">{product.name}</p>
+                          <p className="text-xs text-muted-foreground">Stok gudang: {whStock} {warehouses.find(w => w.id === selectedWarehouse)?.unit || ''}</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="font-semibold">{formatCurrency(displayPrice)}</p>
+                          {customPrice !== null && <p className="text-xs text-green-600">Harga mitra</p>}
+                        </div>
                       </div>
-                      <p className="font-semibold">{formatCurrency(product.price)}</p>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
 
