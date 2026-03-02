@@ -24,6 +24,7 @@ export const Products = () => {
     category_id: '',
     supplier_id: '',
     stock: 0,
+    warehouse_id: 'gudang_utama',
     price: 0,
     cost_price: 0,
     box_price: 0,
