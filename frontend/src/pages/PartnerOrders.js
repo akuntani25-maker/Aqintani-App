@@ -255,6 +255,20 @@ export const PartnerOrders = () => {
                 </div>
 
                 <div className="space-y-2">
+                  <Label>Gudang Sumber *</Label>
+                  <Select value={selectedWarehouse} onValueChange={setSelectedWarehouse}>
+                    <SelectTrigger data-testid="order-warehouse-select">
+                      <SelectValue placeholder="Pilih gudang" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {warehouses.map(wh => (
+                        <SelectItem key={wh.id} value={wh.id}>{wh.name} ({wh.unit})</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
                   <Label>Cari Produk</Label>
                   <div className="relative">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
