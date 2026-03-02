@@ -809,6 +809,97 @@ async def get_partner_sales_detail_report(date_from: str, date_to: str, admin: d
         "total_items": len(rows)
     }
 
+@api_router.get("/reports/best-sellers")
+async def get_best_sellers_report(date_from: str, date_to: str, admin: dict = Depends(require_admin)):
+    """Product ranking by total quantity sold and revenue (POS + Partner combined)"""
+    # Fetch POS transactions
+    transactions = await db.transactions.find(
+        {"date": {"$gte": date_from, "$lte": date_to}}, {"_id": 0}
+    ).to_list(10000)
+
+    # Fetch partner orders
+    orders = await db.partner_orders.find(
+        {"date": {"$gte": date_from, "$lte": date_to}}, {"_id": 0}
+    ).to_list(10000)
+
+    # Build product lookup
+    all_product_ids = set()
+    for t in transactions:
+        for item in t.get("items", []):
+            all_product_ids.add(item["product_id"])
+    for o in orders:
+        for item in o.get("items", []):
+            all_product_ids.add(item["product_id"])
+
+    products = {}
+    if all_product_ids:
+        for p in await db.products.find({"id": {"$in": list(all_product_ids)}}, {"_id": 0}).to_list(10000):
+            products[p["id"]] = p
+
+    warehouses_list = await db.warehouses.find({}, {"_id": 0}).to_list(100)
+    wh_map = {w["id"]: w for w in warehouses_list}
+
+    # Aggregate per product
+    agg = {}
+    for t in transactions:
+        for item in t.get("items", []):
+            pid = item["product_id"]
+            if pid not in agg:
+                agg[pid] = {"product_name": item["product_name"], "qty_pos": 0, "qty_partner": 0, "revenue_pos": 0, "revenue_partner": 0, "cost_total": 0}
+            agg[pid]["qty_pos"] += item["quantity"]
+            agg[pid]["revenue_pos"] += item["subtotal"]
+            product = products.get(pid, {})
+            ipb = product.get("items_per_box", 1) or 1
+            cost_per_unit = (product.get("cost_price", 0) or 0) / ipb
+            agg[pid]["cost_total"] += cost_per_unit * item["quantity"]
+
+    for o in orders:
+        for item in o.get("items", []):
+            pid = item["product_id"]
+            if pid not in agg:
+                agg[pid] = {"product_name": item["product_name"], "qty_pos": 0, "qty_partner": 0, "revenue_pos": 0, "revenue_partner": 0, "cost_total": 0}
+            product = products.get(pid, {})
+            ipb = product.get("items_per_box", 1) or 1
+            item_wh_id = item.get("warehouse_id") or o.get("warehouse_id", "gudang_utama")
+            wh = wh_map.get(item_wh_id, {})
+            wh_unit = wh.get("unit", "satuan")
+            qty_satuan = item["quantity"] * ipb if wh_unit == "dus" else item["quantity"]
+            agg[pid]["qty_partner"] += qty_satuan
+            agg[pid]["revenue_partner"] += item["subtotal"]
+            cost_per_unit = (product.get("cost_price", 0) or 0) / ipb
+            agg[pid]["cost_total"] += cost_per_unit * qty_satuan
+
+    # Build ranked list
+    rows = []
+    for pid, data in agg.items():
+        total_qty = data["qty_pos"] + data["qty_partner"]
+        total_revenue = data["revenue_pos"] + data["revenue_partner"]
+        total_cost = data["cost_total"]
+        margin = total_revenue - total_cost
+        rows.append({
+            "product_id": pid,
+            "product_name": data["product_name"],
+            "qty_pos": data["qty_pos"],
+            "qty_partner": data["qty_partner"],
+            "qty_total": total_qty,
+            "revenue_pos": round(data["revenue_pos"], 2),
+            "revenue_partner": round(data["revenue_partner"], 2),
+            "revenue_total": round(total_revenue, 2),
+            "cost_total": round(total_cost, 2),
+            "margin": round(margin, 2)
+        })
+
+    # Sort by revenue (highest first)
+    rows.sort(key=lambda x: x["revenue_total"], reverse=True)
+
+    return {
+        "date_from": date_from,
+        "date_to": date_to,
+        "rows": rows,
+        "total_products": len(rows)
+    }
+
+
 @api_router.get("/dashboard/stats")
 async def get_dashboard_stats(admin: dict = Depends(require_admin)):
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
