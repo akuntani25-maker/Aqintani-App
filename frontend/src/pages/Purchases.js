@@ -102,11 +102,12 @@ export const Purchases = () => {
         items: formData.items,
         total: totalPurchase,
         paid: formData.paid,
-        notes: formData.notes
+        notes: formData.notes,
+        warehouse_id: formData.warehouse_id
       });
       toast.success('Pembelian berhasil dicatat');
       setIsDialogOpen(false);
-      setFormData({ supplier_id: '', items: [], notes: '', paid: 0 });
+      setFormData({ supplier_id: '', items: [], notes: '', paid: 0, warehouse_id: 'gudang_utama' });
       fetchData();
     } catch (error) {
       toast.error(error.response?.data?.detail || 'Gagal menyimpan');
