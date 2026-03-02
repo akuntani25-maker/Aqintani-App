@@ -1118,6 +1118,240 @@ async def get_analytics_summary(admin: dict = Depends(require_admin)):
         "category_breakdown": list(category_stock.values())
     }
 
+# ============= WAREHOUSES =============
+WAREHOUSE_TYPES = {
+    "gudang_utama": {"name": "Gudang Utama", "unit": "dus"},
+    "gudang_toko": {"name": "Gudang Toko", "unit": "satuan"},
+    "gudang_lainnya": {"name": "Gudang Lainnya", "unit": "dus"},
+}
+
+@api_router.get("/warehouses")
+async def get_warehouses(current_user: dict = Depends(get_current_user)):
+    warehouses = await db.warehouses.find({}, {"_id": 0}).sort("sort_order", 1).to_list(100)
+    if not warehouses:
+        # Seed default warehouses
+        defaults = [
+            {"id": "gudang_utama", "name": "Gudang Utama", "unit": "dus", "sort_order": 1},
+            {"id": "gudang_toko", "name": "Gudang Toko", "unit": "satuan", "sort_order": 2},
+            {"id": "gudang_lainnya", "name": "Gudang Lainnya", "unit": "dus", "sort_order": 3},
+        ]
+        await db.warehouses.insert_many(defaults)
+        warehouses = defaults
+    return [{k: v for k, v in w.items() if k != "_id"} for w in warehouses]
+
+@api_router.get("/warehouse-stock")
+async def get_warehouse_stock(
+    product_id: Optional[str] = None,
+    warehouse_id: Optional[str] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    query = {}
+    if product_id:
+        query["product_id"] = product_id
+    if warehouse_id:
+        query["warehouse_id"] = warehouse_id
+    stocks = await db.warehouse_stock.find(query, {"_id": 0}).to_list(10000)
+    return stocks
+
+@api_router.put("/warehouse-stock")
+async def update_warehouse_stock(
+    product_id: str,
+    warehouse_id: str,
+    stock: int,
+    admin: dict = Depends(require_admin)
+):
+    await db.warehouse_stock.update_one(
+        {"product_id": product_id, "warehouse_id": warehouse_id},
+        {"$set": {"stock": stock}},
+        upsert=True
+    )
+    # Recalculate total product stock
+    await recalculate_product_stock(product_id)
+    return {"message": "Stock updated"}
+
+async def recalculate_product_stock(product_id: str):
+    """Recalculate total product stock in satuan equivalent"""
+    product = await db.products.find_one({"id": product_id}, {"_id": 0})
+    if not product:
+        return
+    items_per_box = product.get("items_per_box", 1) or 1
+    stocks = await db.warehouse_stock.find({"product_id": product_id}, {"_id": 0}).to_list(100)
+    total = 0
+    for s in stocks:
+        wh = await db.warehouses.find_one({"id": s["warehouse_id"]}, {"_id": 0})
+        if wh and wh.get("unit") == "dus":
+            total += s["stock"] * items_per_box
+        else:
+            total += s["stock"]
+    await db.products.update_one({"id": product_id}, {"$set": {"stock": total}})
+
+async def ensure_warehouse_stock(product_id: str):
+    """Ensure warehouse stock entries exist for all warehouses"""
+    warehouses = await db.warehouses.find({}, {"_id": 0}).to_list(100)
+    for wh in warehouses:
+        exists = await db.warehouse_stock.find_one({"product_id": product_id, "warehouse_id": wh["id"]})
+        if not exists:
+            await db.warehouse_stock.insert_one({
+                "product_id": product_id,
+                "warehouse_id": wh["id"],
+                "stock": 0
+            })
+
+# ============= STOCK TRANSFERS =============
+class StockTransferCreate(BaseModel):
+    product_id: str
+    from_warehouse_id: str
+    to_warehouse_id: str
+    quantity: int
+    notes: Optional[str] = ""
+
+@api_router.get("/stock-transfers")
+async def get_stock_transfers(
+    product_id: Optional[str] = None,
+    admin: dict = Depends(require_admin)
+):
+    query = {}
+    if product_id:
+        query["product_id"] = product_id
+    transfers = await db.stock_transfers.find(query, {"_id": 0}).sort("created_at", -1).to_list(1000)
+    return transfers
+
+@api_router.post("/stock-transfers")
+async def create_stock_transfer(data: StockTransferCreate, admin: dict = Depends(require_admin)):
+    if data.from_warehouse_id == data.to_warehouse_id:
+        raise HTTPException(status_code=400, detail="Gudang asal dan tujuan tidak boleh sama")
+    if data.quantity <= 0:
+        raise HTTPException(status_code=400, detail="Jumlah harus lebih dari 0")
+
+    product = await db.products.find_one({"id": data.product_id}, {"_id": 0})
+    if not product:
+        raise HTTPException(status_code=404, detail="Produk tidak ditemukan")
+
+    from_wh = await db.warehouses.find_one({"id": data.from_warehouse_id}, {"_id": 0})
+    to_wh = await db.warehouses.find_one({"id": data.to_warehouse_id}, {"_id": 0})
+    if not from_wh or not to_wh:
+        raise HTTPException(status_code=404, detail="Gudang tidak ditemukan")
+
+    # Check source stock
+    from_stock_doc = await db.warehouse_stock.find_one(
+        {"product_id": data.product_id, "warehouse_id": data.from_warehouse_id}
+    )
+    from_stock = from_stock_doc["stock"] if from_stock_doc else 0
+    if from_stock < data.quantity:
+        raise HTTPException(status_code=400, detail=f"Stok {from_wh['name']} tidak cukup ({from_stock} {from_wh['unit']})")
+
+    items_per_box = product.get("items_per_box", 1) or 1
+    from_unit = from_wh["unit"]
+    to_unit = to_wh["unit"]
+
+    # Calculate converted quantity
+    if from_unit == "dus" and to_unit == "satuan":
+        converted_qty = data.quantity * items_per_box
+    elif from_unit == "satuan" and to_unit == "dus":
+        if data.quantity % items_per_box != 0:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Jumlah satuan ({data.quantity}) harus kelipatan {items_per_box} untuk konversi ke dus"
+            )
+        converted_qty = data.quantity // items_per_box
+    else:
+        converted_qty = data.quantity
+
+    # Deduct from source
+    await db.warehouse_stock.update_one(
+        {"product_id": data.product_id, "warehouse_id": data.from_warehouse_id},
+        {"$inc": {"stock": -data.quantity}}
+    )
+    # Add to destination
+    await db.warehouse_stock.update_one(
+        {"product_id": data.product_id, "warehouse_id": data.to_warehouse_id},
+        {"$inc": {"stock": converted_qty}},
+        upsert=True
+    )
+
+    now = datetime.now(timezone.utc)
+    transfer_doc = {
+        "id": str(uuid.uuid4()),
+        "product_id": data.product_id,
+        "product_name": product["name"],
+        "from_warehouse_id": data.from_warehouse_id,
+        "from_warehouse_name": from_wh["name"],
+        "to_warehouse_id": data.to_warehouse_id,
+        "to_warehouse_name": to_wh["name"],
+        "quantity": data.quantity,
+        "from_unit": from_unit,
+        "converted_quantity": converted_qty,
+        "to_unit": to_unit,
+        "notes": data.notes,
+        "created_at": now.isoformat(),
+        "date": now.strftime("%Y-%m-%d")
+    }
+    await db.stock_transfers.insert_one(transfer_doc)
+
+    await recalculate_product_stock(data.product_id)
+
+    return {k: v for k, v in transfer_doc.items() if k != "_id"}
+
+# ============= PARTNER PRICING =============
+@api_router.get("/partner-prices")
+async def get_partner_prices(
+    partner_store_id: Optional[str] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    query = {}
+    if partner_store_id:
+        query["partner_store_id"] = partner_store_id
+    prices = await db.partner_prices.find(query, {"_id": 0}).to_list(10000)
+    return prices
+
+@api_router.put("/partner-prices")
+async def set_partner_price(
+    partner_store_id: str,
+    product_id: str,
+    custom_price: float,
+    admin: dict = Depends(require_admin)
+):
+    await db.partner_prices.update_one(
+        {"partner_store_id": partner_store_id, "product_id": product_id},
+        {"$set": {"custom_price": custom_price, "updated_at": datetime.now(timezone.utc).isoformat()}},
+        upsert=True
+    )
+    return {"message": "Harga mitra diperbarui"}
+
+@api_router.delete("/partner-prices")
+async def delete_partner_price(
+    partner_store_id: str,
+    product_id: str,
+    admin: dict = Depends(require_admin)
+):
+    await db.partner_prices.delete_one(
+        {"partner_store_id": partner_store_id, "product_id": product_id}
+    )
+    return {"message": "Harga mitra dihapus"}
+
+# ============= SUPPLIER PURCHASE DETAILS =============
+@api_router.get("/suppliers/{supplier_id}/purchases")
+async def get_supplier_purchases(supplier_id: str, admin: dict = Depends(require_admin)):
+    purchases = await db.purchases.find({"supplier_id": supplier_id}, {"_id": 0}).sort("created_at", -1).to_list(1000)
+    return purchases
+
+@api_router.get("/products/{product_id}/price-comparison")
+async def get_product_price_comparison(product_id: str, admin: dict = Depends(require_admin)):
+    """Get all purchase prices for a product from different suppliers"""
+    all_purchases = await db.purchases.find({}, {"_id": 0}).to_list(10000)
+    price_data = {}
+    for purchase in all_purchases:
+        for item in purchase.get("items", []):
+            if item.get("product_id") == product_id:
+                sid = purchase["supplier_id"]
+                sname = purchase["supplier_name"]
+                if sid not in price_data:
+                    price_data[sid] = {"supplier_id": sid, "supplier_name": sname, "prices": [], "last_price": 0, "total_qty": 0}
+                price_data[sid]["prices"].append({"price": item.get("cost_price", 0), "date": purchase.get("date", ""), "quantity": item.get("quantity", 0)})
+                price_data[sid]["last_price"] = item.get("cost_price", 0)
+                price_data[sid]["total_qty"] += item.get("quantity", 0)
+    return list(price_data.values())
+
 app.include_router(api_router)
 
 app.add_middleware(
