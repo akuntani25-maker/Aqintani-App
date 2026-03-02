@@ -1,0 +1,59 @@
+{
+  "summary": "Partner Kios Order Pricing Feature - Complete testing of warehouse-based pricing fix. Fixed critical backend bug (wh_id undefined at line 1003). All backend API tests (5/5) passed. Frontend UI tests verified correct price display based on warehouse type: dus warehouses show box_price, satuan warehouses show unit price. Per-item warehouse selector in cart working correctly - price updates when changing warehouse.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "All Dialogs",
+        "issues": ["Console warning: Missing Description or aria-describedby for DialogContent - accessibility improvement recommended (carried over from previous iteration)"]
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_partner_orders_pricing.py",
+    "/app/test_reports/pytest/partner_orders_pricing_results.xml"
+  ],
+  "passed_tests": [
+    "Backend: GET /api/warehouses returns correct warehouse units (gudang_utama=dus, gudang_toko=satuan, gudang_lainnya=dus) - PASS",
+    "Backend: POST /api/partner-orders with items using box_price for dus warehouse - PASS",
+    "Backend: TransactionItem model stores optional warehouse_id field per item - PASS",
+    "Backend: Stock correctly deducted from per-item warehouse_id (not default) - PASS",
+    "Backend: Returns 400 error when warehouse stock insufficient - PASS",
+    "Frontend: Product list shows Rp 1.000.000/dus for ABACEL when Gudang Utama (dus) selected - PASS",
+    "Frontend: Product list shows Rp 1.400.000/dus for BASMILANG when Gudang Utama (dus) selected - PASS",
+    "Frontend: Product list shows Rp 110.000/satuan for ABACEL when Gudang Toko (satuan) selected - PASS",
+    "Frontend: Product list shows Rp 70.000/satuan for BASMILANG when Gudang Toko (satuan) selected - PASS",
+    "Frontend: Stock display shows correct unit (dus/satuan) based on warehouse - PASS",
+    "Frontend: Cart item has per-item warehouse selector - PASS",
+    "Frontend: Changing cart item warehouse from Gudang Utama to Gudang Toko updates price from Rp 1.000.000 to Rp 110.000 - PASS",
+    "Frontend: Cart subtotal and total correctly recalculated after warehouse change - PASS"
+  ],
+  "bug_fixed": {
+    "description": "Fixed undefined variable 'wh_id' at line 1003 in server.py",
+    "fix": "Changed 'wh_id' to 'default_wh_id' in partner order warehouse_id assignment",
+    "file": "/app/backend/server.py",
+    "line": 1003
+  },
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [
+    "/app/backend/server.py",
+    "/app/backend/tests/test_partner_orders_pricing.py"
+  ],
+  "success_rate": {
+    "backend": "100% (5/5 tests)",
+    "frontend": "100% (8/8 checks)"
+  },
+  "test_credentials": {
+    "admin": "admin@aqintani.com / admin123"
+  },
+  "seed_data_creation": "TEST_ prefixed products, partner stores, and orders created and cleaned up during testing",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Partner Orders warehouse/pricing feature fully functional: 1) When default warehouse is 'Gudang Utama' or 'Gudang Lainnya' (unit=dus), product prices display box_price (e.g., ABACEL 1L = Rp 1,000,000/dus). 2) When default warehouse is 'Gudang Toko' (unit=satuan), product prices display unit price (e.g., ABACEL 1L = Rp 110,000/satuan). 3) Each cart item has its own warehouse selector that can be changed independently. 4) Changing cart item warehouse updates price and subtotal automatically. 5) Stock is deducted from each item's warehouse_id, not a global warehouse. Backend fixed: 'wh_id' undefined variable corrected to 'default_wh_id'."
+}
