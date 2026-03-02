@@ -22,7 +22,6 @@ import { ReceiptPreview } from './pages/ReceiptPreview';
 import { CanvasserDashboard } from './pages/CanvasserDashboard';
 import { Purchases } from './pages/Purchases';
 import { Analytics } from './pages/Analytics';
-import { WarehouseManagement } from './pages/WarehouseManagement';
 import { Toaster } from './components/ui/sonner';
 import './App.css';
 
@@ -44,7 +43,6 @@ function App() {
             <Route path="categories" element={<Categories />} />
             <Route path="suppliers" element={<Suppliers />} />
             <Route path="purchases" element={<Purchases />} />
-            <Route path="warehouse" element={<WarehouseManagement />} />
             <Route path="partner-stores" element={<PartnerStores />} />
             <Route path="partner-stores/:storeId" element={<PartnerStoreDetail />} />
             <Route path="partner-orders" element={<PartnerOrders />} />
