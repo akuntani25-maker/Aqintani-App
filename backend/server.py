@@ -1456,11 +1456,14 @@ async def startup_db():
     
     # Migrate existing products: ensure warehouse_stock entries + items_per_box
     products = await db.products.find({}, {"_id": 0}).to_list(10000)
+    product_ids = set()
     for p in products:
+        product_ids.add(p["id"])
         await ensure_warehouse_stock(p["id"])
-        # If product has stock but no warehouse_stock, put it in Gudang Toko
-        toko_stock = await db.warehouse_stock.find_one({"product_id": p["id"], "warehouse_id": "gudang_toko"})
-        if toko_stock and toko_stock["stock"] == 0 and p.get("stock", 0) > 0:
+        # If product has stock but no warehouse_stock anywhere, put it in Gudang Toko
+        all_wh_stock = await db.warehouse_stock.find({"product_id": p["id"]}, {"_id": 0}).to_list(10)
+        total_wh = sum(s.get("stock", 0) for s in all_wh_stock)
+        if total_wh == 0 and p.get("stock", 0) > 0:
             await db.warehouse_stock.update_one(
                 {"product_id": p["id"], "warehouse_id": "gudang_toko"},
                 {"$set": {"stock": p["stock"]}}
@@ -1468,6 +1471,14 @@ async def startup_db():
         # Ensure items_per_box field exists
         if "items_per_box" not in p:
             await db.products.update_one({"id": p["id"]}, {"$set": {"items_per_box": 1, "box_price": 0}})
+        # Recalculate total stock from warehouse data
+        await recalculate_product_stock(p["id"])
+    
+    # Clean orphaned warehouse_stock entries (products that were deleted)
+    all_wh_stocks = await db.warehouse_stock.find({}, {"_id": 0}).to_list(100000)
+    for s in all_wh_stocks:
+        if s.get("product_id") not in product_ids:
+            await db.warehouse_stock.delete_many({"product_id": s["product_id"]})
 
 @app.on_event("shutdown")
 async def shutdown_db_client():
