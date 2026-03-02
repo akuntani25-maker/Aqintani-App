@@ -134,7 +134,8 @@ export const PartnerOrders = () => {
         total,
         paid: 0,
         delivery_date: deliveryDate,
-        canvasser_id: selectedCanvasser
+        canvasser_id: selectedCanvasser,
+        warehouse_id: selectedWarehouse
       });
       toast.success('Pesanan berhasil dibuat');
       resetForm();
