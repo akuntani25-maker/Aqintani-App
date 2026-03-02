@@ -149,6 +149,7 @@ export const PartnerOrders = () => {
   const resetForm = () => {
     setSelectedPartner('');
     setSelectedCanvasser('');
+    setSelectedWarehouse('gudang_utama');
     setCart([]);
     setDiscount(0);
     setDeliveryDate(new Date().toISOString().split('T')[0]);
