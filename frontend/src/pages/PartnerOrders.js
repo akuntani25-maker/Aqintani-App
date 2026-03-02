@@ -34,16 +34,20 @@ export const PartnerOrders = () => {
 
   const fetchData = async () => {
     try {
-      const [ordersRes, storesRes, canvassersRes, productsRes] = await Promise.all([
+      const [ordersRes, storesRes, canvassersRes, productsRes, whRes, whStockRes] = await Promise.all([
         api.get('/partner-orders'),
         api.get('/partner-stores'),
         api.get('/canvassers'),
-        api.get('/products')
+        api.get('/products'),
+        api.get('/warehouses'),
+        api.get('/warehouse-stock')
       ]);
       setOrders(ordersRes.data);
       setPartnerStores(storesRes.data);
       setCanvassers(canvassersRes.data);
       setProducts(productsRes.data);
+      setWarehouses(whRes.data);
+      setWarehouseStock(whStockRes.data);
     } catch (error) {
       toast.error('Gagal memuat data');
     } finally {
