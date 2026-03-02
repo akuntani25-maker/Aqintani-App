@@ -19,8 +19,12 @@ export const Reports = () => {
     setLoading(true);
     setReportData(null);
     try {
-      const endpoint = activeTab === 'pos' ? '/reports/sales-detail' : '/reports/partner-sales-detail';
-      const res = await api.get(`${endpoint}?date_from=${dateFrom}&date_to=${dateTo}`);
+      const endpoints = {
+        pos: '/reports/sales-detail',
+        partner: '/reports/partner-sales-detail',
+        bestseller: '/reports/best-sellers'
+      };
+      const res = await api.get(`${endpoints[activeTab]}?date_from=${dateFrom}&date_to=${dateTo}`);
       setReportData({ ...res.data, type: activeTab });
     } catch (error) {
       toast.error('Gagal memuat laporan');
