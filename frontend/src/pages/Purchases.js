@@ -169,7 +169,7 @@ export const Purchases = () => {
         </div>
         <Dialog open={isDialogOpen} onOpenChange={(open) => {
           setIsDialogOpen(open);
-          if (!open) setFormData({ supplier_id: '', items: [], notes: '', paid: 0 });
+          if (!open) setFormData({ supplier_id: '', items: [], notes: '', paid: 0, warehouse_id: 'gudang_utama' });
         }}>
           <DialogTrigger asChild>
             <Button data-testid="create-purchase-button">
