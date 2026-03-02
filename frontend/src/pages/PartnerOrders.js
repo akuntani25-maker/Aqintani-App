@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { api } from '../context/AuthContext';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -8,9 +9,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
 import { toast } from 'sonner';
-import { Plus, Search, Package, Trash2, ShoppingCart, Warehouse } from 'lucide-react';
+import { Plus, Search, Package, Trash2, ShoppingCart, Warehouse, FileText, DollarSign, TrendingUp } from 'lucide-react';
 
 export const PartnerOrders = () => {
+  const navigate = useNavigate();
   const [orders, setOrders] = useState([]);
   const [partnerStores, setPartnerStores] = useState([]);
   const [canvassers, setCanvassers] = useState([]);
@@ -54,10 +56,31 @@ export const PartnerOrders = () => {
   useEffect(() => {
     if (selectedPartner) {
       api.get(`/partner-prices?partner_store_id=${selectedPartner}`).then(res => setPartnerPrices(res.data)).catch(() => {});
-    } else {
-      setPartnerPrices([]);
-    }
+    } else { setPartnerPrices([]); }
   }, [selectedPartner]);
+
+  // Today's summary
+  const todaySummary = useMemo(() => {
+    const today = new Date().toISOString().split('T')[0];
+    const todayOrders = orders.filter(o => o.date === today);
+    const totalOrders = todayOrders.length;
+    const totalItems = todayOrders.reduce((s, o) => s + (o.items?.reduce((si, i) => si + i.quantity, 0) || 0), 0);
+    const totalRevenue = todayOrders.reduce((s, o) => s + (o.total || 0), 0);
+    const totalPaid = todayOrders.reduce((s, o) => s + (o.paid || 0), 0);
+
+    // Per-warehouse breakdown
+    const whBreakdown = {};
+    todayOrders.forEach(o => {
+      (o.items || []).forEach(item => {
+        const whId = item.warehouse_id || o.warehouse_id || 'gudang_utama';
+        if (!whBreakdown[whId]) whBreakdown[whId] = { count: 0, items: 0 };
+        whBreakdown[whId].count++;
+        whBreakdown[whId].items += item.quantity;
+      });
+    });
+
+    return { totalOrders, totalItems, totalRevenue, totalPaid, whBreakdown };
+  }, [orders]);
 
   const getPartnerPrice = (productId) => {
     const pp = partnerPrices.find(p => p.product_id === productId);
@@ -70,8 +93,7 @@ export const PartnerOrders = () => {
   };
 
   const getWarehouseUnit = (warehouseId) => {
-    const wh = warehouses.find(w => w.id === warehouseId);
-    return wh?.unit || 'satuan';
+    return warehouses.find(w => w.id === warehouseId)?.unit || 'satuan';
   };
 
   const getPriceForWarehouse = (product, warehouseId) => {
@@ -92,14 +114,7 @@ export const PartnerOrders = () => {
           : item
       ));
     } else {
-      setCart([...cart, {
-        product_id: product.id,
-        product_name: product.name,
-        quantity: 1,
-        price,
-        subtotal: price,
-        warehouse_id: whId
-      }]);
+      setCart([...cart, { product_id: product.id, product_name: product.name, quantity: 1, price, subtotal: price, warehouse_id: whId }]);
     }
   };
 
@@ -137,21 +152,20 @@ export const PartnerOrders = () => {
     if (cart.length === 0) { toast.error('Keranjang kosong'); return; }
     const { subtotal, total } = calculateTotal();
     try {
-      await api.post('/partner-orders', {
+      const res = await api.post('/partner-orders', {
         partner_store_id: selectedPartner,
-        items: cart,
-        subtotal,
-        discount,
-        total,
-        paid: 0,
-        delivery_date: deliveryDate,
-        canvasser_id: selectedCanvasser,
-        warehouse_id: defaultWarehouse
+        items: cart, subtotal, discount, total,
+        paid: 0, delivery_date: deliveryDate,
+        canvasser_id: selectedCanvasser, warehouse_id: defaultWarehouse
       });
       toast.success('Pesanan berhasil dibuat');
+      const orderId = res.data?.id;
       resetForm();
       setIsDialogOpen(false);
       fetchData();
+      if (orderId) {
+        navigate(`/partner-receipt?id=${orderId}`);
+      }
     } catch (error) {
       toast.error(error.response?.data?.detail || 'Gagal membuat pesanan');
     }
@@ -177,10 +191,9 @@ export const PartnerOrders = () => {
   };
 
   const fmt = (v) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(v);
+  const fmtNum = (v) => new Intl.NumberFormat('id-ID').format(v);
 
-  const filteredProducts = products.filter(p =>
-    p.name.toLowerCase().includes(searchProduct.toLowerCase())
-  );
+  const filteredProducts = products.filter(p => p.name.toLowerCase().includes(searchProduct.toLowerCase()));
 
   if (loading) {
     return <div className="flex items-center justify-center min-h-screen"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div></div>;
@@ -197,37 +210,25 @@ export const PartnerOrders = () => {
         </div>
         <Dialog open={isDialogOpen} onOpenChange={(open) => { setIsDialogOpen(open); if (!open) resetForm(); }}>
           <DialogTrigger asChild>
-            <Button data-testid="create-order-button">
-              <Plus className="w-4 h-4 mr-2" />Buat Pesanan Baru
-            </Button>
+            <Button data-testid="create-order-button"><Plus className="w-4 h-4 mr-2" />Buat Pesanan Baru</Button>
           </DialogTrigger>
           <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>Buat Pesanan Kios Mitra</DialogTitle>
-            </DialogHeader>
+            <DialogHeader><DialogTitle>Buat Pesanan Kios Mitra</DialogTitle></DialogHeader>
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              {/* Product Selection */}
               <div className="lg:col-span-2 space-y-4">
                 <div className="space-y-2">
                   <Label>Pilih Kios Mitra *</Label>
                   <Select value={selectedPartner} onValueChange={setSelectedPartner}>
                     <SelectTrigger data-testid="order-partner-select"><SelectValue placeholder="Pilih kios mitra" /></SelectTrigger>
-                    <SelectContent>
-                      {partnerStores.map(store => (
-                        <SelectItem key={store.id} value={store.id}>{store.name} - {store.owner_name}</SelectItem>
-                      ))}
-                    </SelectContent>
+                    <SelectContent>{partnerStores.map(store => <SelectItem key={store.id} value={store.id}>{store.name} - {store.owner_name}</SelectItem>)}</SelectContent>
                   </Select>
                 </div>
-
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label>Kanvaser</Label>
                     <Select value={selectedCanvasser} onValueChange={setSelectedCanvasser}>
                       <SelectTrigger data-testid="order-canvasser-select"><SelectValue placeholder="Pilih kanvaser" /></SelectTrigger>
-                      <SelectContent>
-                        {canvassers.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
-                      </SelectContent>
+                      <SelectContent>{canvassers.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent>
                     </Select>
                   </div>
                   <div className="space-y-2">
@@ -235,17 +236,13 @@ export const PartnerOrders = () => {
                     <Input type="date" value={deliveryDate} onChange={(e) => setDeliveryDate(e.target.value)} data-testid="order-delivery-date" />
                   </div>
                 </div>
-
                 <div className="space-y-2">
                   <Label>Gudang Default (untuk item baru)</Label>
                   <Select value={defaultWarehouse} onValueChange={setDefaultWarehouse}>
                     <SelectTrigger data-testid="order-warehouse-select"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {warehouses.map(wh => <SelectItem key={wh.id} value={wh.id}>{wh.name} ({wh.unit})</SelectItem>)}
-                    </SelectContent>
+                    <SelectContent>{warehouses.map(wh => <SelectItem key={wh.id} value={wh.id}>{wh.name} ({wh.unit})</SelectItem>)}</SelectContent>
                   </Select>
                 </div>
-
                 <div className="space-y-2">
                   <Label>Cari Produk</Label>
                   <div className="relative">
@@ -253,7 +250,6 @@ export const PartnerOrders = () => {
                     <Input placeholder="Cari produk..." value={searchProduct} onChange={(e) => setSearchProduct(e.target.value)} className="pl-10" data-testid="order-search-product" />
                   </div>
                 </div>
-
                 <div className="border rounded-lg max-h-64 overflow-y-auto">
                   {filteredProducts.slice(0, 10).map(product => {
                     const whStock = getWarehouseStockQty(product.id, defaultWarehouse);
@@ -261,12 +257,7 @@ export const PartnerOrders = () => {
                     const displayPrice = getPriceForWarehouse(product, defaultWarehouse);
                     const customPrice = getPartnerPrice(product.id);
                     return (
-                      <div
-                        key={product.id}
-                        className="p-3 hover:bg-accent cursor-pointer border-b last:border-b-0 flex justify-between items-center"
-                        onClick={() => addToCart(product)}
-                        data-testid={`product-item-${product.id}`}
-                      >
+                      <div key={product.id} className="p-3 hover:bg-accent cursor-pointer border-b last:border-b-0 flex justify-between items-center" onClick={() => addToCart(product)} data-testid={`product-item-${product.id}`}>
                         <div>
                           <p className="font-medium text-sm">{product.name}</p>
                           <p className="text-xs text-muted-foreground">Stok: {whStock} {unit}</p>
@@ -280,14 +271,11 @@ export const PartnerOrders = () => {
                   })}
                 </div>
               </div>
-
-              {/* Cart */}
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <Label>Keranjang</Label>
                   <span className="text-sm text-muted-foreground">{cart.length} item</span>
                 </div>
-
                 <div className="border rounded-lg max-h-80 overflow-y-auto">
                   {cart.length === 0 ? (
                     <div className="p-8 text-center text-muted-foreground">
@@ -296,29 +284,18 @@ export const PartnerOrders = () => {
                     </div>
                   ) : cart.map(item => {
                     const unit = getWarehouseUnit(item.warehouse_id);
-                    const whName = warehouses.find(w => w.id === item.warehouse_id)?.name || '';
                     const stock = getWarehouseStockQty(item.product_id, item.warehouse_id);
                     return (
                       <div key={`${item.product_id}-${item.warehouse_id}`} className="p-3 border-b last:border-b-0 space-y-2">
                         <div className="flex justify-between items-start">
                           <p className="text-sm font-medium flex-1">{item.product_name}</p>
-                          <Button size="sm" variant="ghost" onClick={() => updateQuantity(item.product_id, item.warehouse_id, 0)}>
-                            <Trash2 className="w-3 h-3 text-destructive" />
-                          </Button>
+                          <Button size="sm" variant="ghost" onClick={() => updateQuantity(item.product_id, item.warehouse_id, 0)}><Trash2 className="w-3 h-3 text-destructive" /></Button>
                         </div>
                         <div className="flex items-center gap-1">
                           <Warehouse className="w-3 h-3 text-muted-foreground" />
                           <Select value={item.warehouse_id} onValueChange={(v) => changeItemWarehouse(item.product_id, item.warehouse_id, v)}>
-                            <SelectTrigger className="h-7 text-xs" data-testid={`cart-warehouse-${item.product_id}`}>
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {warehouses.map(wh => (
-                                <SelectItem key={wh.id} value={wh.id}>
-                                  {wh.name} ({getWarehouseStockQty(item.product_id, wh.id)} {wh.unit})
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
+                            <SelectTrigger className="h-7 text-xs" data-testid={`cart-warehouse-${item.product_id}`}><SelectValue /></SelectTrigger>
+                            <SelectContent>{warehouses.map(wh => <SelectItem key={wh.id} value={wh.id}>{wh.name} ({getWarehouseStockQty(item.product_id, wh.id)} {wh.unit})</SelectItem>)}</SelectContent>
                           </Select>
                         </div>
                         <div className="flex items-center justify-between">
@@ -333,29 +310,19 @@ export const PartnerOrders = () => {
                             <p className="text-xs text-muted-foreground">{fmt(item.price)}/{unit}</p>
                           </div>
                         </div>
-                        {item.quantity > stock && (
-                          <p className="text-xs text-red-600">Stok tidak cukup! ({stock} {unit})</p>
-                        )}
+                        {item.quantity > stock && <p className="text-xs text-red-600">Stok tidak cukup! ({stock} {unit})</p>}
                       </div>
                     );
                   })}
                 </div>
-
                 <div className="space-y-2 pt-2 border-t">
-                  <div className="flex justify-between text-sm">
-                    <span>Subtotal:</span>
-                    <span className="font-semibold">{fmt(subtotal)}</span>
-                  </div>
+                  <div className="flex justify-between text-sm"><span>Subtotal:</span><span className="font-semibold">{fmt(subtotal)}</span></div>
                   <div className="space-y-2">
                     <Label>Diskon</Label>
                     <Input type="number" value={discount} onChange={(e) => setDiscount(parseFloat(e.target.value) || 0)} placeholder="0" data-testid="order-discount" />
                   </div>
-                  <div className="flex justify-between text-lg font-bold border-t pt-2">
-                    <span>Total:</span>
-                    <span className="text-primary">{fmt(total)}</span>
-                  </div>
+                  <div className="flex justify-between text-lg font-bold border-t pt-2"><span>Total:</span><span className="text-primary">{fmt(total)}</span></div>
                 </div>
-
                 <div className="flex gap-2 pt-2">
                   <Button variant="outline" onClick={() => setIsDialogOpen(false)} className="flex-1">Batal</Button>
                   <Button onClick={handleSubmit} className="flex-1" disabled={cart.length === 0} data-testid="submit-order-button">Buat Pesanan</Button>
@@ -365,6 +332,78 @@ export const PartnerOrders = () => {
           </DialogContent>
         </Dialog>
       </div>
+
+      {/* Today Summary Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4" data-testid="today-summary">
+        <Card className="p-5">
+          <div className="flex items-center gap-3">
+            <div className="w-11 h-11 bg-primary/10 rounded-xl flex items-center justify-center">
+              <Package className="w-5 h-5 text-primary" />
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground uppercase tracking-wider">Pesanan Hari Ini</p>
+              <p className="text-2xl font-bold" data-testid="today-orders-count">{todaySummary.totalOrders}</p>
+            </div>
+          </div>
+        </Card>
+        <Card className="p-5">
+          <div className="flex items-center gap-3">
+            <div className="w-11 h-11 bg-blue-100 rounded-xl flex items-center justify-center">
+              <ShoppingCart className="w-5 h-5 text-blue-600" />
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground uppercase tracking-wider">Total Produk Dipesan</p>
+              <p className="text-2xl font-bold text-blue-600" data-testid="today-items-count">{fmtNum(todaySummary.totalItems)}</p>
+            </div>
+          </div>
+        </Card>
+        <Card className="p-5">
+          <div className="flex items-center gap-3">
+            <div className="w-11 h-11 bg-emerald-100 rounded-xl flex items-center justify-center">
+              <TrendingUp className="w-5 h-5 text-emerald-600" />
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground uppercase tracking-wider">Total Penjualan</p>
+              <p className="text-2xl font-bold text-emerald-600" data-testid="today-revenue">{fmt(todaySummary.totalRevenue)}</p>
+            </div>
+          </div>
+        </Card>
+        <Card className="p-5">
+          <div className="flex items-center gap-3">
+            <div className="w-11 h-11 bg-green-100 rounded-xl flex items-center justify-center">
+              <DollarSign className="w-5 h-5 text-green-600" />
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground uppercase tracking-wider">Uang Diterima</p>
+              <p className="text-2xl font-bold text-green-600" data-testid="today-paid">{fmt(todaySummary.totalPaid)}</p>
+            </div>
+          </div>
+        </Card>
+      </div>
+
+      {/* Warehouse Breakdown */}
+      {Object.keys(todaySummary.whBreakdown).length > 0 && (
+        <Card className="p-5" data-testid="warehouse-breakdown">
+          <p className="text-sm font-semibold mb-3 flex items-center gap-2"><Warehouse className="w-4 h-4" />Ringkasan Per Gudang Hari Ini</p>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            {warehouses.map(wh => {
+              const data = todaySummary.whBreakdown[wh.id];
+              return (
+                <div key={wh.id} className="flex items-center justify-between p-3 bg-accent/50 rounded-lg">
+                  <div>
+                    <p className="text-sm font-medium">{wh.name}</p>
+                    <p className="text-xs text-muted-foreground">{wh.unit}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-lg font-bold">{data ? fmtNum(data.items) : 0}</p>
+                    <p className="text-xs text-muted-foreground">{wh.unit} dikirim</p>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </Card>
+      )}
 
       {/* Orders Table */}
       <Card className="p-6">
@@ -386,8 +425,7 @@ export const PartnerOrders = () => {
               {orders.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
-                    <Package className="w-12 h-12 mx-auto mb-2 opacity-50" />
-                    <p>Belum ada pesanan</p>
+                    <Package className="w-12 h-12 mx-auto mb-2 opacity-50" /><p>Belum ada pesanan</p>
                   </TableCell>
                 </TableRow>
               ) : orders.map(order => (
@@ -398,9 +436,7 @@ export const PartnerOrders = () => {
                   <TableCell>{order.canvasser_name || '-'}</TableCell>
                   <TableCell className="text-right font-semibold">{fmt(order.total)}</TableCell>
                   <TableCell className="text-right">
-                    <span className={order.remaining > 0 ? 'text-orange-600 font-semibold' : 'text-green-600'}>
-                      {fmt(order.remaining)}
-                    </span>
+                    <span className={order.remaining > 0 ? 'text-orange-600 font-semibold' : 'text-green-600'}>{fmt(order.remaining)}</span>
                   </TableCell>
                   <TableCell>
                     <Select value={order.status} onValueChange={(value) => updateOrderStatus(order.id, value)}>
@@ -412,8 +448,12 @@ export const PartnerOrders = () => {
                       </SelectContent>
                     </Select>
                   </TableCell>
-                  <TableCell className="text-center">
-                    <Button size="sm" variant="outline" onClick={() => {}} data-testid={`order-detail-${order.id}`}>Detail</Button>
+                  <TableCell>
+                    <div className="flex items-center justify-center gap-1">
+                      <Button size="sm" variant="outline" onClick={() => navigate(`/partner-receipt?id=${order.id}`)} data-testid={`receipt-${order.id}`}>
+                        <FileText className="w-4 h-4 mr-1" />Struk
+                      </Button>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}
