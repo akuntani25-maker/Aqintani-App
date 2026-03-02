@@ -235,18 +235,29 @@ export const Products = () => {
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="stock">Stok *</Label>
+                  <Label htmlFor="stock">Stok Awal (satuan)</Label>
                   <Input
                     id="stock"
                     type="number"
                     value={formData.stock}
                     onChange={(e) => setFormData({ ...formData, stock: parseInt(e.target.value) || 0 })}
-                    required
                     data-testid="product-stock-input"
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="cost_price">Harga Beli *</Label>
+                  <Label htmlFor="items_per_box">Isi per Dus *</Label>
+                  <Input
+                    id="items_per_box"
+                    type="number"
+                    min="1"
+                    value={formData.items_per_box}
+                    onChange={(e) => setFormData({ ...formData, items_per_box: parseInt(e.target.value) || 1 })}
+                    required
+                    data-testid="product-items-per-box-input"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="cost_price">Harga Beli/Dus *</Label>
                   <Input
                     id="cost_price"
                     type="number"
@@ -256,8 +267,11 @@ export const Products = () => {
                     data-testid="product-cost-input"
                   />
                 </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="price">Harga Jual *</Label>
+                  <Label htmlFor="price">Harga Jual Satuan *</Label>
                   <Input
                     id="price"
                     type="number"
@@ -265,6 +279,16 @@ export const Products = () => {
                     onChange={(e) => setFormData({ ...formData, price: parseFloat(e.target.value) || 0 })}
                     required
                     data-testid="product-price-input"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="box_price">Harga Jual per Dus</Label>
+                  <Input
+                    id="box_price"
+                    type="number"
+                    value={formData.box_price}
+                    onChange={(e) => setFormData({ ...formData, box_price: parseFloat(e.target.value) || 0 })}
+                    data-testid="product-box-price-input"
                   />
                 </div>
               </div>
