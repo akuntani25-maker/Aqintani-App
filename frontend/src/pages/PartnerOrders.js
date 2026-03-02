@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
 import { toast } from 'sonner';
-import { Plus, Search, Package, Trash2, ShoppingCart, Warehouse, FileText, DollarSign, TrendingUp } from 'lucide-react';
+import { Plus, Search, Package, Trash2, ShoppingCart, Warehouse, FileText, DollarSign, TrendingUp, RotateCcw } from 'lucide-react';
 
 export const PartnerOrders = () => {
   const navigate = useNavigate();
@@ -29,6 +29,10 @@ export const PartnerOrders = () => {
   const [warehouses, setWarehouses] = useState([]);
   const [warehouseStock, setWarehouseStock] = useState([]);
   const [partnerPrices, setPartnerPrices] = useState([]);
+  const [returnDialog, setReturnDialog] = useState(null);
+  const [returnItems, setReturnItems] = useState([]);
+  const [returnNotes, setReturnNotes] = useState('');
+  const [returnWarehouse, setReturnWarehouse] = useState('gudang_toko');
 
   useEffect(() => { fetchData(); }, []);
 
@@ -96,50 +100,57 @@ export const PartnerOrders = () => {
     return warehouses.find(w => w.id === warehouseId)?.unit || 'satuan';
   };
 
-  const getPriceForWarehouse = (product, warehouseId) => {
+  const getPriceForUnit = (product, unitType) => {
     const customPrice = getPartnerPrice(product.id);
     if (customPrice !== null) return customPrice;
+    return unitType === 'dus' ? (product.box_price || product.price) : product.price;
+  };
+
+  const getPriceForWarehouse = (product, warehouseId) => {
     const unit = getWarehouseUnit(warehouseId);
-    return unit === 'dus' ? (product.box_price || product.price) : product.price;
+    return getPriceForUnit(product, unit);
   };
 
   const addToCart = (product) => {
     const whId = defaultWarehouse;
-    const price = getPriceForWarehouse(product, whId);
-    const existing = cart.find(item => item.product_id === product.id && item.warehouse_id === whId);
+    const whUnit = getWarehouseUnit(whId);
+    const price = getPriceForUnit(product, whUnit);
+    const existing = cart.find(item => item.product_id === product.id && item.warehouse_id === whId && item.sell_unit === whUnit);
     if (existing) {
       setCart(cart.map(item =>
-        (item.product_id === product.id && item.warehouse_id === whId)
+        (item.product_id === product.id && item.warehouse_id === whId && item.sell_unit === whUnit)
           ? { ...item, quantity: item.quantity + 1, subtotal: (item.quantity + 1) * item.price }
           : item
       ));
     } else {
-      setCart([...cart, { product_id: product.id, product_name: product.name, quantity: 1, price, subtotal: price, warehouse_id: whId }]);
+      setCart([...cart, { product_id: product.id, product_name: product.name, quantity: 1, price, subtotal: price, warehouse_id: whId, sell_unit: whUnit }]);
     }
   };
 
-  const updateQuantity = (productId, warehouseId, newQuantity) => {
+  const updateQuantity = (idx, newQuantity) => {
     if (newQuantity <= 0) {
-      setCart(cart.filter(item => !(item.product_id === productId && item.warehouse_id === warehouseId)));
+      setCart(cart.filter((_, i) => i !== idx));
     } else {
-      setCart(cart.map(item =>
-        (item.product_id === productId && item.warehouse_id === warehouseId)
-          ? { ...item, quantity: newQuantity, subtotal: newQuantity * item.price }
-          : item
-      ));
+      setCart(cart.map((item, i) => i === idx ? { ...item, quantity: newQuantity, subtotal: newQuantity * item.price } : item));
     }
   };
 
-  const changeItemWarehouse = (productId, oldWhId, newWhId) => {
-    if (oldWhId === newWhId) return;
-    const product = products.find(p => p.id === productId);
+  const changeItemWarehouse = (idx, newWhId) => {
+    const item = cart[idx];
+    if (!item || item.warehouse_id === newWhId) return;
+    const product = products.find(p => p.id === item.product_id);
     if (!product) return;
-    const newPrice = getPriceForWarehouse(product, newWhId);
-    setCart(cart.map(item =>
-      (item.product_id === productId && item.warehouse_id === oldWhId)
-        ? { ...item, warehouse_id: newWhId, price: newPrice, subtotal: item.quantity * newPrice }
-        : item
-    ));
+    const newPrice = getPriceForUnit(product, item.sell_unit);
+    setCart(cart.map((it, i) => i === idx ? { ...it, warehouse_id: newWhId, price: newPrice, subtotal: it.quantity * newPrice } : it));
+  };
+
+  const changeItemUnit = (idx, newUnit) => {
+    const item = cart[idx];
+    if (!item || item.sell_unit === newUnit) return;
+    const product = products.find(p => p.id === item.product_id);
+    if (!product) return;
+    const newPrice = getPriceForUnit(product, newUnit);
+    setCart(cart.map((it, i) => i === idx ? { ...it, sell_unit: newUnit, price: newPrice, subtotal: it.quantity * newPrice } : it));
   };
 
   const calculateTotal = () => {
@@ -168,6 +179,32 @@ export const PartnerOrders = () => {
       }
     } catch (error) {
       toast.error(error.response?.data?.detail || 'Gagal membuat pesanan');
+    }
+  };
+
+  const openReturnDialog = (order) => {
+    setReturnDialog(order);
+    setReturnItems(order.items.map(i => ({ ...i, return_qty: 0, reason: '' })));
+    setReturnNotes('');
+    setReturnWarehouse('gudang_toko');
+  };
+
+  const handleReturn = async () => {
+    const items = returnItems.filter(i => i.return_qty > 0).map(i => ({
+      product_id: i.product_id, product_name: i.product_name,
+      quantity: i.return_qty, reason: i.reason, subtotal: i.return_qty * i.price
+    }));
+    if (items.length === 0) { toast.error('Pilih produk yang diretur'); return; }
+    try {
+      await api.post('/returns', {
+        source_type: 'partner_order', source_id: returnDialog.id,
+        items, notes: returnNotes, warehouse_id: returnWarehouse
+      });
+      toast.success('Retur berhasil dicatat');
+      setReturnDialog(null);
+      fetchData();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Gagal mencatat retur');
     }
   };
 
@@ -282,35 +319,44 @@ export const PartnerOrders = () => {
                       <ShoppingCart className="w-12 h-12 mx-auto mb-2 opacity-20" />
                       <p className="text-sm">Keranjang kosong</p>
                     </div>
-                  ) : cart.map(item => {
-                    const unit = getWarehouseUnit(item.warehouse_id);
+                  ) : cart.map((item, idx) => {
                     const stock = getWarehouseStockQty(item.product_id, item.warehouse_id);
                     return (
-                      <div key={`${item.product_id}-${item.warehouse_id}`} className="p-3 border-b last:border-b-0 space-y-2">
+                      <div key={idx} className="p-3 border-b last:border-b-0 space-y-2">
                         <div className="flex justify-between items-start">
                           <p className="text-sm font-medium flex-1">{item.product_name}</p>
-                          <Button size="sm" variant="ghost" onClick={() => updateQuantity(item.product_id, item.warehouse_id, 0)}><Trash2 className="w-3 h-3 text-destructive" /></Button>
+                          <Button size="sm" variant="ghost" onClick={() => updateQuantity(idx, 0)}><Trash2 className="w-3 h-3 text-destructive" /></Button>
                         </div>
                         <div className="flex items-center gap-1">
-                          <Warehouse className="w-3 h-3 text-muted-foreground" />
-                          <Select value={item.warehouse_id} onValueChange={(v) => changeItemWarehouse(item.product_id, item.warehouse_id, v)}>
-                            <SelectTrigger className="h-7 text-xs" data-testid={`cart-warehouse-${item.product_id}`}><SelectValue /></SelectTrigger>
+                          <Warehouse className="w-3 h-3 text-muted-foreground shrink-0" />
+                          <Select value={item.warehouse_id} onValueChange={(v) => changeItemWarehouse(idx, v)}>
+                            <SelectTrigger className="h-7 text-xs"><SelectValue /></SelectTrigger>
                             <SelectContent>{warehouses.map(wh => <SelectItem key={wh.id} value={wh.id}>{wh.name} ({getWarehouseStockQty(item.product_id, wh.id)} {wh.unit})</SelectItem>)}</SelectContent>
+                          </Select>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <span className="text-xs text-muted-foreground shrink-0">Unit:</span>
+                          <Select value={item.sell_unit} onValueChange={(v) => changeItemUnit(idx, v)}>
+                            <SelectTrigger className="h-7 text-xs" data-testid={`cart-unit-${idx}`}><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="dus">Dus</SelectItem>
+                              <SelectItem value="satuan">Satuan</SelectItem>
+                            </SelectContent>
                           </Select>
                         </div>
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2">
-                            <Button size="sm" variant="outline" onClick={() => updateQuantity(item.product_id, item.warehouse_id, item.quantity - 1)}>-</Button>
+                            <Button size="sm" variant="outline" onClick={() => updateQuantity(idx, item.quantity - 1)}>-</Button>
                             <span className="w-8 text-center text-sm">{item.quantity}</span>
-                            <Button size="sm" variant="outline" onClick={() => updateQuantity(item.product_id, item.warehouse_id, item.quantity + 1)}>+</Button>
-                            <span className="text-xs text-muted-foreground">{unit}</span>
+                            <Button size="sm" variant="outline" onClick={() => updateQuantity(idx, item.quantity + 1)}>+</Button>
+                            <span className="text-xs text-muted-foreground">{item.sell_unit}</span>
                           </div>
                           <div className="text-right">
                             <span className="text-sm font-semibold">{fmt(item.subtotal)}</span>
-                            <p className="text-xs text-muted-foreground">{fmt(item.price)}/{unit}</p>
+                            <p className="text-xs text-muted-foreground">{fmt(item.price)}/{item.sell_unit}</p>
                           </div>
                         </div>
-                        {item.quantity > stock && <p className="text-xs text-red-600">Stok tidak cukup! ({stock} {unit})</p>}
+                        {item.quantity > stock && <p className="text-xs text-red-600">Stok tidak cukup! ({stock} {getWarehouseUnit(item.warehouse_id)})</p>}
                       </div>
                     );
                   })}
@@ -430,7 +476,10 @@ export const PartnerOrders = () => {
                 </TableRow>
               ) : orders.map(order => (
                 <TableRow key={order.id} data-testid={`order-row-${order.id}`}>
-                  <TableCell className="font-mono text-sm">{order.order_number}</TableCell>
+                  <TableCell className="font-mono text-sm">
+                    {order.order_number}
+                    {order.has_return && <span className="ml-2 text-xs bg-red-100 text-red-700 px-1.5 py-0.5 rounded font-semibold">RETUR</span>}
+                  </TableCell>
                   <TableCell>{new Date(order.created_at).toLocaleDateString('id-ID')}</TableCell>
                   <TableCell>{order.partner_store_name}</TableCell>
                   <TableCell>{order.canvasser_name || '-'}</TableCell>
@@ -453,6 +502,9 @@ export const PartnerOrders = () => {
                       <Button size="sm" variant="outline" onClick={() => navigate(`/partner-receipt?id=${order.id}`)} data-testid={`receipt-${order.id}`}>
                         <FileText className="w-4 h-4 mr-1" />Struk
                       </Button>
+                      <Button size="sm" variant="outline" onClick={() => openReturnDialog(order)} data-testid={`return-${order.id}`} className="text-orange-600 border-orange-200 hover:bg-orange-50">
+                        <RotateCcw className="w-4 h-4 mr-1" />Retur
+                      </Button>
                     </div>
                   </TableCell>
                 </TableRow>
@@ -461,6 +513,56 @@ export const PartnerOrders = () => {
           </Table>
         </div>
       </Card>
+
+      {/* Return Dialog */}
+      <Dialog open={!!returnDialog} onOpenChange={(open) => { if (!open) setReturnDialog(null); }}>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader><DialogTitle>Retur Pesanan {returnDialog?.order_number}</DialogTitle></DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">Kios: <span className="font-semibold text-foreground">{returnDialog?.partner_store_name}</span></p>
+            <div className="space-y-3">
+              {returnItems.map((item, idx) => (
+                <div key={idx} className="p-3 border rounded-lg space-y-2">
+                  <p className="text-sm font-medium">{item.product_name}</p>
+                  <p className="text-xs text-muted-foreground">Dipesan: {item.quantity} — Harga: {fmt(item.price)}</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <Label className="text-xs">Qty Retur</Label>
+                      <Input type="number" min="0" max={item.quantity} value={item.return_qty}
+                        onChange={(e) => {
+                          const v = Math.min(parseInt(e.target.value) || 0, item.quantity);
+                          setReturnItems(returnItems.map((it, i) => i === idx ? { ...it, return_qty: v } : it));
+                        }}
+                        data-testid={`return-qty-${idx}`} />
+                    </div>
+                    <div>
+                      <Label className="text-xs">Alasan</Label>
+                      <Input value={item.reason} placeholder="Rusak, expired, dll"
+                        onChange={(e) => setReturnItems(returnItems.map((it, i) => i === idx ? { ...it, reason: e.target.value } : it))}
+                        data-testid={`return-reason-${idx}`} />
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="space-y-2">
+              <Label>Gudang Tujuan Retur</Label>
+              <Select value={returnWarehouse} onValueChange={setReturnWarehouse}>
+                <SelectTrigger data-testid="return-warehouse-select"><SelectValue /></SelectTrigger>
+                <SelectContent>{warehouses.map(wh => <SelectItem key={wh.id} value={wh.id}>{wh.name}</SelectItem>)}</SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Catatan</Label>
+              <Input value={returnNotes} onChange={(e) => setReturnNotes(e.target.value)} placeholder="Keterangan tambahan..." data-testid="return-notes" />
+            </div>
+            <div className="flex gap-2 pt-2">
+              <Button variant="outline" onClick={() => setReturnDialog(null)} className="flex-1">Batal</Button>
+              <Button onClick={handleReturn} className="flex-1 bg-orange-600 hover:bg-orange-700" data-testid="submit-return-button">Catat Retur</Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

@@ -159,6 +159,7 @@ class TransactionItem(BaseModel):
     price: float
     subtotal: float
     warehouse_id: Optional[str] = ""
+    sell_unit: Optional[str] = ""
 
 class TransactionCreate(BaseModel):
     items: List[TransactionItem]
@@ -307,6 +308,7 @@ class PartnerOrder(BaseModel):
     status: str
     created_at: str
     date: str
+    has_return: Optional[bool] = False
 
 class CanvasserCreate(BaseModel):
     name: str
@@ -1202,14 +1204,26 @@ async def create_partner_order(data: PartnerOrderCreate, current_user: dict = De
         item_wh_id = item.warehouse_id or default_wh_id
         wh = await db.warehouses.find_one({"id": item_wh_id}, {"_id": 0})
         if wh:
+            wh_unit = wh.get("unit", "satuan")
+            sell_unit = item.sell_unit or wh_unit
+
+            # Calculate stock deduction: if selling satuan from dus warehouse, convert
+            if wh_unit == "dus" and sell_unit == "satuan":
+                product = await db.products.find_one({"id": item.product_id}, {"_id": 0})
+                ipb = product.get("items_per_box", 1) or 1 if product else 1
+                # Need (quantity) satuan, which is quantity/ipb in dus (fractional allowed for stock tracking)
+                deduct_qty = item.quantity / ipb
+            else:
+                deduct_qty = item.quantity
+
             wh_stock = await db.warehouse_stock.find_one({"product_id": item.product_id, "warehouse_id": item_wh_id})
             current_qty = wh_stock["stock"] if wh_stock else 0
-            if current_qty < item.quantity:
+            if current_qty < deduct_qty:
                 wh_name = wh.get("name", item_wh_id)
                 raise HTTPException(status_code=400, detail=f"Stok {wh_name} tidak cukup untuk {item.product_name}")
             await db.warehouse_stock.update_one(
                 {"product_id": item.product_id, "warehouse_id": item_wh_id},
-                {"$inc": {"stock": -item.quantity}}
+                {"$inc": {"stock": -deduct_qty}}
             )
             await recalculate_product_stock(item.product_id)
     
@@ -1285,6 +1299,67 @@ async def pay_partner_order(order_id: str, amount: float, current_user: dict = D
         )
     
     return result
+
+
+# ============= RETURNS / RETUR =============
+class ReturnCreate(BaseModel):
+    source_type: str  # "transaction" or "partner_order"
+    source_id: str
+    items: List[dict]  # [{product_id, product_name, quantity, reason}]
+    notes: str = ""
+    warehouse_id: str = "gudang_toko"
+
+@api_router.post("/returns")
+async def create_return(data: ReturnCreate, admin: dict = Depends(require_admin)):
+    now = datetime.now(timezone.utc)
+    return_doc = {
+        "id": str(uuid.uuid4()),
+        "return_number": f"RTN{now.strftime('%Y%m%d%H%M%S')}",
+        "source_type": data.source_type,
+        "source_id": data.source_id,
+        "items": data.items,
+        "notes": data.notes,
+        "warehouse_id": data.warehouse_id,
+        "created_at": now.isoformat(),
+        "date": now.strftime("%Y-%m-%d")
+    }
+    await db.returns.insert_one(return_doc)
+
+    # Restore stock to warehouse
+    for item in data.items:
+        await db.warehouse_stock.update_one(
+            {"product_id": item["product_id"], "warehouse_id": data.warehouse_id},
+            {"$inc": {"stock": item["quantity"]}},
+            upsert=True
+        )
+        await recalculate_product_stock(item["product_id"])
+
+    # Mark source as having returns
+    if data.source_type == "transaction":
+        await db.transactions.update_one({"id": data.source_id}, {"$set": {"has_return": True}})
+    elif data.source_type == "partner_order":
+        await db.partner_orders.update_one({"id": data.source_id}, {"$set": {"has_return": True}})
+        # Reduce partner debt by return total if partner order
+        order = await db.partner_orders.find_one({"id": data.source_id}, {"_id": 0})
+        if order:
+            return_total = sum(i.get("subtotal", 0) for i in data.items)
+            new_remaining = max(0, order.get("remaining", 0) - return_total)
+            await db.partner_orders.update_one({"id": data.source_id}, {"$set": {"remaining": new_remaining}})
+            partner_store = await db.partner_stores.find_one({"id": order["partner_store_id"]})
+            if partner_store:
+                new_debt = max(0, partner_store.get("current_debt", 0) - return_total)
+                await db.partner_stores.update_one({"id": order["partner_store_id"]}, {"$set": {"current_debt": new_debt}})
+
+    return_doc.pop("_id", None)
+    return return_doc
+
+@api_router.get("/returns")
+async def get_returns(source_id: str = None, admin: dict = Depends(require_admin)):
+    query = {}
+    if source_id:
+        query["source_id"] = source_id
+    returns = await db.returns.find(query, {"_id": 0}).sort("created_at", -1).to_list(1000)
+    return returns
 
 # ============= CANVASSERS =============
 @api_router.get("/canvassers", response_model=List[Canvasser])

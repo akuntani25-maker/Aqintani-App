@@ -6,7 +6,7 @@ import { Input } from '../components/ui/input';
 import { Card } from '../components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { toast } from 'sonner';
-import { Search, Plus, Minus, Trash2, ShoppingCart, LogOut, CreditCard, Banknote, Smartphone, Printer } from 'lucide-react';
+import { Search, Plus, Minus, Trash2, ShoppingCart, LogOut, CreditCard, Banknote, Smartphone, Printer, Pencil } from 'lucide-react';
 import { useReactToPrint } from 'react-to-print';
 import ThermalPrinter from '../utils/ThermalPrinter';
 
@@ -181,6 +181,14 @@ export const POS = () => {
     }));
   };
 
+  const updateItemPrice = (productId, newPrice) => {
+    setCart(cart.map(item =>
+      item.product_id === productId
+        ? { ...item, price: newPrice, subtotal: item.quantity * newPrice }
+        : item
+    ));
+  };
+
   const removeFromCart = (productId) => {
     setCart(cart.filter(item => item.product_id !== productId));
   };
@@ -348,6 +356,17 @@ export const POS = () => {
                   >
                     <Trash2 className="w-4 h-4 text-destructive" />
                   </Button>
+                </div>
+                <div className="flex items-center gap-1 mb-2">
+                  <Pencil className="w-3 h-3 text-muted-foreground" />
+                  <Input
+                    type="number"
+                    value={item.price}
+                    onChange={(e) => updateItemPrice(item.product_id, parseFloat(e.target.value) || 0)}
+                    className="h-7 text-sm font-medium w-32"
+                    data-testid={`edit-price-${item.product_id}`}
+                  />
+                  <span className="text-xs text-muted-foreground">/pcs</span>
                 </div>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">

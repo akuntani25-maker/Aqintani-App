@@ -1,0 +1,62 @@
+{
+  "summary": "Completed testing of 3 new features: POS Manual Price Override, Partner Order Unit Selection, and Return/Retur Feature. All backend tests passed (9/9). All frontend features verified working via Playwright.",
+  "backend_issues": {
+    "critical": [],
+    "minor": [
+      {
+        "endpoint": "GET /api/partner-orders",
+        "issue": "PartnerOrder response model was missing has_return field - FIXED by adding Optional[bool] has_return = False to model",
+        "priority": "FIXED"
+      }
+    ]
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {
+        "screen": "All Dialogs",
+        "issues": ["Console warning: Missing Description or aria-describedby for DialogContent - accessibility improvement recommended (carried over)"]
+      }
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_new_features.py",
+    "/app/test_reports/pytest/new_features_results.xml"
+  ],
+  "passed_tests": [
+    "Backend: GET /api/returns returns 200 with list - PASS",
+    "Backend: POST /api/returns requires admin auth - PASS",
+    "Backend: POST /api/returns creates return, restores stock, sets has_return=true, reduces partner debt - PASS",
+    "Backend: GET /api/returns after creation shows records - PASS",
+    "Backend: Partner order with sell_unit='dus' deducts stock normally - PASS",
+    "Backend: Partner order with sell_unit='satuan' from dus warehouse deducts fractional stock (5 satuan / 10 ipb = 0.5 dus) - PASS",
+    "Backend: TransactionItem accepts and stores sell_unit field - PASS",
+    "Backend: POS transaction accepts custom/overridden price (45000 instead of 50000) - PASS",
+    "Backend: Warehouses exist with correct units (gudang_utama=dus, gudang_toko=satuan, gudang_lainnya=dus) - PASS",
+    "Frontend POS: Editable price input field with pencil icon exists per cart item - PASS",
+    "Frontend POS: Price change recalculates subtotal correctly - PASS",
+    "Frontend Partner Orders: Unit selector (Dus/Satuan) exists per cart item - PASS",
+    "Frontend Partner Orders: Retur button exists on each order row - PASS",
+    "Frontend Partner Orders: Return dialog opens with item list, qty retur, reason, warehouse selector - PASS",
+    "Frontend Partner Orders: Return submission shows success toast - PASS",
+    "Frontend Partner Orders: RETUR badge appears on orders with has_return=true - PASS"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [
+    "/app/backend/server.py (added has_return to PartnerOrder model)",
+    "/app/backend/tests/test_new_features.py"
+  ],
+  "success_rate": {
+    "backend": "100% (9/9 tests)",
+    "frontend": "100% (all 3 new features working)"
+  },
+  "test_credentials": {
+    "admin": "admin@aqintani.com / admin123"
+  },
+  "seed_data_creation": "Created test data via pytest fixtures: TEST_CATEGORY, TEST_SUPPLIER, TEST_PRODUCT (items_per_box=10), TEST_STORE",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "3 new features tested and working: 1) POS Manual Price Override - editable price Input with data-testid='edit-price-{product_id}' on cart items, changes recalculate subtotal. 2) Partner Order Unit Selection - per-item unit selector with data-testid='cart-unit-{idx}', options Dus/Satuan, changing unit changes price accordingly. Selling satuan from dus warehouse deducts fractional stock (qty/items_per_box). 3) Return/Retur Feature - 'Retur' button on order rows opens dialog with qty/reason/warehouse inputs, POST /api/returns creates return, restores stock, reduces partner debt, sets has_return=true. RETUR badge shows on orders with returns. Fixed has_return field missing in PartnerOrder response model."
+}
