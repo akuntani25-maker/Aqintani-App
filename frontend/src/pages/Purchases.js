@@ -36,14 +36,16 @@ export const Purchases = () => {
 
   const fetchData = async () => {
     try {
-      const [purchasesRes, suppliersRes, productsRes] = await Promise.all([
+      const [purchasesRes, suppliersRes, productsRes, whRes] = await Promise.all([
         api.get('/purchases'),
         api.get('/suppliers'),
-        api.get('/products')
+        api.get('/products'),
+        api.get('/warehouses')
       ]);
       setPurchases(purchasesRes.data);
       setSuppliers(suppliersRes.data);
       setProducts(productsRes.data);
+      setWarehouses(whRes.data);
     } catch (error) {
       toast.error('Gagal memuat data');
     } finally {
