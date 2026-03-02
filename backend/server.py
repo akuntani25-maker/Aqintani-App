@@ -158,6 +158,7 @@ class TransactionItem(BaseModel):
     quantity: int
     price: float
     subtotal: float
+    warehouse_id: Optional[str] = ""
 
 class TransactionCreate(BaseModel):
     items: List[TransactionItem]
