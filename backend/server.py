@@ -966,17 +966,19 @@ async def create_partner_order(data: PartnerOrderCreate, current_user: dict = De
         if canvasser:
             canvasser_name = canvasser["name"]
     
-    # Deduct stock from selected warehouse
-    wh_id = data.warehouse_id or "gudang_utama"
-    wh = await db.warehouses.find_one({"id": wh_id}, {"_id": 0})
-    if wh:
-        for item in data.items:
-            wh_stock = await db.warehouse_stock.find_one({"product_id": item.product_id, "warehouse_id": wh_id})
+    # Deduct stock from each item's warehouse (or fallback to order-level warehouse)
+    default_wh_id = data.warehouse_id or "gudang_utama"
+    for item in data.items:
+        item_wh_id = item.warehouse_id or default_wh_id
+        wh = await db.warehouses.find_one({"id": item_wh_id}, {"_id": 0})
+        if wh:
+            wh_stock = await db.warehouse_stock.find_one({"product_id": item.product_id, "warehouse_id": item_wh_id})
             current_qty = wh_stock["stock"] if wh_stock else 0
             if current_qty < item.quantity:
-                raise HTTPException(status_code=400, detail=f"Stok {wh['name']} tidak cukup untuk {item.product_name}")
+                wh_name = wh.get("name", item_wh_id)
+                raise HTTPException(status_code=400, detail=f"Stok {wh_name} tidak cukup untuk {item.product_name}")
             await db.warehouse_stock.update_one(
-                {"product_id": item.product_id, "warehouse_id": wh_id},
+                {"product_id": item.product_id, "warehouse_id": item_wh_id},
                 {"$inc": {"stock": -item.quantity}}
             )
             await recalculate_product_stock(item.product_id)
