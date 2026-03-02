@@ -57,9 +57,9 @@ export const Analytics = () => {
   };
 
   return (
-    <div className="p-6 md:p-8 space-y-6" data-testid="analytics-page">
+    <div className="p-4 md:p-6 lg:p-8 space-y-6" data-testid="analytics-page">
       <div>
-        <h1 className="text-3xl md:text-4xl font-bold tracking-tight">Analytics</h1>
+        <h1 className="text-2xl md:text-3xl lg:text-4xl font-bold tracking-tight">Analytics</h1>
         <p className="text-sm text-muted-foreground mt-2">Ringkasan performa bisnis bulan ini</p>
       </div>
 

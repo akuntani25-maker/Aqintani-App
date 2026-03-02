@@ -80,10 +80,10 @@ export const Categories = () => {
   }
 
   return (
-    <div className="p-6 md:p-8 space-y-6" data-testid="categories-page">
+    <div className="p-4 md:p-6 lg:p-8 space-y-6" data-testid="categories-page">
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
-          <h1 className="text-3xl md:text-4xl font-bold tracking-tight">Kategori</h1>
+          <h1 className="text-2xl md:text-3xl lg:text-4xl font-bold tracking-tight">Kategori</h1>
           <p className="text-sm text-muted-foreground mt-2">Kelola kategori produk</p>
         </div>
         <Dialog open={isDialogOpen} onOpenChange={(open) => {

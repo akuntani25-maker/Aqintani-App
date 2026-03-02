@@ -169,11 +169,11 @@ export const Products = () => {
   }
 
   return (
-    <div className="p-6 md:p-8 space-y-6" data-testid="products-page">
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+    <div className="p-4 md:p-6 lg:p-8 space-y-6" data-testid="products-page">
+      <div className="flex flex-col gap-4">
         <div>
-          <h1 className="text-3xl md:text-4xl font-bold tracking-tight">Produk</h1>
-          <p className="text-sm text-muted-foreground mt-2">Kelola produk, stok gudang & transfer</p>
+          <h1 className="text-2xl md:text-3xl lg:text-4xl font-bold tracking-tight">Produk</h1>
+          <p className="text-sm text-muted-foreground mt-1">Kelola produk, stok gudang & transfer</p>
         </div>
         <Dialog open={isDialogOpen} onOpenChange={(open) => { setIsDialogOpen(open); if (!open) resetForm(); }}>
           <DialogTrigger asChild>

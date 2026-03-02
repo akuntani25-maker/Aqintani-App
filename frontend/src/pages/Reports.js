@@ -67,23 +67,23 @@ export const Reports = () => {
     : '0';
 
   return (
-    <div className="p-6 md:p-8 space-y-6" data-testid="reports-page">
+    <div className="p-4 md:p-6 lg:p-8 space-y-6" data-testid="reports-page">
       <div>
-        <h1 className="text-3xl md:text-4xl font-bold tracking-tight">Laporan</h1>
-        <p className="text-sm text-muted-foreground mt-2">Laporan penjualan rinci per produk</p>
+        <h1 className="text-2xl md:text-3xl lg:text-4xl font-bold tracking-tight">Laporan</h1>
+        <p className="text-sm text-muted-foreground mt-1">Laporan penjualan rinci per produk</p>
       </div>
 
       {/* Tab & Filter */}
       <Card className="p-6 space-y-4">
-        <div className="flex gap-2">
-          <Button variant={activeTab === 'pos' ? 'default' : 'outline'} onClick={() => { setActiveTab('pos'); setReportData(null); }} data-testid="tab-pos">
-            <ShoppingCart className="w-4 h-4 mr-2" />Penjualan POS
+        <div className="flex flex-wrap gap-2">
+          <Button variant={activeTab === 'pos' ? 'default' : 'outline'} size="sm" onClick={() => { setActiveTab('pos'); setReportData(null); }} data-testid="tab-pos">
+            <ShoppingCart className="w-4 h-4 mr-1" />POS
           </Button>
-          <Button variant={activeTab === 'partner' ? 'default' : 'outline'} onClick={() => { setActiveTab('partner'); setReportData(null); }} data-testid="tab-partner">
-            <Store className="w-4 h-4 mr-2" />Penjualan Kios Mitra
+          <Button variant={activeTab === 'partner' ? 'default' : 'outline'} size="sm" onClick={() => { setActiveTab('partner'); setReportData(null); }} data-testid="tab-partner">
+            <Store className="w-4 h-4 mr-1" />Kios Mitra
           </Button>
-          <Button variant={activeTab === 'bestseller' ? 'default' : 'outline'} onClick={() => { setActiveTab('bestseller'); setReportData(null); }} data-testid="tab-bestseller">
-            <Award className="w-4 h-4 mr-2" />Produk Terlaris
+          <Button variant={activeTab === 'bestseller' ? 'default' : 'outline'} size="sm" onClick={() => { setActiveTab('bestseller'); setReportData(null); }} data-testid="tab-bestseller">
+            <Award className="w-4 h-4 mr-1" />Terlaris
           </Button>
         </div>
         <div className="flex flex-col md:flex-row gap-4 items-end">

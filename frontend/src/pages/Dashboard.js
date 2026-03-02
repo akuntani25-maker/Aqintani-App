@@ -72,10 +72,10 @@ export const Dashboard = () => {
   ];
 
   return (
-    <div className="p-6 md:p-8 space-y-8" data-testid="dashboard-page">
+    <div className="p-4 md:p-6 lg:p-8 space-y-6 md:space-y-8" data-testid="dashboard-page">
       <div>
-        <h1 className="text-3xl md:text-4xl font-bold tracking-tight">Dashboard</h1>
-        <p className="text-sm text-muted-foreground mt-2">Selamat datang di UD. Aqin Tani</p>
+        <h1 className="text-2xl md:text-3xl lg:text-4xl font-bold tracking-tight">Dashboard</h1>
+        <p className="text-sm text-muted-foreground mt-1">Selamat datang di UD. Aqin Tani</p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
@@ -103,7 +103,7 @@ export const Dashboard = () => {
             Penjualan 7 Hari Terakhir
           </h2>
         </div>
-        <ResponsiveContainer width="100%" height={300}>
+        <ResponsiveContainer width="100%" height={250}>
           <BarChart data={stats?.last_7_days || []}>
             <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
             <XAxis 

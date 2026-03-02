@@ -141,10 +141,10 @@ export const PartnerStores = () => {
   }
 
   return (
-    <div className="p-6 md:p-8 space-y-6" data-testid="partner-stores-page">
+    <div className="p-4 md:p-6 lg:p-8 space-y-6" data-testid="partner-stores-page">
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
-          <h1 className="text-3xl md:text-4xl font-bold tracking-tight">Kios Mitra</h1>
+          <h1 className="text-2xl md:text-3xl lg:text-4xl font-bold tracking-tight">Kios Mitra</h1>
           <p className="text-sm text-muted-foreground mt-2">Kelola data kios mitra dan tracking piutang</p>
         </div>
         <div className="flex gap-2">

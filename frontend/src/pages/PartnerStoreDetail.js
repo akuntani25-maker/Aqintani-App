@@ -111,14 +111,14 @@ export const PartnerStoreDetail = () => {
   const totalPaid = orders.reduce((s, o) => s + o.paid, 0);
 
   return (
-    <div className="p-6 md:p-8 space-y-6" data-testid="partner-store-detail-page">
+    <div className="p-4 md:p-6 lg:p-8 space-y-6" data-testid="partner-store-detail-page">
       <div className="flex items-center gap-4">
         <Button variant="outline" size="sm" onClick={() => navigate('/admin/partner-stores')} data-testid="back-button">
           <ArrowLeft className="w-4 h-4 mr-2" />
           Kembali
         </Button>
         <div className="flex-1">
-          <h1 className="text-3xl md:text-4xl font-bold tracking-tight">{store.name}</h1>
+          <h1 className="text-2xl md:text-3xl lg:text-4xl font-bold tracking-tight">{store.name}</h1>
           <p className="text-sm text-muted-foreground mt-1">Detail kios mitra, riwayat transaksi & setoran</p>
         </div>
         {store.current_debt > 0 && (

@@ -241,15 +241,15 @@ export const PartnerOrders = () => {
   const { subtotal, total } = calculateTotal();
 
   return (
-    <div className="p-6 md:p-8 space-y-6" data-testid="partner-orders-page">
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+    <div className="p-4 md:p-6 lg:p-8 space-y-6" data-testid="partner-orders-page">
+      <div className="flex flex-col gap-4">
         <div>
-          <h1 className="text-3xl md:text-4xl font-bold tracking-tight">Pesanan Kios Mitra</h1>
-          <p className="text-sm text-muted-foreground mt-2">Buat dan kelola pesanan untuk kios mitra</p>
+          <h1 className="text-2xl md:text-3xl lg:text-4xl font-bold tracking-tight">Pesanan Kios Mitra</h1>
+          <p className="text-sm text-muted-foreground mt-1">Buat dan kelola pesanan untuk kios mitra</p>
         </div>
         <Dialog open={isDialogOpen} onOpenChange={(open) => { setIsDialogOpen(open); if (!open) resetForm(); }}>
           <DialogTrigger asChild>
-            <Button data-testid="create-order-button"><Plus className="w-4 h-4 mr-2" />Buat Pesanan Baru</Button>
+            <Button className="w-full md:w-auto" data-testid="create-order-button"><Plus className="w-4 h-4 mr-2" />Buat Pesanan Baru</Button>
           </DialogTrigger>
           <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
             <DialogHeader><DialogTitle>Buat Pesanan Kios Mitra</DialogTitle></DialogHeader>
@@ -379,48 +379,48 @@ export const PartnerOrders = () => {
       </div>
 
       {/* Today Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4" data-testid="today-summary">
-        <Card className="p-5">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4" data-testid="today-summary">
+        <Card className="p-4 md:p-5">
           <div className="flex items-center gap-3">
-            <div className="w-11 h-11 bg-primary/10 rounded-xl flex items-center justify-center">
-              <Package className="w-5 h-5 text-primary" />
+            <div className="w-9 h-9 md:w-11 md:h-11 bg-primary/10 rounded-xl flex items-center justify-center shrink-0">
+              <Package className="w-4 h-4 md:w-5 md:h-5 text-primary" />
             </div>
-            <div>
-              <p className="text-xs text-muted-foreground uppercase tracking-wider">Pesanan Hari Ini</p>
-              <p className="text-2xl font-bold" data-testid="today-orders-count">{todaySummary.totalOrders}</p>
+            <div className="min-w-0">
+              <p className="text-[10px] md:text-xs text-muted-foreground uppercase tracking-wider">Pesanan Hari Ini</p>
+              <p className="text-lg md:text-2xl font-bold truncate" data-testid="today-orders-count">{todaySummary.totalOrders}</p>
             </div>
           </div>
         </Card>
-        <Card className="p-5">
+        <Card className="p-4 md:p-5">
           <div className="flex items-center gap-3">
-            <div className="w-11 h-11 bg-blue-100 rounded-xl flex items-center justify-center">
-              <ShoppingCart className="w-5 h-5 text-blue-600" />
+            <div className="w-9 h-9 md:w-11 md:h-11 bg-blue-100 rounded-xl flex items-center justify-center shrink-0">
+              <ShoppingCart className="w-4 h-4 md:w-5 md:h-5 text-blue-600" />
             </div>
-            <div>
-              <p className="text-xs text-muted-foreground uppercase tracking-wider">Total Produk Dipesan</p>
-              <p className="text-2xl font-bold text-blue-600" data-testid="today-items-count">{fmtNum(todaySummary.totalItems)}</p>
+            <div className="min-w-0">
+              <p className="text-[10px] md:text-xs text-muted-foreground uppercase tracking-wider">Total Produk Dipesan</p>
+              <p className="text-lg md:text-2xl font-bold text-blue-600 truncate" data-testid="today-items-count">{fmtNum(todaySummary.totalItems)}</p>
             </div>
           </div>
         </Card>
-        <Card className="p-5">
+        <Card className="p-4 md:p-5">
           <div className="flex items-center gap-3">
-            <div className="w-11 h-11 bg-emerald-100 rounded-xl flex items-center justify-center">
-              <TrendingUp className="w-5 h-5 text-emerald-600" />
+            <div className="w-9 h-9 md:w-11 md:h-11 bg-emerald-100 rounded-xl flex items-center justify-center shrink-0">
+              <TrendingUp className="w-4 h-4 md:w-5 md:h-5 text-emerald-600" />
             </div>
-            <div>
-              <p className="text-xs text-muted-foreground uppercase tracking-wider">Total Penjualan</p>
-              <p className="text-2xl font-bold text-emerald-600" data-testid="today-revenue">{fmt(todaySummary.totalRevenue)}</p>
+            <div className="min-w-0">
+              <p className="text-[10px] md:text-xs text-muted-foreground uppercase tracking-wider">Total Penjualan</p>
+              <p className="text-lg md:text-2xl font-bold text-emerald-600 truncate" data-testid="today-revenue">{fmt(todaySummary.totalRevenue)}</p>
             </div>
           </div>
         </Card>
-        <Card className="p-5">
+        <Card className="p-4 md:p-5">
           <div className="flex items-center gap-3">
-            <div className="w-11 h-11 bg-green-100 rounded-xl flex items-center justify-center">
-              <DollarSign className="w-5 h-5 text-green-600" />
+            <div className="w-9 h-9 md:w-11 md:h-11 bg-green-100 rounded-xl flex items-center justify-center shrink-0">
+              <DollarSign className="w-4 h-4 md:w-5 md:h-5 text-green-600" />
             </div>
-            <div>
-              <p className="text-xs text-muted-foreground uppercase tracking-wider">Uang Diterima</p>
-              <p className="text-2xl font-bold text-green-600" data-testid="today-paid">{fmt(todaySummary.totalPaid)}</p>
+            <div className="min-w-0">
+              <p className="text-[10px] md:text-xs text-muted-foreground uppercase tracking-wider">Uang Diterima</p>
+              <p className="text-lg md:text-2xl font-bold text-green-600 truncate" data-testid="today-paid">{fmt(todaySummary.totalPaid)}</p>
             </div>
           </div>
         </Card>

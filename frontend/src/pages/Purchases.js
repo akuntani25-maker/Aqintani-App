@@ -161,10 +161,10 @@ export const Purchases = () => {
   }
 
   return (
-    <div className="p-6 md:p-8 space-y-6" data-testid="purchases-page">
+    <div className="p-4 md:p-6 lg:p-8 space-y-6" data-testid="purchases-page">
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
-          <h1 className="text-3xl md:text-4xl font-bold tracking-tight">Pembelian</h1>
+          <h1 className="text-2xl md:text-3xl lg:text-4xl font-bold tracking-tight">Pembelian</h1>
           <p className="text-sm text-muted-foreground mt-2">Catat pembelian dari supplier dan track hutang</p>
         </div>
         <Dialog open={isDialogOpen} onOpenChange={(open) => {
@@ -282,7 +282,7 @@ export const Purchases = () => {
       </div>
 
       {/* Summary */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
         <Card className="p-6">
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 bg-primary/10 rounded-xl flex items-center justify-center">
