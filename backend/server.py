@@ -120,6 +120,7 @@ class ProductCreate(BaseModel):
     category_id: Optional[str] = ""
     supplier_id: Optional[str] = ""
     stock: int = 0
+    warehouse_id: Optional[str] = "gudang_utama"
     price: float
     cost_price: float
     box_price: Optional[float] = 0
