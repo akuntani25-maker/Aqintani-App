@@ -216,7 +216,7 @@ export const Canvassers = () => {
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
         <Card className="p-6">
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 bg-primary/10 rounded-xl flex items-center justify-center">
@@ -224,7 +224,7 @@ export const Canvassers = () => {
             </div>
             <div>
               <p className="text-xs text-muted-foreground uppercase tracking-wider">Total Kanvaser</p>
-              <p className="text-2xl font-bold">{canvassers.length}</p>
+              <p className="text-base md:text-xl lg:text-2xl font-bold truncate">{canvassers.length}</p>
             </div>
           </div>
         </Card>
@@ -236,7 +236,7 @@ export const Canvassers = () => {
             </div>
             <div>
               <p className="text-xs text-muted-foreground uppercase tracking-wider">Aktif</p>
-              <p className="text-2xl font-bold">
+              <p className="text-base md:text-xl lg:text-2xl font-bold truncate">
                 {canvassers.filter(c => c.is_active).length}
               </p>
             </div>
@@ -250,7 +250,7 @@ export const Canvassers = () => {
             </div>
             <div>
               <p className="text-xs text-muted-foreground uppercase tracking-wider">Mobil Box</p>
-              <p className="text-2xl font-bold">
+              <p className="text-base md:text-xl lg:text-2xl font-bold truncate">
                 {canvassers.filter(c => c.vehicle_type.toLowerCase().includes('box')).length}
               </p>
             </div>

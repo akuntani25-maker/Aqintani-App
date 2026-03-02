@@ -321,7 +321,7 @@ export const PartnerStores = () => {
       )}
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
         <Card className="p-6">
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 bg-primary/10 rounded-xl flex items-center justify-center">
@@ -329,7 +329,7 @@ export const PartnerStores = () => {
             </div>
             <div>
               <p className="text-xs text-muted-foreground uppercase tracking-wider">Total Kios</p>
-              <p className="text-2xl font-bold">{stores.length}</p>
+              <p className="text-base md:text-xl lg:text-2xl font-bold truncate">{stores.length}</p>
             </div>
           </div>
         </Card>
@@ -341,7 +341,7 @@ export const PartnerStores = () => {
             </div>
             <div>
               <p className="text-xs text-muted-foreground uppercase tracking-wider">Total Piutang</p>
-              <p className="text-2xl font-bold">
+              <p className="text-base md:text-xl lg:text-2xl font-bold truncate">
                 {formatCurrency(stores.reduce((sum, s) => sum + (s.current_debt || 0), 0))}
               </p>
             </div>
@@ -355,7 +355,7 @@ export const PartnerStores = () => {
             </div>
             <div>
               <p className="text-xs text-muted-foreground uppercase tracking-wider">Dengan Lokasi</p>
-              <p className="text-2xl font-bold">
+              <p className="text-base md:text-xl lg:text-2xl font-bold truncate">
                 {stores.filter(s => s.latitude && s.longitude).length}
               </p>
             </div>

@@ -290,7 +290,7 @@ export const Purchases = () => {
             </div>
             <div>
               <p className="text-xs text-muted-foreground uppercase tracking-wider">Total Pembelian</p>
-              <p className="text-2xl font-bold">{fmt(totalBelanja)}</p>
+              <p className="text-base md:text-xl lg:text-2xl font-bold truncate">{fmt(totalBelanja)}</p>
             </div>
           </div>
         </Card>
@@ -301,7 +301,7 @@ export const Purchases = () => {
             </div>
             <div>
               <p className="text-xs text-muted-foreground uppercase tracking-wider">Sisa Hutang</p>
-              <p className="text-2xl font-bold text-orange-600">{fmt(totalHutang)}</p>
+              <p className="text-base md:text-xl lg:text-2xl font-bold text-orange-600 truncate">{fmt(totalHutang)}</p>
             </div>
           </div>
         </Card>
@@ -312,7 +312,7 @@ export const Purchases = () => {
             </div>
             <div>
               <p className="text-xs text-muted-foreground uppercase tracking-wider">Sudah Dibayar</p>
-              <p className="text-2xl font-bold text-green-600">{fmt(totalBelanja - totalHutang)}</p>
+              <p className="text-base md:text-xl lg:text-2xl font-bold text-green-600 truncate">{fmt(totalBelanja - totalHutang)}</p>
             </div>
           </div>
         </Card>
@@ -409,7 +409,7 @@ export const Purchases = () => {
               </div>
               <div className="p-4 bg-orange-50 rounded-lg border border-orange-200">
                 <p className="text-sm text-orange-800">Sisa Hutang</p>
-                <p className="text-2xl font-bold text-orange-600">{fmt(selectedPurchase.remaining)}</p>
+                <p className="text-base md:text-xl lg:text-2xl font-bold text-orange-600 truncate">{fmt(selectedPurchase.remaining)}</p>
               </div>
               <div className="space-y-2">
                 <Label>Jumlah Bayar</Label>

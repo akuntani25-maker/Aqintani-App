@@ -64,7 +64,7 @@ export const Analytics = () => {
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
         <Card className="p-6" data-testid="monthly-sales-card">
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 bg-primary/10 rounded-xl flex items-center justify-center">
@@ -72,7 +72,7 @@ export const Analytics = () => {
             </div>
             <div>
               <p className="text-xs text-muted-foreground uppercase tracking-wider">Penjualan Bulan Ini</p>
-              <p className="text-2xl font-bold">{fmt(summary.monthly_sales)}</p>
+              <p className="text-base md:text-xl lg:text-2xl font-bold truncate">{fmt(summary.monthly_sales)}</p>
               <p className="text-xs text-muted-foreground">{summary.monthly_transactions} transaksi</p>
             </div>
           </div>
@@ -85,7 +85,7 @@ export const Analytics = () => {
             </div>
             <div>
               <p className="text-xs text-muted-foreground uppercase tracking-wider">Pembelian Bulan Ini</p>
-              <p className="text-2xl font-bold">{fmt(summary.monthly_purchases)}</p>
+              <p className="text-base md:text-xl lg:text-2xl font-bold truncate">{fmt(summary.monthly_purchases)}</p>
               <p className="text-xs text-orange-600">Belum bayar: {fmt(summary.monthly_purchases_unpaid)}</p>
             </div>
           </div>
@@ -98,7 +98,7 @@ export const Analytics = () => {
             </div>
             <div>
               <p className="text-xs text-muted-foreground uppercase tracking-wider">Penjualan Mitra</p>
-              <p className="text-2xl font-bold">{fmt(summary.total_partner_sales)}</p>
+              <p className="text-base md:text-xl lg:text-2xl font-bold truncate">{fmt(summary.total_partner_sales)}</p>
               <p className="text-xs text-orange-600">Piutang: {fmt(summary.total_partner_unpaid)}</p>
             </div>
           </div>
@@ -111,7 +111,7 @@ export const Analytics = () => {
             </div>
             <div>
               <p className="text-xs text-muted-foreground uppercase tracking-wider">Est. Margin</p>
-              <p className="text-2xl font-bold text-green-600">{fmt(summary.estimated_margin)}</p>
+              <p className="text-base md:text-xl lg:text-2xl font-bold text-green-600 truncate">{fmt(summary.estimated_margin)}</p>
             </div>
           </div>
         </Card>

@@ -78,18 +78,18 @@ export const Dashboard = () => {
         <p className="text-sm text-muted-foreground mt-1">Selamat datang di UD. Aqin Tani</p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
         {statCards.map((card, index) => (
-          <Card key={index} className="p-6 hover:shadow-md transition-shadow" data-testid={card.testId}>
+          <Card key={index} className="p-4 md:p-6 hover:shadow-md transition-shadow" data-testid={card.testId}>
             <div className="flex items-start justify-between">
-              <div>
-                <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2">
+              <div className="min-w-0 flex-1">
+                <p className="text-[10px] md:text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1 md:mb-2">
                   {card.title}
                 </p>
-                <p className="text-2xl font-bold">{card.value}</p>
+                <p className="text-base md:text-xl lg:text-2xl font-bold truncate">{card.value}</p>
               </div>
-              <div className={`${card.color} text-white p-3 rounded-lg`}>
-                <card.icon className="w-5 h-5" />
+              <div className={`${card.color} text-white p-2 md:p-3 rounded-lg shrink-0`}>
+                <card.icon className="w-4 h-4 md:w-5 md:h-5" />
               </div>
             </div>
           </Card>
@@ -98,7 +98,7 @@ export const Dashboard = () => {
 
       <Card className="p-6 md:p-8" data-testid="sales-chart-card">
         <div className="mb-6">
-          <h2 className="text-2xl font-semibold tracking-tight flex items-center gap-2">
+          <h2 className="text-lg md:text-2xl font-semibold tracking-tight flex items-center gap-2">
             <TrendingUp className="w-5 h-5 text-primary" />
             Penjualan 7 Hari Terakhir
           </h2>

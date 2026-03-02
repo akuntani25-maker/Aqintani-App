@@ -153,39 +153,39 @@ export const CanvasserDashboard = () => {
 
       <div className="max-w-7xl mx-auto px-4 py-6 space-y-6">
         {/* Summary Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <Card className="p-6" data-testid="pending-count-card">
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 bg-yellow-100 rounded-xl flex items-center justify-center">
-                <Package className="w-6 h-6 text-yellow-600" />
+        <div className="grid grid-cols-3 gap-3 md:gap-4">
+          <Card className="p-4 md:p-6" data-testid="pending-count-card">
+            <div className="flex items-center gap-2 md:gap-3">
+              <div className="w-9 h-9 md:w-12 md:h-12 bg-yellow-100 rounded-xl flex items-center justify-center shrink-0">
+                <Package className="w-4 h-4 md:w-6 md:h-6 text-yellow-600" />
               </div>
-              <div>
-                <p className="text-xs text-muted-foreground uppercase tracking-wider">Pending</p>
-                <p className="text-3xl font-bold">{pendingOrders.length}</p>
-              </div>
-            </div>
-          </Card>
-
-          <Card className="p-6" data-testid="delivered-count-card">
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center">
-                <CheckCircle className="w-6 h-6 text-green-600" />
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground uppercase tracking-wider">Terkirim</p>
-                <p className="text-3xl font-bold">{deliveredOrders.length}</p>
+              <div className="min-w-0">
+                <p className="text-[10px] md:text-xs text-muted-foreground uppercase tracking-wider">Pending</p>
+                <p className="text-lg md:text-2xl font-bold truncate">{pendingOrders.length}</p>
               </div>
             </div>
           </Card>
 
-          <Card className="p-6" data-testid="total-remaining-card">
-            <div className="flex items-center gap-3">
-              <div className="w-12 h-12 bg-orange-100 rounded-xl flex items-center justify-center">
-                <DollarSign className="w-6 h-6 text-orange-600" />
+          <Card className="p-4 md:p-6" data-testid="delivered-count-card">
+            <div className="flex items-center gap-2 md:gap-3">
+              <div className="w-9 h-9 md:w-12 md:h-12 bg-green-100 rounded-xl flex items-center justify-center shrink-0">
+                <CheckCircle className="w-4 h-4 md:w-6 md:h-6 text-green-600" />
               </div>
-              <div>
-                <p className="text-xs text-muted-foreground uppercase tracking-wider">Sisa Tagihan</p>
-                <p className="text-2xl font-bold text-orange-600">{formatCurrency(notifications.total_remaining)}</p>
+              <div className="min-w-0">
+                <p className="text-[10px] md:text-xs text-muted-foreground uppercase tracking-wider">Terkirim</p>
+                <p className="text-lg md:text-2xl font-bold truncate">{deliveredOrders.length}</p>
+              </div>
+            </div>
+          </Card>
+
+          <Card className="p-4 md:p-6" data-testid="total-remaining-card">
+            <div className="flex items-center gap-2 md:gap-3">
+              <div className="w-9 h-9 md:w-12 md:h-12 bg-orange-100 rounded-xl flex items-center justify-center shrink-0">
+                <DollarSign className="w-4 h-4 md:w-6 md:h-6 text-orange-600" />
+              </div>
+              <div className="min-w-0">
+                <p className="text-[10px] md:text-xs text-muted-foreground uppercase tracking-wider">Sisa Tagihan</p>
+                <p className="text-base md:text-xl lg:text-2xl font-bold text-orange-600 truncate">{formatCurrency(notifications.total_remaining)}</p>
               </div>
             </div>
           </Card>
@@ -237,13 +237,13 @@ export const CanvasserDashboard = () => {
           ) : (
             <div className="space-y-4">
               {filteredOrders.map((order) => (
-                <Card key={order.id} className="p-6 border-2 hover:border-primary/50 transition-colors" data-testid={`order-card-${order.id}`}>
+                <Card key={order.id} className="p-4 md:p-6 border-2 hover:border-primary/50 transition-colors" data-testid={`order-card-${order.id}`}>
                   <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
                     <div className="flex-1 space-y-3">
                       <div className="flex items-start justify-between">
                         <div>
                           <p className="font-mono text-sm text-muted-foreground">{order.order_number}</p>
-                          <h3 className="text-xl font-bold mt-1">{order.partner_store_name}</h3>
+                          <h3 className="text-base md:text-xl font-bold mt-1">{order.partner_store_name}</h3>
                         </div>
                         <span className={`px-3 py-1 rounded-full text-sm font-medium border-2 ${getStatusColor(order.status)}`} data-testid={`order-status-${order.id}`}>
                           {order.status === 'pending' ? 'PENDING' : order.status === 'delivered' ? 'TERKIRIM' : 'BATAL'}
@@ -264,11 +264,11 @@ export const CanvasserDashboard = () => {
                       <div className="flex items-center justify-between pt-3 border-t">
                         <div>
                           <p className="text-sm text-muted-foreground">Total Pesanan</p>
-                          <p className="text-2xl font-bold text-primary">{formatCurrency(order.total)}</p>
+                          <p className="text-base md:text-xl font-bold text-primary">{formatCurrency(order.total)}</p>
                         </div>
                         <div className="text-right">
                           <p className="text-sm text-muted-foreground">Sisa Tagihan</p>
-                          <p className={`text-2xl font-bold ${order.remaining > 0 ? 'text-orange-600' : 'text-green-600'}`}>
+                          <p className={`text-base md:text-xl font-bold ${order.remaining > 0 ? 'text-orange-600' : 'text-green-600'}`}>
                             {formatCurrency(order.remaining)}
                           </p>
                         </div>
@@ -342,7 +342,7 @@ export const CanvasserDashboard = () => {
 
               <div className="p-4 bg-orange-50 rounded-lg border border-orange-200">
                 <p className="text-sm text-orange-800 mb-1">Sisa Tagihan</p>
-                <p className="text-2xl font-bold text-orange-600">{formatCurrency(selectedOrder.remaining)}</p>
+                <p className="text-base md:text-xl lg:text-2xl font-bold text-orange-600 truncate">{formatCurrency(selectedOrder.remaining)}</p>
               </div>
 
               <div className="space-y-2">

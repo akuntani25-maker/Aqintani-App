@@ -249,7 +249,7 @@ export const PartnerOrders = () => {
         </div>
         <Dialog open={isDialogOpen} onOpenChange={(open) => { setIsDialogOpen(open); if (!open) resetForm(); }}>
           <DialogTrigger asChild>
-            <Button className="w-full md:w-auto" data-testid="create-order-button"><Plus className="w-4 h-4 mr-2" />Buat Pesanan Baru</Button>
+            <Button className="w-full md:w-auto" data-testid="create-order-button"><Plus className="w-4 h-4 mr-2" />Buat Pesanan</Button>
           </DialogTrigger>
           <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
             <DialogHeader><DialogTitle>Buat Pesanan Kios Mitra</DialogTitle></DialogHeader>
