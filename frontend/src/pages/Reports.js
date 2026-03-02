@@ -6,266 +6,263 @@ import { Label } from '../components/ui/label';
 import { Card } from '../components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
 import { toast } from 'sonner';
-import { FileText, Download, Calendar } from 'lucide-react';
-import jsPDF from 'jspdf';
+import { FileText, Download, TrendingUp, TrendingDown, DollarSign, ShoppingCart, Store } from 'lucide-react';
 
 export const Reports = () => {
-  const [reportType, setReportType] = useState('daily');
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
-  const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
-  const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
+  const [activeTab, setActiveTab] = useState('pos');
+  const [dateFrom, setDateFrom] = useState(new Date().toISOString().split('T')[0]);
+  const [dateTo, setDateTo] = useState(new Date().toISOString().split('T')[0]);
   const [reportData, setReportData] = useState(null);
   const [loading, setLoading] = useState(false);
 
-  const fetchDailyReport = async () => {
+  const fetchReport = async () => {
     setLoading(true);
+    setReportData(null);
     try {
-      const response = await api.get(`/reports/daily?date=${selectedDate}`);
-      setReportData({ ...response.data, type: 'daily' });
+      const endpoint = activeTab === 'pos' ? '/reports/sales-detail' : '/reports/partner-sales-detail';
+      const res = await api.get(`${endpoint}?date_from=${dateFrom}&date_to=${dateTo}`);
+      setReportData({ ...res.data, type: activeTab });
     } catch (error) {
       toast.error('Gagal memuat laporan');
-    } finally {
-      setLoading(false);
-    }
+    } finally { setLoading(false); }
   };
 
-  const fetchMonthlyReport = async () => {
-    setLoading(true);
-    try {
-      const response = await api.get(`/reports/monthly?year=${selectedYear}&month=${selectedMonth}`);
-      setReportData({ ...response.data, type: 'monthly' });
-    } catch (error) {
-      toast.error('Gagal memuat laporan');
-    } finally {
-      setLoading(false);
-    }
-  };
+  const fmt = (v) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(v);
+  const fmtNum = (v) => new Intl.NumberFormat('id-ID').format(v);
 
-  const handleGenerate = () => {
-    if (reportType === 'daily') {
-      fetchDailyReport();
-    } else {
-      fetchMonthlyReport();
-    }
-  };
-
-  const formatCurrency = (value) => {
-    return new Intl.NumberFormat('id-ID', {
-      style: 'currency',
-      currency: 'IDR',
-      minimumFractionDigits: 0
-    }).format(value);
-  };
-
-  const exportToPDF = () => {
-    const doc = new jsPDF();
-    
-    doc.setFontSize(18);
-    doc.text('UD. AQIN TANI', 105, 20, { align: 'center' });
-    doc.setFontSize(12);
-    doc.text(
-      reportData.type === 'daily' 
-        ? `Laporan Harian - ${selectedDate}`
-        : `Laporan Bulanan - ${selectedMonth}/${selectedYear}`,
-      105, 30, { align: 'center' }
-    );
-
-    doc.setFontSize(10);
-    let yPos = 50;
-    doc.text(`Total Penjualan: ${formatCurrency(reportData.total_sales)}`, 20, yPos);
-    yPos += 10;
-    doc.text(`Total Transaksi: ${reportData.total_transactions}`, 20, yPos);
-
-    doc.save(`laporan-${reportData.type}-${reportType === 'daily' ? selectedDate : `${selectedMonth}-${selectedYear}`}.pdf`);
-    toast.success('Laporan berhasil diexport');
-  };
-
-  const exportToCSV = () => {
-    let csvContent = "data:text/csv;charset=utf-8,";
-    
-    if (reportData.type === 'daily') {
-      csvContent += "No Transaksi,Tanggal,Kasir,Total,Metode Pembayaran\n";
-      reportData.transactions.forEach(t => {
-        csvContent += `${t.transaction_number},${t.created_at},${t.cashier_name},${t.total},${t.payment_method}\n`;
+  const exportCSV = () => {
+    if (!reportData || !reportData.rows.length) return;
+    let csv = "data:text/csv;charset=utf-8,";
+    if (reportData.type === 'pos') {
+      csv += "Tanggal,No Transaksi,Produk,Qty,Harga Pokok,Harga Jual,Total Jual,Total HPP,Margin\n";
+      reportData.rows.forEach(r => {
+        csv += `${r.date},${r.transaction_number},${r.product_name},${r.quantity},${r.cost_price},${r.sell_price},${r.total_sell},${r.total_cost},${r.margin}\n`;
       });
     } else {
-      csvContent += "Tanggal,Total Penjualan\n";
-      Object.entries(reportData.daily_sales).forEach(([date, total]) => {
-        csvContent += `${date},${total}\n`;
+      csv += "Tanggal,No Order,Kios Mitra,Produk,Qty (satuan),HPP/satuan,Jual/satuan,Total Jual,Total HPP,Margin\n";
+      reportData.rows.forEach(r => {
+        csv += `${r.date},${r.order_number},${r.partner_store_name},${r.product_name},${r.quantity_satuan},${r.cost_price_per_unit},${r.sell_price_per_unit},${r.total_sell},${r.total_cost},${r.margin}\n`;
       });
     }
-
-    const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
-    link.setAttribute("href", encodedUri);
-    link.setAttribute("download", `laporan-${reportData.type}.csv`);
+    link.setAttribute("href", encodeURI(csv));
+    link.setAttribute("download", `laporan-${reportData.type}-${dateFrom}-${dateTo}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-    toast.success('Laporan berhasil diexport');
+    toast.success('CSV berhasil diexport');
   };
+
+  const marginPercent = reportData && reportData.total_sales > 0
+    ? ((reportData.total_margin / reportData.total_sales) * 100).toFixed(1)
+    : '0';
 
   return (
     <div className="p-6 md:p-8 space-y-6" data-testid="reports-page">
       <div>
         <h1 className="text-3xl md:text-4xl font-bold tracking-tight">Laporan</h1>
-        <p className="text-sm text-muted-foreground mt-2">Lihat dan export laporan penjualan</p>
+        <p className="text-sm text-muted-foreground mt-2">Laporan penjualan rinci per produk</p>
       </div>
 
-      <Card className="p-6">
-        <div className="space-y-4">
-          <div className="flex gap-4">
-            <Button
-              variant={reportType === 'daily' ? 'default' : 'outline'}
-              onClick={() => setReportType('daily')}
-              data-testid="daily-report-button"
-            >
-              <Calendar className="w-4 h-4 mr-2" />
-              Laporan Harian
-            </Button>
-            <Button
-              variant={reportType === 'monthly' ? 'default' : 'outline'}
-              onClick={() => setReportType('monthly')}
-              data-testid="monthly-report-button"
-            >
-              <Calendar className="w-4 h-4 mr-2" />
-              Laporan Bulanan
-            </Button>
+      {/* Tab & Filter */}
+      <Card className="p-6 space-y-4">
+        <div className="flex gap-2">
+          <Button variant={activeTab === 'pos' ? 'default' : 'outline'} onClick={() => { setActiveTab('pos'); setReportData(null); }} data-testid="tab-pos">
+            <ShoppingCart className="w-4 h-4 mr-2" />Penjualan POS
+          </Button>
+          <Button variant={activeTab === 'partner' ? 'default' : 'outline'} onClick={() => { setActiveTab('partner'); setReportData(null); }} data-testid="tab-partner">
+            <Store className="w-4 h-4 mr-2" />Penjualan Kios Mitra
+          </Button>
+        </div>
+        <div className="flex flex-col md:flex-row gap-4 items-end">
+          <div className="space-y-2 flex-1">
+            <Label>Dari Tanggal</Label>
+            <Input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} data-testid="date-from" />
           </div>
-
-          {reportType === 'daily' ? (
-            <div className="flex gap-4 items-end">
-              <div className="space-y-2 flex-1">
-                <Label htmlFor="date">Pilih Tanggal</Label>
-                <Input
-                  id="date"
-                  type="date"
-                  value={selectedDate}
-                  onChange={(e) => setSelectedDate(e.target.value)}
-                  data-testid="date-input"
-                />
-              </div>
-              <Button onClick={handleGenerate} disabled={loading} data-testid="generate-report-button">
-                {loading ? 'Memuat...' : 'Generate Laporan'}
-              </Button>
-            </div>
-          ) : (
-            <div className="flex gap-4 items-end">
-              <div className="space-y-2 flex-1">
-                <Label htmlFor="month">Bulan</Label>
-                <Input
-                  id="month"
-                  type="number"
-                  min="1"
-                  max="12"
-                  value={selectedMonth}
-                  onChange={(e) => setSelectedMonth(parseInt(e.target.value))}
-                  data-testid="month-input"
-                />
-              </div>
-              <div className="space-y-2 flex-1">
-                <Label htmlFor="year">Tahun</Label>
-                <Input
-                  id="year"
-                  type="number"
-                  value={selectedYear}
-                  onChange={(e) => setSelectedYear(parseInt(e.target.value))}
-                  data-testid="year-input"
-                />
-              </div>
-              <Button onClick={handleGenerate} disabled={loading} data-testid="generate-report-button">
-                {loading ? 'Memuat...' : 'Generate Laporan'}
-              </Button>
-            </div>
-          )}
+          <div className="space-y-2 flex-1">
+            <Label>Sampai Tanggal</Label>
+            <Input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} data-testid="date-to" />
+          </div>
+          <Button onClick={fetchReport} disabled={loading} data-testid="generate-report-button">
+            <FileText className="w-4 h-4 mr-2" />{loading ? 'Memuat...' : 'Generate Laporan'}
+          </Button>
         </div>
       </Card>
 
+      {/* Report Result */}
       {reportData && (
-        <Card className="p-6" data-testid="report-result">
-          <div className="flex justify-between items-start mb-6">
-            <div>
-              <h2 className="text-2xl font-bold">
-                {reportData.type === 'daily' ? `Laporan Harian` : `Laporan Bulanan`}
-              </h2>
-              <p className="text-sm text-muted-foreground">
-                {reportData.type === 'daily' 
-                  ? selectedDate
-                  : `${selectedMonth}/${selectedYear}`
-                }
-              </p>
-            </div>
-            <div className="flex gap-2">
-              <Button variant="outline" onClick={exportToPDF} data-testid="export-pdf-button">
-                <Download className="w-4 h-4 mr-2" />
-                PDF
-              </Button>
-              <Button variant="outline" onClick={exportToCSV} data-testid="export-csv-button">
-                <Download className="w-4 h-4 mr-2" />
-                CSV
-              </Button>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-            <div className="p-6 bg-primary/5 rounded-lg border">
-              <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2">
-                Total Penjualan
-              </p>
-              <p className="text-3xl font-bold text-primary">{formatCurrency(reportData.total_sales)}</p>
-            </div>
-            <div className="p-6 bg-secondary/5 rounded-lg border">
-              <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-2">
-                Total Transaksi
-              </p>
-              <p className="text-3xl font-bold text-secondary">{reportData.total_transactions}</p>
-            </div>
-          </div>
-
-          {reportData.type === 'daily' && reportData.payment_methods && (
-            <div className="mb-6">
-              <h3 className="font-semibold mb-3">Metode Pembayaran</h3>
-              <div className="grid grid-cols-3 gap-4">
-                {Object.entries(reportData.payment_methods).map(([method, total]) => (
-                  <div key={method} className="p-4 bg-accent rounded-lg">
-                    <p className="text-xs text-muted-foreground capitalize">{method}</p>
-                    <p className="text-lg font-bold">{formatCurrency(total)}</p>
-                  </div>
-                ))}
+        <div className="space-y-6" data-testid="report-result">
+          {/* Summary */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <Card className="p-5">
+              <div className="flex items-center gap-3">
+                <div className="w-11 h-11 bg-primary/10 rounded-xl flex items-center justify-center">
+                  <DollarSign className="w-5 h-5 text-primary" />
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground uppercase tracking-wider">Total Penjualan</p>
+                  <p className="text-xl font-bold" data-testid="total-sales">{fmt(reportData.total_sales)}</p>
+                </div>
               </div>
-            </div>
-          )}
+            </Card>
+            <Card className="p-5">
+              <div className="flex items-center gap-3">
+                <div className="w-11 h-11 bg-red-100 rounded-xl flex items-center justify-center">
+                  <TrendingDown className="w-5 h-5 text-red-600" />
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground uppercase tracking-wider">Total HPP</p>
+                  <p className="text-xl font-bold text-red-600" data-testid="total-cost">{fmt(reportData.total_cost)}</p>
+                </div>
+              </div>
+            </Card>
+            <Card className="p-5">
+              <div className="flex items-center gap-3">
+                <div className="w-11 h-11 bg-emerald-100 rounded-xl flex items-center justify-center">
+                  <TrendingUp className="w-5 h-5 text-emerald-600" />
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground uppercase tracking-wider">Total Margin</p>
+                  <p className="text-xl font-bold text-emerald-600" data-testid="total-margin">{fmt(reportData.total_margin)}</p>
+                </div>
+              </div>
+            </Card>
+            <Card className="p-5">
+              <div className="flex items-center gap-3">
+                <div className="w-11 h-11 bg-blue-100 rounded-xl flex items-center justify-center">
+                  <FileText className="w-5 h-5 text-blue-600" />
+                </div>
+                <div>
+                  <p className="text-xs text-muted-foreground uppercase tracking-wider">Margin %</p>
+                  <p className="text-xl font-bold text-blue-600" data-testid="margin-percent">{marginPercent}%</p>
+                </div>
+              </div>
+            </Card>
+          </div>
 
-          {reportData.type === 'daily' && reportData.transactions && (
-            <div>
-              <h3 className="font-semibold mb-3">Daftar Transaksi</h3>
+          {/* Export */}
+          <div className="flex justify-between items-center">
+            <p className="text-sm text-muted-foreground">{fmtNum(reportData.rows.length)} item produk terjual</p>
+            <Button variant="outline" onClick={exportCSV} disabled={!reportData.rows.length} data-testid="export-csv-button">
+              <Download className="w-4 h-4 mr-2" />Export CSV
+            </Button>
+          </div>
+
+          {/* POS Sales Table */}
+          {reportData.type === 'pos' && (
+            <Card className="p-6">
+              <h3 className="font-semibold mb-4">Rincian Penjualan POS</h3>
               <div className="rounded-lg border overflow-x-auto">
                 <Table>
                   <TableHeader>
-                    <TableRow>
-                      <TableHead>No Transaksi</TableHead>
-                      <TableHead>Waktu</TableHead>
-                      <TableHead>Kasir</TableHead>
-                      <TableHead>Metode</TableHead>
-                      <TableHead className="text-right">Total</TableHead>
+                    <TableRow className="bg-muted/50">
+                      <TableHead>Tanggal</TableHead>
+                      <TableHead>Produk</TableHead>
+                      <TableHead className="text-center">Qty</TableHead>
+                      <TableHead className="text-right">HPP/Unit</TableHead>
+                      <TableHead className="text-right">Jual/Unit</TableHead>
+                      <TableHead className="text-right">Total Jual</TableHead>
+                      <TableHead className="text-right">Total HPP</TableHead>
+                      <TableHead className="text-right">Margin</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {reportData.transactions.map((transaction) => (
-                      <TableRow key={transaction.id}>
-                        <TableCell className="font-mono text-sm">{transaction.transaction_number}</TableCell>
-                        <TableCell>{new Date(transaction.created_at).toLocaleTimeString('id-ID')}</TableCell>
-                        <TableCell>{transaction.cashier_name}</TableCell>
-                        <TableCell className="capitalize">{transaction.payment_method}</TableCell>
-                        <TableCell className="text-right font-semibold">{formatCurrency(transaction.total)}</TableCell>
-                      </TableRow>
-                    ))}
+                    {reportData.rows.length === 0 ? (
+                      <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">Tidak ada data penjualan</TableCell></TableRow>
+                    ) : reportData.rows.map((row, i) => {
+                      const isPositive = row.margin >= 0;
+                      return (
+                        <TableRow key={i} data-testid={`pos-row-${i}`}>
+                          <TableCell className="text-sm whitespace-nowrap">{row.date}</TableCell>
+                          <TableCell className="font-medium">{row.product_name}</TableCell>
+                          <TableCell className="text-center">{fmtNum(row.quantity)}</TableCell>
+                          <TableCell className="text-right text-sm text-muted-foreground">{fmt(row.cost_price)}</TableCell>
+                          <TableCell className="text-right text-sm">{fmt(row.sell_price)}</TableCell>
+                          <TableCell className="text-right font-semibold">{fmt(row.total_sell)}</TableCell>
+                          <TableCell className="text-right text-sm text-red-600">{fmt(row.total_cost)}</TableCell>
+                          <TableCell className="text-right">
+                            <span className={`font-semibold ${isPositive ? 'text-emerald-600' : 'text-red-600'}`}>{fmt(row.margin)}</span>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
                   </TableBody>
+                  {reportData.rows.length > 0 && (
+                    <tfoot>
+                      <tr className="border-t-2 bg-muted/30 font-bold">
+                        <td className="p-3" colSpan={5}>TOTAL</td>
+                        <td className="p-3 text-right">{fmt(reportData.total_sales)}</td>
+                        <td className="p-3 text-right text-red-600">{fmt(reportData.total_cost)}</td>
+                        <td className="p-3 text-right text-emerald-600">{fmt(reportData.total_margin)}</td>
+                      </tr>
+                    </tfoot>
+                  )}
                 </Table>
               </div>
-            </div>
+            </Card>
           )}
-        </Card>
+
+          {/* Partner Sales Table */}
+          {reportData.type === 'partner' && (
+            <Card className="p-6">
+              <h3 className="font-semibold mb-4">Rincian Penjualan Kios Mitra</h3>
+              <div className="rounded-lg border overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-muted/50">
+                      <TableHead>Tanggal</TableHead>
+                      <TableHead>Produk</TableHead>
+                      <TableHead>Kios Mitra</TableHead>
+                      <TableHead className="text-center">Qty (satuan)</TableHead>
+                      <TableHead className="text-right">HPP/Unit</TableHead>
+                      <TableHead className="text-right">Jual/Unit</TableHead>
+                      <TableHead className="text-right">Total Jual</TableHead>
+                      <TableHead className="text-right">Total HPP</TableHead>
+                      <TableHead className="text-right">Margin</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {reportData.rows.length === 0 ? (
+                      <TableRow><TableCell colSpan={9} className="text-center py-8 text-muted-foreground">Tidak ada data penjualan kios mitra</TableCell></TableRow>
+                    ) : reportData.rows.map((row, i) => {
+                      const isPositive = row.margin >= 0;
+                      return (
+                        <TableRow key={i} data-testid={`partner-row-${i}`}>
+                          <TableCell className="text-sm whitespace-nowrap">{row.date}</TableCell>
+                          <TableCell className="font-medium">{row.product_name}</TableCell>
+                          <TableCell className="text-sm">{row.partner_store_name}</TableCell>
+                          <TableCell className="text-center">
+                            {fmtNum(row.quantity_satuan)}
+                            {row.unit_original === 'dus' && (
+                              <span className="text-xs text-muted-foreground ml-1">({row.quantity_original} dus)</span>
+                            )}
+                          </TableCell>
+                          <TableCell className="text-right text-sm text-muted-foreground">{fmt(row.cost_price_per_unit)}</TableCell>
+                          <TableCell className="text-right text-sm">{fmt(row.sell_price_per_unit)}</TableCell>
+                          <TableCell className="text-right font-semibold">{fmt(row.total_sell)}</TableCell>
+                          <TableCell className="text-right text-sm text-red-600">{fmt(row.total_cost)}</TableCell>
+                          <TableCell className="text-right">
+                            <span className={`font-semibold ${isPositive ? 'text-emerald-600' : 'text-red-600'}`}>{fmt(row.margin)}</span>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                  {reportData.rows.length > 0 && (
+                    <tfoot>
+                      <tr className="border-t-2 bg-muted/30 font-bold">
+                        <td className="p-3" colSpan={6}>TOTAL</td>
+                        <td className="p-3 text-right">{fmt(reportData.total_sales)}</td>
+                        <td className="p-3 text-right text-red-600">{fmt(reportData.total_cost)}</td>
+                        <td className="p-3 text-right text-emerald-600">{fmt(reportData.total_margin)}</td>
+                      </tr>
+                    </tfoot>
+                  )}
+                </Table>
+              </div>
+            </Card>
+          )}
+        </div>
       )}
     </div>
   );
