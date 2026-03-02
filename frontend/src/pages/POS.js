@@ -85,6 +85,7 @@ export const POS = () => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const [products, setProducts] = useState([]);
+  const [warehouseStock, setWarehouseStock] = useState([]);
   const [cart, setCart] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [barcodeInput, setBarcodeInput] = useState('');
@@ -105,8 +106,16 @@ export const POS = () => {
 
   const fetchProducts = async () => {
     try {
-      const response = await api.get('/products');
-      setProducts(response.data.filter(p => p.stock > 0));
+      const [prodRes, stockRes] = await Promise.all([
+        api.get('/products'),
+        api.get('/warehouse-stock?warehouse_id=gudang_toko')
+      ]);
+      setWarehouseStock(stockRes.data);
+      // Attach toko stock to products
+      const tokoStockMap = {};
+      stockRes.data.forEach(s => { tokoStockMap[s.product_id] = s.stock; });
+      const prods = prodRes.data.map(p => ({ ...p, toko_stock: tokoStockMap[p.id] || 0 }));
+      setProducts(prods.filter(p => p.toko_stock > 0));
     } catch (error) {
       toast.error('Gagal memuat produk');
     }
