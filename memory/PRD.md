@@ -44,14 +44,19 @@ Build a responsive web application for a pharmacy and agriculture store named "U
 - Purchases page to view all supplier purchase records
 - **Filter-aware summary cards**: Total Pembelian, Sisa Hutang, Sudah Dibayar now dynamically update based on supplier filter selection
 
+### POS Enhancements (DONE - Mar 2026)
+- **Manual Price Override**: Kasir can edit sell price per item in cart before checkout
+
 ### Partner Orders / Pesanan Kios (FIXED & ENHANCED - Mar 2026)
-- **Per-item warehouse selection**: Each order item can be sourced from different warehouses (Gudang Utama, Gudang Toko, Gudang Lainnya)
-- **Correct pricing by warehouse unit**: Items from "dus" warehouses use box_price, items from "satuan" warehouses use unit price
-- **Real-time price adaptation**: Changing item warehouse in cart automatically recalculates price and total
+- **Per-item warehouse selection**: Each order item can be sourced from different warehouses
+- **Per-item unit selection**: Each item can be sold as 'dus' or 'satuan' regardless of warehouse unit. Selling satuan from dus warehouse deducts fractional stock.
+- **Correct pricing by unit**: Items adapt price based on selected unit (box_price for dus, unit price for satuan)
+- **Real-time price adaptation**: Changing item warehouse or unit recalculates price and total
 - **Stock validation per warehouse**: Shows available stock and warns when insufficient
-- **Today's Summary Cards**: Pesanan hari ini, total produk dipesan, total penjualan, uang diterima
-- **Per-Warehouse Breakdown**: Shows how many items distributed from each warehouse today
-- **Partner Order Receipt (Struk)**: Print-ready receipt with order details, previous outstanding balance (sisa bon), and accumulated total debt. Auto-navigates to receipt after order creation.
+- **Today's Summary Cards**: Orders today, total products, total revenue, money received
+- **Per-Warehouse Breakdown**: Items distributed from each warehouse today
+- **Partner Order Receipt (Struk)**: Print-ready receipt with previous debt + accumulated total
+- **Return/Retur Feature**: Mark orders with returns — per-item return qty + reason, stock restored to chosen warehouse, partner debt reduced, RETUR badge on orders
 
 ### Analytics & Reports (ENHANCED - Mar 2026)
 - Analytics page with basic charts
