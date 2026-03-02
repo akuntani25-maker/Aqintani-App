@@ -149,8 +149,8 @@ export const Purchases = () => {
     return matchSupplier && matchSearch;
   });
 
-  const totalHutang = purchases.reduce((s, p) => s + (p.remaining || 0), 0);
-  const totalBelanja = purchases.reduce((s, p) => s + (p.total || 0), 0);
+  const totalHutang = filteredPurchases.reduce((s, p) => s + (p.remaining || 0), 0);
+  const totalBelanja = filteredPurchases.reduce((s, p) => s + (p.total || 0), 0);
 
   if (loading) {
     return (
