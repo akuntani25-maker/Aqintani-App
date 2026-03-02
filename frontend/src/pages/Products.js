@@ -235,6 +235,37 @@ export const Products = () => {
                   <p className="text-sm text-blue-800">{formData.stock} dus x {formData.items_per_box} satuan/dus = <span className="font-bold">{formData.stock * formData.items_per_box} satuan</span> masuk ke {warehouses.find(w => w.id === formData.warehouse_id)?.name || 'gudang'}</p>
                 </div>
               )}
+              {!editingProduct && formData.stock > 0 && formData.supplier_id && formData.cost_price > 0 && (() => {
+                const totalPurchase = formData.cost_price * formData.stock;
+                const paid = Math.min(formData.initial_paid || 0, totalPurchase);
+                const debt = totalPurchase - paid;
+                return (
+                  <div className="p-4 bg-amber-50 rounded-lg border border-amber-200 space-y-3">
+                    <p className="text-sm font-semibold text-amber-900">Pembelian Otomatis ke Supplier</p>
+                    <div className="flex items-center justify-between text-sm text-amber-800">
+                      <span>Total: {fmt(totalPurchase)}</span>
+                      <span>({formData.stock} dus x {fmt(formData.cost_price)}/dus)</span>
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-amber-900">Bayar di Muka</Label>
+                      <Input
+                        type="number"
+                        min="0"
+                        max={totalPurchase}
+                        value={formData.initial_paid}
+                        onChange={(e) => setFormData({ ...formData, initial_paid: parseFloat(e.target.value) || 0 })}
+                        placeholder="0"
+                        data-testid="product-initial-paid-input"
+                      />
+                    </div>
+                    {debt > 0 ? (
+                      <p className="text-sm font-medium text-red-700">Sisa hutang: {fmt(debt)}</p>
+                    ) : (
+                      <p className="text-sm font-medium text-green-700">Lunas</p>
+                    )}
+                  </div>
+                );
+              })()}
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="space-y-2">
                   <Label>Harga Beli/Dus *</Label>
