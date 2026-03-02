@@ -239,6 +239,7 @@ class PurchaseCreate(BaseModel):
     total: float
     paid: float = 0
     notes: Optional[str] = ""
+    warehouse_id: Optional[str] = "gudang_utama"
 
 class Purchase(BaseModel):
     model_config = ConfigDict(extra="ignore")
