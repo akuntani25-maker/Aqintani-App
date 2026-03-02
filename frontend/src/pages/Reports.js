@@ -104,53 +104,80 @@ export const Reports = () => {
       {/* Report Result */}
       {reportData && (
         <div className="space-y-6" data-testid="report-result">
-          {/* Summary */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <Card className="p-5">
-              <div className="flex items-center gap-3">
-                <div className="w-11 h-11 bg-primary/10 rounded-xl flex items-center justify-center">
-                  <DollarSign className="w-5 h-5 text-primary" />
+          {/* Summary - POS & Partner */}
+          {(reportData.type === 'pos' || reportData.type === 'partner') && (
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <Card className="p-5">
+                <div className="flex items-center gap-3">
+                  <div className="w-11 h-11 bg-primary/10 rounded-xl flex items-center justify-center"><DollarSign className="w-5 h-5 text-primary" /></div>
+                  <div>
+                    <p className="text-xs text-muted-foreground uppercase tracking-wider">Total Penjualan</p>
+                    <p className="text-xl font-bold" data-testid="total-sales">{fmt(reportData.total_sales)}</p>
+                  </div>
                 </div>
-                <div>
-                  <p className="text-xs text-muted-foreground uppercase tracking-wider">Total Penjualan</p>
-                  <p className="text-xl font-bold" data-testid="total-sales">{fmt(reportData.total_sales)}</p>
+              </Card>
+              <Card className="p-5">
+                <div className="flex items-center gap-3">
+                  <div className="w-11 h-11 bg-red-100 rounded-xl flex items-center justify-center"><TrendingDown className="w-5 h-5 text-red-600" /></div>
+                  <div>
+                    <p className="text-xs text-muted-foreground uppercase tracking-wider">Total HPP</p>
+                    <p className="text-xl font-bold text-red-600" data-testid="total-cost">{fmt(reportData.total_cost)}</p>
+                  </div>
                 </div>
-              </div>
-            </Card>
-            <Card className="p-5">
-              <div className="flex items-center gap-3">
-                <div className="w-11 h-11 bg-red-100 rounded-xl flex items-center justify-center">
-                  <TrendingDown className="w-5 h-5 text-red-600" />
+              </Card>
+              <Card className="p-5">
+                <div className="flex items-center gap-3">
+                  <div className="w-11 h-11 bg-emerald-100 rounded-xl flex items-center justify-center"><TrendingUp className="w-5 h-5 text-emerald-600" /></div>
+                  <div>
+                    <p className="text-xs text-muted-foreground uppercase tracking-wider">Total Margin</p>
+                    <p className="text-xl font-bold text-emerald-600" data-testid="total-margin">{fmt(reportData.total_margin)}</p>
+                  </div>
                 </div>
-                <div>
-                  <p className="text-xs text-muted-foreground uppercase tracking-wider">Total HPP</p>
-                  <p className="text-xl font-bold text-red-600" data-testid="total-cost">{fmt(reportData.total_cost)}</p>
+              </Card>
+              <Card className="p-5">
+                <div className="flex items-center gap-3">
+                  <div className="w-11 h-11 bg-blue-100 rounded-xl flex items-center justify-center"><FileText className="w-5 h-5 text-blue-600" /></div>
+                  <div>
+                    <p className="text-xs text-muted-foreground uppercase tracking-wider">Margin %</p>
+                    <p className="text-xl font-bold text-blue-600" data-testid="margin-percent">{marginPercent}%</p>
+                  </div>
                 </div>
-              </div>
-            </Card>
-            <Card className="p-5">
-              <div className="flex items-center gap-3">
-                <div className="w-11 h-11 bg-emerald-100 rounded-xl flex items-center justify-center">
-                  <TrendingUp className="w-5 h-5 text-emerald-600" />
+              </Card>
+            </div>
+          )}
+
+          {/* Summary - Bestseller */}
+          {reportData.type === 'bestseller' && (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <Card className="p-5">
+                <div className="flex items-center gap-3">
+                  <div className="w-11 h-11 bg-amber-100 rounded-xl flex items-center justify-center"><Award className="w-5 h-5 text-amber-600" /></div>
+                  <div>
+                    <p className="text-xs text-muted-foreground uppercase tracking-wider">Total Produk Terjual</p>
+                    <p className="text-xl font-bold" data-testid="total-products">{fmtNum(reportData.total_products)} produk</p>
+                  </div>
                 </div>
-                <div>
-                  <p className="text-xs text-muted-foreground uppercase tracking-wider">Total Margin</p>
-                  <p className="text-xl font-bold text-emerald-600" data-testid="total-margin">{fmt(reportData.total_margin)}</p>
+              </Card>
+              <Card className="p-5">
+                <div className="flex items-center gap-3">
+                  <div className="w-11 h-11 bg-primary/10 rounded-xl flex items-center justify-center"><DollarSign className="w-5 h-5 text-primary" /></div>
+                  <div>
+                    <p className="text-xs text-muted-foreground uppercase tracking-wider">Total Revenue</p>
+                    <p className="text-xl font-bold" data-testid="total-revenue-bs">{fmt(reportData.rows.reduce((s, r) => s + r.revenue_total, 0))}</p>
+                  </div>
                 </div>
-              </div>
-            </Card>
-            <Card className="p-5">
-              <div className="flex items-center gap-3">
-                <div className="w-11 h-11 bg-blue-100 rounded-xl flex items-center justify-center">
-                  <FileText className="w-5 h-5 text-blue-600" />
+              </Card>
+              <Card className="p-5">
+                <div className="flex items-center gap-3">
+                  <div className="w-11 h-11 bg-emerald-100 rounded-xl flex items-center justify-center"><TrendingUp className="w-5 h-5 text-emerald-600" /></div>
+                  <div>
+                    <p className="text-xs text-muted-foreground uppercase tracking-wider">Total Margin</p>
+                    <p className="text-xl font-bold text-emerald-600" data-testid="total-margin-bs">{fmt(reportData.rows.reduce((s, r) => s + r.margin, 0))}</p>
+                  </div>
                 </div>
-                <div>
-                  <p className="text-xs text-muted-foreground uppercase tracking-wider">Margin %</p>
-                  <p className="text-xl font-bold text-blue-600" data-testid="margin-percent">{marginPercent}%</p>
-                </div>
-              </div>
-            </Card>
-          </div>
+              </Card>
+            </div>
+          )}
 
           {/* Export */}
           <div className="flex justify-between items-center">
