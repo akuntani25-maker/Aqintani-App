@@ -17,7 +17,8 @@ import {
   ShoppingCart,
   Truck,
   TrendingUp,
-  ShoppingBag
+  ShoppingBag,
+  Warehouse
 } from 'lucide-react';
 
 export const AdminLayout = () => {
