@@ -44,6 +44,12 @@ Build a responsive web application for a pharmacy and agriculture store named "U
 - Purchases page to view all supplier purchase records
 - **Filter-aware summary cards**: Total Pembelian, Sisa Hutang, Sudah Dibayar now dynamically update based on supplier filter selection
 
+### Partner Orders / Pesanan Kios (FIXED - Mar 2026)
+- **Per-item warehouse selection**: Each order item can be sourced from different warehouses (Gudang Utama, Gudang Toko, Gudang Lainnya)
+- **Correct pricing by warehouse unit**: Items from "dus" warehouses use box_price, items from "satuan" warehouses use unit price
+- **Real-time price adaptation**: Changing item warehouse in cart automatically recalculates price and total
+- **Stock validation per warehouse**: Shows available stock and warns when insufficient
+
 ### Analytics & Reports (DONE - Basic)
 - Analytics page with basic charts
 - Laporan (Reports) page
