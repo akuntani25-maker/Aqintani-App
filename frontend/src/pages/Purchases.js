@@ -26,9 +26,11 @@ export const Purchases = () => {
     supplier_id: '',
     items: [],
     notes: '',
-    paid: 0
+    paid: 0,
+    warehouse_id: 'gudang_utama'
   });
   const [searchProduct, setSearchProduct] = useState('');
+  const [warehouses, setWarehouses] = useState([]);
 
   useEffect(() => { fetchData(); }, []);
 
