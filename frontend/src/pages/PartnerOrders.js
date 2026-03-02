@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
 import { toast } from 'sonner';
-import { Plus, Search, Package, Trash2, ShoppingCart, Warehouse, FileText, DollarSign, TrendingUp, RotateCcw, Pencil } from 'lucide-react';
+import { Plus, Search, Package, Trash2, ShoppingCart, Warehouse, FileText, DollarSign, TrendingUp, RotateCcw, Pencil, Trash } from 'lucide-react';
 
 export const PartnerOrders = () => {
   const navigate = useNavigate();
@@ -197,6 +197,18 @@ export const PartnerOrders = () => {
       toast.error(error.response?.data?.detail || 'Gagal mencatat retur');
     }
   };
+
+  const deleteOrder = async (orderId) => {
+    if (!window.confirm('Yakin ingin menghapus pesanan ini?')) return;
+    try {
+      await api.delete(`/partner-orders/${orderId}`);
+      toast.success('Pesanan berhasil dihapus');
+      fetchData();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Gagal menghapus pesanan');
+    }
+  };
+
 
   const resetForm = () => {
     setSelectedPartner('');
@@ -491,6 +503,9 @@ export const PartnerOrders = () => {
                       </Button>
                       <Button size="sm" variant="outline" onClick={() => openReturnDialog(order)} data-testid={`return-${order.id}`} className="text-orange-600 border-orange-200 hover:bg-orange-50">
                         <RotateCcw className="w-4 h-4 mr-1" />Retur
+                      </Button>
+                      <Button size="sm" variant="outline" onClick={() => deleteOrder(order.id)} data-testid={`delete-${order.id}`} className="text-red-600 border-red-200 hover:bg-red-50">
+                        <Trash className="w-4 h-4" />
                       </Button>
                     </div>
                   </TableCell>

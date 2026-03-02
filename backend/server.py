@@ -1261,6 +1261,23 @@ async def update_order_status(order_id: str, status: str, current_user: dict = D
         raise HTTPException(status_code=404, detail="Order not found")
     return result
 
+@api_router.delete("/partner-orders/{order_id}")
+async def delete_partner_order(order_id: str, admin: dict = Depends(require_admin)):
+    order = await db.partner_orders.find_one({"id": order_id}, {"_id": 0})
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    # Restore partner store debt
+    remaining = order.get("remaining", 0)
+    if remaining > 0:
+        partner = await db.partner_stores.find_one({"id": order["partner_store_id"]})
+        if partner:
+            new_debt = max(0, partner.get("current_debt", 0) - remaining)
+            await db.partner_stores.update_one({"id": order["partner_store_id"]}, {"$set": {"current_debt": new_debt}})
+    await db.partner_orders.delete_one({"id": order_id})
+    await db.returns.delete_many({"source_id": order_id})
+    return {"message": "Pesanan berhasil dihapus"}
+
+
 @api_router.post("/partner-orders/{order_id}/pay")
 async def pay_partner_order(order_id: str, amount: float, current_user: dict = Depends(get_current_user)):
     order = await db.partner_orders.find_one({"id": order_id})
