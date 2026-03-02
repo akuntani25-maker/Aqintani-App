@@ -1204,26 +1204,14 @@ async def create_partner_order(data: PartnerOrderCreate, current_user: dict = De
         item_wh_id = item.warehouse_id or default_wh_id
         wh = await db.warehouses.find_one({"id": item_wh_id}, {"_id": 0})
         if wh:
-            wh_unit = wh.get("unit", "satuan")
-            sell_unit = item.sell_unit or wh_unit
-
-            # Calculate stock deduction: if selling satuan from dus warehouse, convert
-            if wh_unit == "dus" and sell_unit == "satuan":
-                product = await db.products.find_one({"id": item.product_id}, {"_id": 0})
-                ipb = product.get("items_per_box", 1) or 1 if product else 1
-                # Need (quantity) satuan, which is quantity/ipb in dus (fractional allowed for stock tracking)
-                deduct_qty = item.quantity / ipb
-            else:
-                deduct_qty = item.quantity
-
             wh_stock = await db.warehouse_stock.find_one({"product_id": item.product_id, "warehouse_id": item_wh_id})
             current_qty = wh_stock["stock"] if wh_stock else 0
-            if current_qty < deduct_qty:
+            if current_qty < item.quantity:
                 wh_name = wh.get("name", item_wh_id)
                 raise HTTPException(status_code=400, detail=f"Stok {wh_name} tidak cukup untuk {item.product_name}")
             await db.warehouse_stock.update_one(
                 {"product_id": item.product_id, "warehouse_id": item_wh_id},
-                {"$inc": {"stock": -deduct_qty}}
+                {"$inc": {"stock": -item.quantity}}
             )
             await recalculate_product_stock(item.product_id)
     

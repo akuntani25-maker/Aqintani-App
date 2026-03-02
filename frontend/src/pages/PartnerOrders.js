@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
 import { toast } from 'sonner';
-import { Plus, Search, Package, Trash2, ShoppingCart, Warehouse, FileText, DollarSign, TrendingUp, RotateCcw } from 'lucide-react';
+import { Plus, Search, Package, Trash2, ShoppingCart, Warehouse, FileText, DollarSign, TrendingUp, RotateCcw, Pencil } from 'lucide-react';
 
 export const PartnerOrders = () => {
   const navigate = useNavigate();
@@ -100,30 +100,25 @@ export const PartnerOrders = () => {
     return warehouses.find(w => w.id === warehouseId)?.unit || 'satuan';
   };
 
-  const getPriceForUnit = (product, unitType) => {
+  const getPriceForWarehouse = (product, warehouseId) => {
     const customPrice = getPartnerPrice(product.id);
     if (customPrice !== null) return customPrice;
-    return unitType === 'dus' ? (product.box_price || product.price) : product.price;
-  };
-
-  const getPriceForWarehouse = (product, warehouseId) => {
     const unit = getWarehouseUnit(warehouseId);
-    return getPriceForUnit(product, unit);
+    return unit === 'dus' ? (product.box_price || product.price) : product.price;
   };
 
   const addToCart = (product) => {
     const whId = defaultWarehouse;
-    const whUnit = getWarehouseUnit(whId);
-    const price = getPriceForUnit(product, whUnit);
-    const existing = cart.find(item => item.product_id === product.id && item.warehouse_id === whId && item.sell_unit === whUnit);
+    const price = getPriceForWarehouse(product, whId);
+    const existing = cart.find(item => item.product_id === product.id && item.warehouse_id === whId);
     if (existing) {
       setCart(cart.map(item =>
-        (item.product_id === product.id && item.warehouse_id === whId && item.sell_unit === whUnit)
+        (item.product_id === product.id && item.warehouse_id === whId)
           ? { ...item, quantity: item.quantity + 1, subtotal: (item.quantity + 1) * item.price }
           : item
       ));
     } else {
-      setCart([...cart, { product_id: product.id, product_name: product.name, quantity: 1, price, subtotal: price, warehouse_id: whId, sell_unit: whUnit }]);
+      setCart([...cart, { product_id: product.id, product_name: product.name, quantity: 1, price, subtotal: price, warehouse_id: whId }]);
     }
   };
 
@@ -135,22 +130,17 @@ export const PartnerOrders = () => {
     }
   };
 
+  const updateItemPrice = (idx, newPrice) => {
+    setCart(cart.map((item, i) => i === idx ? { ...item, price: newPrice, subtotal: item.quantity * newPrice } : item));
+  };
+
   const changeItemWarehouse = (idx, newWhId) => {
     const item = cart[idx];
     if (!item || item.warehouse_id === newWhId) return;
     const product = products.find(p => p.id === item.product_id);
     if (!product) return;
-    const newPrice = getPriceForUnit(product, item.sell_unit);
+    const newPrice = getPriceForWarehouse(product, newWhId);
     setCart(cart.map((it, i) => i === idx ? { ...it, warehouse_id: newWhId, price: newPrice, subtotal: it.quantity * newPrice } : it));
-  };
-
-  const changeItemUnit = (idx, newUnit) => {
-    const item = cart[idx];
-    if (!item || item.sell_unit === newUnit) return;
-    const product = products.find(p => p.id === item.product_id);
-    if (!product) return;
-    const newPrice = getPriceForUnit(product, newUnit);
-    setCart(cart.map((it, i) => i === idx ? { ...it, sell_unit: newUnit, price: newPrice, subtotal: it.quantity * newPrice } : it));
   };
 
   const calculateTotal = () => {
@@ -320,6 +310,7 @@ export const PartnerOrders = () => {
                       <p className="text-sm">Keranjang kosong</p>
                     </div>
                   ) : cart.map((item, idx) => {
+                    const unit = getWarehouseUnit(item.warehouse_id);
                     const stock = getWarehouseStockQty(item.product_id, item.warehouse_id);
                     return (
                       <div key={idx} className="p-3 border-b last:border-b-0 space-y-2">
@@ -335,28 +326,24 @@ export const PartnerOrders = () => {
                           </Select>
                         </div>
                         <div className="flex items-center gap-1">
-                          <span className="text-xs text-muted-foreground shrink-0">Unit:</span>
-                          <Select value={item.sell_unit} onValueChange={(v) => changeItemUnit(idx, v)}>
-                            <SelectTrigger className="h-7 text-xs" data-testid={`cart-unit-${idx}`}><SelectValue /></SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="dus">Dus</SelectItem>
-                              <SelectItem value="satuan">Satuan</SelectItem>
-                            </SelectContent>
-                          </Select>
+                          <Pencil className="w-3 h-3 text-muted-foreground shrink-0" />
+                          <Input type="number" value={item.price} className="h-7 text-xs font-medium w-28"
+                            onChange={(e) => updateItemPrice(idx, parseFloat(e.target.value) || 0)}
+                            data-testid={`cart-price-${idx}`} />
+                          <span className="text-xs text-muted-foreground">/{unit}</span>
                         </div>
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2">
                             <Button size="sm" variant="outline" onClick={() => updateQuantity(idx, item.quantity - 1)}>-</Button>
                             <span className="w-8 text-center text-sm">{item.quantity}</span>
                             <Button size="sm" variant="outline" onClick={() => updateQuantity(idx, item.quantity + 1)}>+</Button>
-                            <span className="text-xs text-muted-foreground">{item.sell_unit}</span>
+                            <span className="text-xs text-muted-foreground">{unit}</span>
                           </div>
                           <div className="text-right">
                             <span className="text-sm font-semibold">{fmt(item.subtotal)}</span>
-                            <p className="text-xs text-muted-foreground">{fmt(item.price)}/{item.sell_unit}</p>
                           </div>
                         </div>
-                        {item.quantity > stock && <p className="text-xs text-red-600">Stok tidak cukup! ({stock} {getWarehouseUnit(item.warehouse_id)})</p>}
+                        {item.quantity > stock && <p className="text-xs text-red-600">Stok tidak cukup! ({stock} {unit})</p>}
                       </div>
                     );
                   })}

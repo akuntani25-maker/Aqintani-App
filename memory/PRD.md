@@ -48,10 +48,10 @@ Build a responsive web application for a pharmacy and agriculture store named "U
 - **Manual Price Override**: Kasir can edit sell price per item in cart before checkout
 
 ### Partner Orders / Pesanan Kios (FIXED & ENHANCED - Mar 2026)
+- **Manual Price Override**: Admin can edit sell price per item in partner order cart
 - **Per-item warehouse selection**: Each order item can be sourced from different warehouses
-- **Per-item unit selection**: Each item can be sold as 'dus' or 'satuan' regardless of warehouse unit. Selling satuan from dus warehouse deducts fractional stock.
-- **Correct pricing by unit**: Items adapt price based on selected unit (box_price for dus, unit price for satuan)
-- **Real-time price adaptation**: Changing item warehouse or unit recalculates price and total
+- **Correct pricing by warehouse unit**: Items from "dus" warehouses use box_price, "satuan" warehouses use unit price
+- **Real-time price adaptation**: Changing warehouse recalculates price; manual override also supported
 - **Stock validation per warehouse**: Shows available stock and warns when insufficient
 - **Today's Summary Cards**: Orders today, total products, total revenue, money received
 - **Per-Warehouse Breakdown**: Items distributed from each warehouse today
