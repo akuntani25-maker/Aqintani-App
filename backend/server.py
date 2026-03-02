@@ -474,10 +474,20 @@ async def create_product(data: ProductCreate, admin: dict = Depends(require_admi
     product_doc = {
         "id": str(uuid.uuid4()),
         **data.model_dump(),
+        "box_price": data.box_price or 0,
+        "items_per_box": data.items_per_box or 1,
         "created_at": now,
         "updated_at": now
     }
     await db.products.insert_one(product_doc)
+    # Create warehouse stock entries
+    await ensure_warehouse_stock(product_doc["id"])
+    # If initial stock provided, put it in Gudang Toko
+    if data.stock > 0:
+        await db.warehouse_stock.update_one(
+            {"product_id": product_doc["id"], "warehouse_id": "gudang_toko"},
+            {"$set": {"stock": data.stock}}
+        )
     return product_doc
 
 @api_router.put("/products/{product_id}", response_model=Product)
