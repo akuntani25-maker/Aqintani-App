@@ -516,6 +516,8 @@ async def create_product(data: ProductCreate, admin: dict = Depends(require_admi
             supplier = await db.suppliers.find_one({"id": data.supplier_id}, {"_id": 0})
             supplier_name = supplier["name"] if supplier else ""
             purchase_total = data.cost_price * data.stock  # cost_price per dus * jumlah dus
+            paid = min(data.initial_paid or 0, purchase_total)
+            remaining = purchase_total - paid
             
             purchase_doc = {
                 "id": str(uuid.uuid4()),
@@ -529,10 +531,10 @@ async def create_product(data: ProductCreate, admin: dict = Depends(require_admi
                     "subtotal": purchase_total
                 }],
                 "total": purchase_total,
-                "paid": purchase_total,
-                "remaining": 0,
+                "paid": paid,
+                "remaining": remaining,
                 "warehouse_id": warehouse_id,
-                "notes": f"Pembelian awal - {data.name}",
+                "notes": f"Pembelian awal - {data.name}" + (f" (Tempo)" if remaining > 0 else ""),
                 "created_at": now.isoformat(),
                 "date": now.strftime("%Y-%m-%d")
             }
