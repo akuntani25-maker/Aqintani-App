@@ -889,6 +889,21 @@ async def create_partner_order(data: PartnerOrderCreate, current_user: dict = De
         if canvasser:
             canvasser_name = canvasser["name"]
     
+    # Deduct stock from selected warehouse
+    wh_id = data.warehouse_id or "gudang_utama"
+    wh = await db.warehouses.find_one({"id": wh_id}, {"_id": 0})
+    if wh:
+        for item in data.items:
+            wh_stock = await db.warehouse_stock.find_one({"product_id": item.product_id, "warehouse_id": wh_id})
+            current_qty = wh_stock["stock"] if wh_stock else 0
+            if current_qty < item.quantity:
+                raise HTTPException(status_code=400, detail=f"Stok {wh['name']} tidak cukup untuk {item.product_name}")
+            await db.warehouse_stock.update_one(
+                {"product_id": item.product_id, "warehouse_id": wh_id},
+                {"$inc": {"stock": -item.quantity}}
+            )
+            await recalculate_product_stock(item.product_id)
+    
     now = datetime.now(timezone.utc)
     order_number = f"PO{now.strftime('%Y%m%d%H%M%S')}"
     
@@ -906,6 +921,7 @@ async def create_partner_order(data: PartnerOrderCreate, current_user: dict = De
         "delivery_date": data.delivery_date or now.strftime("%Y-%m-%d"),
         "canvasser_id": data.canvasser_id or "",
         "canvasser_name": canvasser_name,
+        "warehouse_id": wh_id,
         "status": "pending",
         "created_at": now.isoformat(),
         "date": now.strftime("%Y-%m-%d")
