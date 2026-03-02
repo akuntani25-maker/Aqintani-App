@@ -1000,7 +1000,7 @@ async def create_partner_order(data: PartnerOrderCreate, current_user: dict = De
         "delivery_date": data.delivery_date or now.strftime("%Y-%m-%d"),
         "canvasser_id": data.canvasser_id or "",
         "canvasser_name": canvasser_name,
-        "warehouse_id": wh_id,
+        "warehouse_id": default_wh_id,
         "status": "pending",
         "created_at": now.isoformat(),
         "date": now.strftime("%Y-%m-%d")
