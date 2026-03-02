@@ -42,14 +42,16 @@ export const Products = () => {
 
   const fetchData = async () => {
     try {
-      const [productsRes, categoriesRes, suppliersRes] = await Promise.all([
+      const [productsRes, categoriesRes, suppliersRes, whRes] = await Promise.all([
         api.get('/products'),
         api.get('/categories'),
-        api.get('/suppliers')
+        api.get('/suppliers'),
+        api.get('/warehouses')
       ]);
       setProducts(productsRes.data);
       setCategories(categoriesRes.data);
       setSuppliers(suppliersRes.data);
+      setWarehouses(whRes.data);
     } catch (error) {
       toast.error('Gagal memuat data');
     } finally {
