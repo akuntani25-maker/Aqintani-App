@@ -241,7 +241,7 @@ export const Products = () => {
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="stock">Stok Awal (satuan)</Label>
+                  <Label htmlFor="stock">Stok Awal (dus)</Label>
                   <Input
                     id="stock"
                     type="number"
@@ -249,6 +249,19 @@ export const Products = () => {
                     onChange={(e) => setFormData({ ...formData, stock: parseInt(e.target.value) || 0 })}
                     data-testid="product-stock-input"
                   />
+                </div>
+                <div className="space-y-2">
+                  <Label>Gudang Tujuan</Label>
+                  <Select value={formData.warehouse_id} onValueChange={(v) => setFormData({ ...formData, warehouse_id: v })}>
+                    <SelectTrigger data-testid="product-warehouse-select">
+                      <SelectValue placeholder="Pilih gudang" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {warehouses.map(wh => (
+                        <SelectItem key={wh.id} value={wh.id}>{wh.name} ({wh.unit})</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="items_per_box">Isi per Dus *</Label>
@@ -262,6 +275,15 @@ export const Products = () => {
                     data-testid="product-items-per-box-input"
                   />
                 </div>
+              </div>
+
+              {formData.stock > 0 && formData.items_per_box > 0 && (
+                <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
+                  <p className="text-sm text-blue-800">
+                    {formData.stock} dus x {formData.items_per_box} satuan/dus = <span className="font-bold">{formData.stock * formData.items_per_box} satuan</span> masuk ke {warehouses.find(w => w.id === formData.warehouse_id)?.name || 'gudang'}
+                  </p>
+                </div>
+              )}
                 <div className="space-y-2">
                   <Label htmlFor="cost_price">Harga Beli/Dus *</Label>
                   <Input
