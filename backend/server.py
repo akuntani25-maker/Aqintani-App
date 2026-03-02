@@ -733,6 +733,8 @@ async def create_purchase(data: PurchaseCreate, admin: dict = Depends(require_ad
     if not supplier:
         raise HTTPException(status_code=404, detail="Supplier not found")
     
+    warehouse_id = data.warehouse_id or "gudang_utama"
+    
     now = datetime.now(timezone.utc)
     purchase_doc = {
         "id": str(uuid.uuid4()),
@@ -742,12 +744,27 @@ async def create_purchase(data: PurchaseCreate, admin: dict = Depends(require_ad
         "total": data.total,
         "paid": data.paid,
         "remaining": data.total - data.paid,
+        "warehouse_id": warehouse_id,
         "notes": data.notes,
         "created_at": now.isoformat(),
         "date": now.strftime("%Y-%m-%d")
     }
     
     await db.purchases.insert_one(purchase_doc)
+    
+    # Add purchased quantities to warehouse stock
+    for item in data.items:
+        pid = item.get("product_id")
+        qty = item.get("quantity", 0)
+        if pid and qty > 0:
+            await ensure_warehouse_stock(pid)
+            await db.warehouse_stock.update_one(
+                {"product_id": pid, "warehouse_id": warehouse_id},
+                {"$inc": {"stock": qty}},
+                upsert=True
+            )
+            await recalculate_product_stock(pid)
+    
     return purchase_doc
 
 @api_router.post("/purchases/{purchase_id}/pay")
