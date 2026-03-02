@@ -55,7 +55,28 @@ export const PartnerOrders = () => {
     }
   };
 
+  // Fetch partner prices when partner changes
+  useEffect(() => {
+    if (selectedPartner) {
+      api.get(`/partner-prices?partner_store_id=${selectedPartner}`).then(res => setPartnerPrices(res.data)).catch(() => {});
+    } else {
+      setPartnerPrices([]);
+    }
+  }, [selectedPartner]);
+
+  const getPartnerPrice = (productId) => {
+    const pp = partnerPrices.find(p => p.product_id === productId);
+    return pp ? pp.custom_price : null;
+  };
+
+  const getWarehouseStockQty = (productId, warehouseId) => {
+    const entry = warehouseStock.find(s => s.product_id === productId && s.warehouse_id === warehouseId);
+    return entry ? entry.stock : 0;
+  };
+
   const addToCart = (product) => {
+    const customPrice = getPartnerPrice(product.id);
+    const price = customPrice !== null ? customPrice : product.price;
     const existing = cart.find(item => item.product_id === product.id);
     if (existing) {
       setCart(cart.map(item =>
@@ -68,8 +89,8 @@ export const PartnerOrders = () => {
         product_id: product.id,
         product_name: product.name,
         quantity: 1,
-        price: product.price,
-        subtotal: product.price
+        price,
+        subtotal: price
       }]);
     }
   };
