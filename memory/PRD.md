@@ -53,9 +53,14 @@ Build a responsive web application for a pharmacy and agriculture store named "U
 - **Per-Warehouse Breakdown**: Shows how many items distributed from each warehouse today
 - **Partner Order Receipt (Struk)**: Print-ready receipt with order details, previous outstanding balance (sisa bon), and accumulated total debt. Auto-navigates to receipt after order creation.
 
-### Analytics & Reports (DONE - Basic)
+### Analytics & Reports (ENHANCED - Mar 2026)
 - Analytics page with basic charts
-- Laporan (Reports) page
+- Laporan (Reports) page with two detailed report tabs:
+  - **Penjualan POS**: Rincian per produk — tanggal, produk, qty, HPP/unit, jual/unit, total jual, total HPP, margin
+  - **Penjualan Kios Mitra**: Rincian per produk — tanggal, produk, kios mitra, qty (satuan), HPP/unit, jual/unit, total jual, total HPP, margin
+- Summary cards: Total Penjualan, Total HPP, Total Margin, Margin %
+- Date range filter and CSV export
+- Footer row with totals per table
 
 ## Prioritized Backlog
 
