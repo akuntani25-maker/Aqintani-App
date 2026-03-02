@@ -1413,6 +1413,31 @@ async def startup_db():
         }
         await db.users.insert_one(default_admin)
         logger.info("Default admin created: admin@aqintani.com / admin123")
+    
+    # Seed warehouses
+    wh_count = await db.warehouses.count_documents({})
+    if wh_count == 0:
+        await db.warehouses.insert_many([
+            {"id": "gudang_utama", "name": "Gudang Utama", "unit": "dus", "sort_order": 1},
+            {"id": "gudang_toko", "name": "Gudang Toko", "unit": "satuan", "sort_order": 2},
+            {"id": "gudang_lainnya", "name": "Gudang Lainnya", "unit": "dus", "sort_order": 3},
+        ])
+        logger.info("Default warehouses created")
+    
+    # Migrate existing products: ensure warehouse_stock entries + items_per_box
+    products = await db.products.find({}, {"_id": 0}).to_list(10000)
+    for p in products:
+        await ensure_warehouse_stock(p["id"])
+        # If product has stock but no warehouse_stock, put it in Gudang Toko
+        toko_stock = await db.warehouse_stock.find_one({"product_id": p["id"], "warehouse_id": "gudang_toko"})
+        if toko_stock and toko_stock["stock"] == 0 and p.get("stock", 0) > 0:
+            await db.warehouse_stock.update_one(
+                {"product_id": p["id"], "warehouse_id": "gudang_toko"},
+                {"$set": {"stock": p["stock"]}}
+            )
+        # Ensure items_per_box field exists
+        if "items_per_box" not in p:
+            await db.products.update_one({"id": p["id"]}, {"$set": {"items_per_box": 1, "box_price": 0}})
 
 @app.on_event("shutdown")
 async def shutdown_db_client():
