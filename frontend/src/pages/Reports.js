@@ -6,7 +6,7 @@ import { Label } from '../components/ui/label';
 import { Card } from '../components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
 import { toast } from 'sonner';
-import { FileText, Download, TrendingUp, TrendingDown, DollarSign, ShoppingCart, Store } from 'lucide-react';
+import { FileText, Download, TrendingUp, TrendingDown, DollarSign, ShoppingCart, Store, Award } from 'lucide-react';
 
 export const Reports = () => {
   const [activeTab, setActiveTab] = useState('pos');
