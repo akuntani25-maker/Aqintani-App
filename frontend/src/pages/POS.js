@@ -141,9 +141,10 @@ export const POS = () => {
 
   const addToCart = (product) => {
     const existingItem = cart.find(item => item.product_id === product.id);
+    const maxStock = product.toko_stock || product.stock;
     if (existingItem) {
-      if (existingItem.quantity >= product.stock) {
-        toast.error('Stok tidak mencukupi');
+      if (existingItem.quantity >= maxStock) {
+        toast.error('Stok Gudang Toko tidak mencukupi');
         return;
       }
       setCart(cart.map(item =>
@@ -158,7 +159,7 @@ export const POS = () => {
         quantity: 1,
         price: product.price,
         subtotal: product.price,
-        max_stock: product.stock
+        max_stock: maxStock
       }]);
     }
     toast.success(`${product.name} ditambahkan`);
