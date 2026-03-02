@@ -77,6 +77,9 @@ export const Reports = () => {
           <Button variant={activeTab === 'partner' ? 'default' : 'outline'} onClick={() => { setActiveTab('partner'); setReportData(null); }} data-testid="tab-partner">
             <Store className="w-4 h-4 mr-2" />Penjualan Kios Mitra
           </Button>
+          <Button variant={activeTab === 'bestseller' ? 'default' : 'outline'} onClick={() => { setActiveTab('bestseller'); setReportData(null); }} data-testid="tab-bestseller">
+            <Award className="w-4 h-4 mr-2" />Produk Terlaris
+          </Button>
         </div>
         <div className="flex flex-col md:flex-row gap-4 items-end">
           <div className="space-y-2 flex-1">
