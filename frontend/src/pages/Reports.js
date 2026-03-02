@@ -301,6 +301,64 @@ export const Reports = () => {
               </div>
             </Card>
           )}
+          {/* Bestseller Table */}
+          {reportData.type === 'bestseller' && (
+            <Card className="p-6">
+              <h3 className="font-semibold mb-4">Peringkat Produk Terlaris</h3>
+              <div className="rounded-lg border overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-muted/50">
+                      <TableHead className="w-14 text-center">#</TableHead>
+                      <TableHead>Produk</TableHead>
+                      <TableHead className="text-center">Qty POS</TableHead>
+                      <TableHead className="text-center">Qty Mitra</TableHead>
+                      <TableHead className="text-center">Qty Total</TableHead>
+                      <TableHead className="text-right">Revenue POS</TableHead>
+                      <TableHead className="text-right">Revenue Mitra</TableHead>
+                      <TableHead className="text-right">Revenue Total</TableHead>
+                      <TableHead className="text-right">HPP</TableHead>
+                      <TableHead className="text-right">Margin</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {reportData.rows.length === 0 ? (
+                      <TableRow><TableCell colSpan={10} className="text-center py-8 text-muted-foreground">Tidak ada data produk</TableCell></TableRow>
+                    ) : reportData.rows.map((row, i) => {
+                      const maxRevenue = reportData.rows[0]?.revenue_total || 1;
+                      const pct = (row.revenue_total / maxRevenue) * 100;
+                      const medal = i === 0 ? 'text-amber-500' : i === 1 ? 'text-gray-400' : i === 2 ? 'text-orange-600' : '';
+                      return (
+                        <TableRow key={row.product_id} data-testid={`bs-row-${i}`}>
+                          <TableCell className="text-center">
+                            <span className={`font-bold text-lg ${medal}`}>{i + 1}</span>
+                          </TableCell>
+                          <TableCell>
+                            <div>
+                              <p className="font-medium">{row.product_name}</p>
+                              <div className="mt-1 h-1.5 bg-gray-100 rounded-full overflow-hidden w-32">
+                                <div className="h-full bg-primary/60 rounded-full" style={{ width: `${pct}%` }}></div>
+                              </div>
+                            </div>
+                          </TableCell>
+                          <TableCell className="text-center">{fmtNum(row.qty_pos)}</TableCell>
+                          <TableCell className="text-center">{fmtNum(row.qty_partner)}</TableCell>
+                          <TableCell className="text-center font-semibold">{fmtNum(row.qty_total)}</TableCell>
+                          <TableCell className="text-right text-sm">{fmt(row.revenue_pos)}</TableCell>
+                          <TableCell className="text-right text-sm">{fmt(row.revenue_partner)}</TableCell>
+                          <TableCell className="text-right font-semibold">{fmt(row.revenue_total)}</TableCell>
+                          <TableCell className="text-right text-sm text-red-600">{fmt(row.cost_total)}</TableCell>
+                          <TableCell className="text-right">
+                            <span className={`font-semibold ${row.margin >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>{fmt(row.margin)}</span>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+            </Card>
+          )}
         </div>
       )}
     </div>
