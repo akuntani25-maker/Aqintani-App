@@ -541,8 +541,6 @@ async def create_product(data: ProductCreate, admin: dict = Depends(require_admi
             await db.purchases.insert_one(purchase_doc)
     
     return product_doc
-    
-    return product_doc
 
 @api_router.put("/products/{product_id}", response_model=Product)
 async def update_product(product_id: str, data: ProductCreate, admin: dict = Depends(require_admin)):

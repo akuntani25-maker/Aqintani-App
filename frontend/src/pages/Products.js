@@ -36,7 +36,7 @@ export const Products = () => {
   const [formData, setFormData] = useState({
     name: '', barcode: '', category_id: '', supplier_id: '',
     stock: 0, warehouse_id: 'gudang_utama', price: 0, cost_price: 0,
-    box_price: 0, items_per_box: 1, expiry_date: '', batch_number: '',
+    box_price: 0, items_per_box: 1, initial_paid: 0, expiry_date: '', batch_number: '',
     description: '', min_stock_alert: 10
   });
 
@@ -110,7 +110,7 @@ export const Products = () => {
     setFormData({
       name: '', barcode: '', category_id: '', supplier_id: '',
       stock: 0, warehouse_id: 'gudang_utama', price: 0, cost_price: 0,
-      box_price: 0, items_per_box: 1, expiry_date: '', batch_number: '',
+      box_price: 0, items_per_box: 1, initial_paid: 0, expiry_date: '', batch_number: '',
       description: '', min_stock_alert: 10
     });
   };
