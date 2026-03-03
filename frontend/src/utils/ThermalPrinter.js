@@ -1,295 +1,322 @@
-// Thermal Printer Utility for POS 58 RPP02N (58mm)
-// Supports USB and Bluetooth connections
+// Thermal Printer Utility - USB & Bluetooth
+// Supports various thermal printers (58mm, 48mm)
 
 class ThermalPrinter {
   constructor() {
     this.device = null;
+    this.characteristic = null;
     this.connectionType = localStorage.getItem('printerType') || 'usb';
-    this.characteristicUUID = '0000ff02-0000-1000-8000-00805f9b34fb'; // Common for thermal printers
   }
 
-  // ESC/POS Commands
   commands = {
-    INIT: [0x1B, 0x40], // Initialize printer
-    LINE_FEED: [0x0A], // Line feed
-    CUT: [0x1D, 0x56, 0x00], // Cut paper
+    INIT: [0x1B, 0x40],
+    LINE_FEED: [0x0A],
+    CUT: [0x1D, 0x56, 0x00],
     ALIGN_LEFT: [0x1B, 0x61, 0x00],
     ALIGN_CENTER: [0x1B, 0x61, 0x01],
     ALIGN_RIGHT: [0x1B, 0x61, 0x02],
     BOLD_ON: [0x1B, 0x45, 0x01],
     BOLD_OFF: [0x1B, 0x45, 0x00],
     SIZE_NORMAL: [0x1D, 0x21, 0x00],
-    SIZE_DOUBLE: [0x1D, 0x21, 0x11], // Double width & height
-    SIZE_LARGE: [0x1D, 0x21, 0x22],
+    SIZE_DOUBLE: [0x1D, 0x21, 0x11],
   };
 
-  // Connect to printer via USB
+  // Known Bluetooth service/characteristic UUIDs for thermal printers
+  BLE_PROFILES = [
+    { service: '000018f0-0000-1000-8000-00805f9b34fb', characteristic: '00002af1-0000-1000-8000-00805f9b34fb' },
+    { service: '000018f0-0000-1000-8000-00805f9b34fb', characteristic: '0000ff02-0000-1000-8000-00805f9b34fb' },
+    { service: 'e7810a71-73ae-499d-8c15-faa9aef0c3f2', characteristic: 'bef8d6c9-9c21-4c9e-b632-bd58c1009f9f' },
+    { service: '49535343-fe7d-4ae5-8fa9-9fafd205e455', characteristic: '49535343-8841-43f4-a8d4-ecbe34729bb3' },
+    { service: '0000ff00-0000-1000-8000-00805f9b34fb', characteristic: '0000ff02-0000-1000-8000-00805f9b34fb' },
+    { service: '0000ffe0-0000-1000-8000-00805f9b34fb', characteristic: '0000ffe1-0000-1000-8000-00805f9b34fb' },
+    // Common Chinese thermal printer profiles
+    { service: '0000fee7-0000-1000-8000-00805f9b34fb', characteristic: '0000fee7-0000-1000-8000-00805f9b34fb' },
+    { service: '00001101-0000-1000-8000-00805f9b34fb', characteristic: '00001101-0000-1000-8000-00805f9b34fb' },
+    { service: '0000ae00-0000-1000-8000-00805f9b34fb', characteristic: '0000ae01-0000-1000-8000-00805f9b34fb' },
+    { service: '0000ae30-0000-1000-8000-00805f9b34fb', characteristic: '0000ae31-0000-1000-8000-00805f9b34fb' },
+  ];
+
   async connectUSB() {
     try {
-      if (!navigator.usb) {
-        throw new Error('WebUSB tidak didukung di browser ini');
-      }
-
+      if (!navigator.usb) throw new Error('WebUSB tidak didukung di browser ini. Gunakan Chrome/Edge terbaru.');
       this.device = await navigator.usb.requestDevice({
         filters: [
-          { vendorId: 0x04b8 }, // EPSON
-          { vendorId: 0x0416 }, // Common thermal printer
-          { vendorId: 0x0483 },
-          { vendorId: 0x1a86 },
-          { vendorId: 0x067b }, // Prolific
-          { vendorId: 0x1504 }, // Other thermal printers
+          { vendorId: 0x04b8 }, { vendorId: 0x0416 }, { vendorId: 0x0483 },
+          { vendorId: 0x1a86 }, { vendorId: 0x067b }, { vendorId: 0x1504 },
+          { vendorId: 0x0fe6 }, { vendorId: 0x20d1 }, { vendorId: 0x0dd4 },
         ]
       });
-
       await this.device.open();
-      
-      if (this.device.configuration === null) {
-        await this.device.selectConfiguration(1);
-      }
-      
+      if (this.device.configuration === null) await this.device.selectConfiguration(1);
       await this.device.claimInterface(0);
-      
       this.connectionType = 'usb';
       localStorage.setItem('printerType', 'usb');
-      
       return { success: true, message: 'Printer USB terhubung' };
     } catch (error) {
-      console.error('USB connection error:', error);
-      return { success: false, message: error.message };
+      console.error('USB error:', error);
+      return { success: false, message: error.message || 'Gagal menghubungkan USB' };
     }
   }
 
-  // Connect to printer via Bluetooth
   async connectBluetooth() {
     try {
-      if (!navigator.bluetooth) {
-        throw new Error('Web Bluetooth tidak didukung di browser ini');
-      }
+      if (!navigator.bluetooth) throw new Error('Web Bluetooth tidak didukung. Gunakan Chrome di Android/Windows/macOS.');
 
-      this.device = await navigator.bluetooth.requestDevice({
-        filters: [
-          { namePrefix: 'RPP' },
-          { namePrefix: 'POS' },
-          { namePrefix: 'Printer' },
-          { namePrefix: 'EPSON' },
-          { namePrefix: 'D58' },
-          { namePrefix: 'TM-' },
-        ],
-        optionalServices: ['000018f0-0000-1000-8000-00805f9b34fb', 'e7810a71-73ae-499d-8c15-faa9aef0c3f2']
-      });
-
-      const server = await this.device.gatt.connect();
+      // Try with acceptAllDevices first (broader compatibility)
+      let device;
+      const allServiceUUIDs = [...new Set(this.BLE_PROFILES.map(p => p.service))];
       
-      // Try common service UUIDs for thermal printers
-      let service;
       try {
-        service = await server.getPrimaryService('000018f0-0000-1000-8000-00805f9b34fb');
-      } catch {
-        service = await server.getPrimaryService('e7810a71-73ae-499d-8c15-faa9aef0c3f2');
+        device = await navigator.bluetooth.requestDevice({
+          acceptAllDevices: true,
+          optionalServices: allServiceUUIDs
+        });
+      } catch (e) {
+        // Fallback: try with name filters for more restricted environments
+        device = await navigator.bluetooth.requestDevice({
+          filters: [
+            { namePrefix: 'RPP' }, { namePrefix: 'POS' }, { namePrefix: 'Printer' },
+            { namePrefix: 'EPSON' }, { namePrefix: 'D58' }, { namePrefix: 'TM-' },
+            { namePrefix: 'BT' }, { namePrefix: 'MPT' }, { namePrefix: 'SPP' },
+            { namePrefix: 'TP' }, { namePrefix: 'BlueTooth' }, { namePrefix: 'Xprinter' },
+            { namePrefix: 'XP-' }, { namePrefix: 'QS-' }, { namePrefix: 'MTP' },
+            { namePrefix: 'ZJ-' }, { namePrefix: 'PT-' }, { namePrefix: 'GP-' },
+            { namePrefix: 'Inner' }, { namePrefix: 'Gprinter' }, { namePrefix: 'TSC' },
+            { services: ['000018f0-0000-1000-8000-00805f9b34fb'] },
+          ],
+          optionalServices: allServiceUUIDs
+        });
       }
-      
-      this.characteristic = await service.getCharacteristic(this.characteristicUUID);
-      
+
+      this.device = device;
+      console.log('BLE device:', device.name || device.id);
+
+      // Small delay for GATT server stability on some devices
+      await new Promise(r => setTimeout(r, 300));
+
+      // Retry GATT connection up to 3 times
+      let server;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          server = await device.gatt.connect();
+          break;
+        } catch (e) {
+          console.warn(`GATT connect attempt ${attempt + 1} failed:`, e);
+          if (attempt === 2) throw new Error('Gagal terhubung ke printer. Pastikan printer menyala dan dalam jarak dekat.');
+          await new Promise(r => setTimeout(r, 500));
+        }
+      }
+
+      // Auto-discover the right service/characteristic
+      let foundCharacteristic = null;
+      for (const profile of this.BLE_PROFILES) {
+        try {
+          const service = await server.getPrimaryService(profile.service);
+          foundCharacteristic = await service.getCharacteristic(profile.characteristic);
+          console.log('Found BLE profile:', profile.service, profile.characteristic);
+          break;
+        } catch {
+          continue;
+        }
+      }
+
+      // If no known profile, try discovering all services
+      if (!foundCharacteristic) {
+        try {
+          const services = await server.getPrimaryServices();
+          for (const service of services) {
+            try {
+              const chars = await service.getCharacteristics();
+              for (const char of chars) {
+                if (char.properties.write || char.properties.writeWithoutResponse) {
+                  foundCharacteristic = char;
+                  console.log('Discovered writable char:', char.uuid, 'on service:', service.uuid);
+                  break;
+                }
+              }
+              if (foundCharacteristic) break;
+            } catch { continue; }
+          }
+        } catch (e) {
+          console.error('Service discovery failed:', e);
+        }
+      }
+
+      if (!foundCharacteristic) {
+        await device.gatt.disconnect();
+        throw new Error('Tidak dapat menemukan layanan cetak pada printer ini. Pastikan printer mendukung Bluetooth LE.');
+      }
+
+      this.characteristic = foundCharacteristic;
       this.connectionType = 'bluetooth';
       localStorage.setItem('printerType', 'bluetooth');
-      
-      return { success: true, message: 'Printer Bluetooth terhubung' };
+      return { success: true, message: `Printer "${device.name || 'BLE'}" terhubung via Bluetooth` };
     } catch (error) {
-      console.error('Bluetooth connection error:', error);
-      return { success: false, message: error.message };
+      console.error('Bluetooth error:', error);
+      return { success: false, message: error.message || 'Gagal menghubungkan Bluetooth' };
     }
   }
 
-  // Send data to printer
   async sendData(data) {
     try {
       const buffer = new Uint8Array(data);
-      
       if (this.connectionType === 'usb' && this.device) {
-        await this.device.transferOut(1, buffer);
+        // USB: find the right endpoint
+        const iface = this.device.configuration.interfaces[0];
+        const endpoint = iface.alternate.endpoints.find(e => e.direction === 'out');
+        const epNum = endpoint ? endpoint.endpointNumber : 1;
+        await this.device.transferOut(epNum, buffer);
       } else if (this.connectionType === 'bluetooth' && this.characteristic) {
-        // Split data into chunks (BLE has MTU limit)
-        const chunkSize = 20;
+        // BLE: chunk data with larger MTU-safe size for better throughput
+        const useNoResponse = this.characteristic.properties.writeWithoutResponse;
+        const chunkSize = useNoResponse ? 200 : 100;
+        
         for (let i = 0; i < buffer.length; i += chunkSize) {
-          const chunk = buffer.slice(i, i + chunkSize);
-          await this.characteristic.writeValue(chunk);
-          await new Promise(resolve => setTimeout(resolve, 50)); // Small delay between chunks
+          const chunk = buffer.slice(i, Math.min(i + chunkSize, buffer.length));
+          try {
+            if (useNoResponse) {
+              await this.characteristic.writeValueWithoutResponse(chunk);
+            } else {
+              await this.characteristic.writeValueWithResponse(chunk);
+            }
+          } catch (writeErr) {
+            // Retry once with smaller chunk on failure
+            console.warn('Write failed, retrying with smaller chunk:', writeErr);
+            const smallChunk = 20;
+            for (let j = 0; j < chunk.length; j += smallChunk) {
+              const miniChunk = chunk.slice(j, Math.min(j + smallChunk, chunk.length));
+              if (useNoResponse) {
+                await this.characteristic.writeValueWithoutResponse(miniChunk);
+              } else {
+                await this.characteristic.writeValueWithResponse(miniChunk);
+              }
+              await new Promise(r => setTimeout(r, 50));
+            }
+          }
+          await new Promise(r => setTimeout(r, 20));
         }
       } else {
         throw new Error('Printer tidak terhubung');
       }
       return true;
     } catch (error) {
-      console.error('Print error:', error);
+      console.error('Send error:', error);
       return false;
     }
   }
 
-  // Convert string to byte array (support Indonesian characters)
   textToBytes(text) {
-    const encoder = new TextEncoder();
-    return Array.from(encoder.encode(text));
+    return Array.from(new TextEncoder().encode(text));
   }
 
-  // Print receipt for transaction
-  async printReceipt(transaction) {
-    const data = [];
-
-    // Initialize
-    data.push(...this.commands.INIT);
-
-    // Header - Store Name (Center, Large, Bold)
-    data.push(...this.commands.ALIGN_CENTER);
-    data.push(...this.commands.SIZE_DOUBLE);
-    data.push(...this.commands.BOLD_ON);
-    data.push(...this.textToBytes('UD. AQIN TANI'));
-    data.push(...this.commands.LINE_FEED);
-    
-    // Subtitle
-    data.push(...this.commands.SIZE_NORMAL);
-    data.push(...this.commands.BOLD_OFF);
-    data.push(...this.textToBytes('Toko Obat & Alat Pertanian'));
-    data.push(...this.commands.LINE_FEED);
-    data.push(...this.commands.LINE_FEED);
-
-    // Transaction Info
-    data.push(...this.commands.ALIGN_LEFT);
-    data.push(...this.textToBytes(new Date(transaction.created_at).toLocaleString('id-ID')));
-    data.push(...this.commands.LINE_FEED);
-    data.push(...this.textToBytes(`No: ${transaction.transaction_number}`));
-    data.push(...this.commands.LINE_FEED);
-    data.push(...this.textToBytes(`Kasir: ${transaction.cashier_name}`));
-    data.push(...this.commands.LINE_FEED);
-    data.push(...this.textToBytes('--------------------------------'));
-    data.push(...this.commands.LINE_FEED);
-
-    // Items
-    transaction.items.forEach(item => {
-      data.push(...this.textToBytes(item.product_name));
-      data.push(...this.commands.LINE_FEED);
-      
-      const itemLine = `${item.quantity} x ${this.formatCurrency(item.price)}`;
-      const subtotalLine = this.formatCurrency(item.subtotal);
-      const spacing = ' '.repeat(Math.max(0, 32 - itemLine.length - subtotalLine.length));
-      
-      data.push(...this.textToBytes(`${itemLine}${spacing}${subtotalLine}`));
-      data.push(...this.commands.LINE_FEED);
-    });
-
-    data.push(...this.textToBytes('--------------------------------'));
-    data.push(...this.commands.LINE_FEED);
-
-    // Totals
-    const subtotalLine = this.formatLine('Subtotal:', this.formatCurrency(transaction.subtotal));
-    data.push(...this.textToBytes(subtotalLine));
-    data.push(...this.commands.LINE_FEED);
-
-    if (transaction.discount > 0) {
-      const discountLine = this.formatLine('Diskon:', `-${this.formatCurrency(transaction.discount)}`);
-      data.push(...this.textToBytes(discountLine));
-      data.push(...this.commands.LINE_FEED);
-    }
-
-    if (transaction.tax > 0) {
-      const taxLine = this.formatLine('Pajak:', this.formatCurrency(transaction.tax));
-      data.push(...this.textToBytes(taxLine));
-      data.push(...this.commands.LINE_FEED);
-    }
-
-    // Total (Bold)
-    data.push(...this.commands.BOLD_ON);
-    const totalLine = this.formatLine('TOTAL:', this.formatCurrency(transaction.total));
-    data.push(...this.textToBytes(totalLine));
-    data.push(...this.commands.LINE_FEED);
-    data.push(...this.commands.BOLD_OFF);
-
-    // Payment
-    const paymentLine = this.formatLine(`Bayar (${transaction.payment_method}):`, this.formatCurrency(transaction.payment_amount));
-    data.push(...this.textToBytes(paymentLine));
-    data.push(...this.commands.LINE_FEED);
-
-    const changeLine = this.formatLine('Kembali:', this.formatCurrency(transaction.change));
-    data.push(...this.textToBytes(changeLine));
-    data.push(...this.commands.LINE_FEED);
-    data.push(...this.commands.LINE_FEED);
-
-    // Footer
-    data.push(...this.commands.ALIGN_CENTER);
-    data.push(...this.textToBytes('Terima kasih atas kunjungan Anda!'));
-    data.push(...this.commands.LINE_FEED);
-    data.push(...this.textToBytes('Barang yang sudah dibeli'));
-    data.push(...this.commands.LINE_FEED);
-    data.push(...this.textToBytes('tidak dapat ditukar/dikembalikan'));
-    data.push(...this.commands.LINE_FEED);
-    data.push(...this.commands.LINE_FEED);
-    data.push(...this.commands.LINE_FEED);
-
-    // Cut paper
-    data.push(...this.commands.CUT);
-
-    return await this.sendData(data);
-  }
-
-  formatCurrency(value) {
-    return new Intl.NumberFormat('id-ID', {
-      style: 'currency',
-      currency: 'IDR',
-      minimumFractionDigits: 0
-    }).format(value).replace('Rp', 'Rp ');
+  getCharWidth() {
+    const size = localStorage.getItem('paperSize') || '58mm';
+    return size === '48mm' ? 24 : 32;
   }
 
   formatLine(label, value) {
-    const maxWidth = 32; // 58mm = ~32 characters
-    const spacing = ' '.repeat(Math.max(0, maxWidth - label.length - value.length));
-    return `${label}${spacing}${value}`;
+    const w = this.getCharWidth();
+    const gap = Math.max(1, w - label.length - value.length);
+    return label + ' '.repeat(gap) + value;
   }
 
-  // Test print
+  formatCurrency(v) {
+    return 'Rp ' + new Intl.NumberFormat('id-ID', { minimumFractionDigits: 0 }).format(v);
+  }
+
+  async printReceipt(transaction) {
+    const d = [];
+    const w = this.getCharWidth();
+    const sep = '-'.repeat(w);
+
+    d.push(...this.commands.INIT);
+    d.push(...this.commands.ALIGN_CENTER);
+    d.push(...this.commands.SIZE_DOUBLE);
+    d.push(...this.commands.BOLD_ON);
+    d.push(...this.textToBytes('UD. AQIN TANI'));
+    d.push(...this.commands.LINE_FEED);
+    d.push(...this.commands.SIZE_NORMAL);
+    d.push(...this.commands.BOLD_OFF);
+    d.push(...this.textToBytes('Toko Obat & Alat Pertanian'));
+    d.push(...this.commands.LINE_FEED);
+    d.push(...this.commands.ALIGN_LEFT);
+    d.push(...this.textToBytes(sep));
+    d.push(...this.commands.LINE_FEED);
+    d.push(...this.textToBytes(new Date(transaction.created_at).toLocaleString('id-ID')));
+    d.push(...this.commands.LINE_FEED);
+    d.push(...this.textToBytes(`No: ${transaction.transaction_number}`));
+    d.push(...this.commands.LINE_FEED);
+    d.push(...this.textToBytes(`Kasir: ${transaction.cashier_name}`));
+    d.push(...this.commands.LINE_FEED);
+    d.push(...this.textToBytes(sep));
+    d.push(...this.commands.LINE_FEED);
+
+    transaction.items.forEach(item => {
+      d.push(...this.textToBytes(item.product_name));
+      d.push(...this.commands.LINE_FEED);
+      const left = `${item.quantity}x${this.formatCurrency(item.price)}`;
+      const right = this.formatCurrency(item.subtotal);
+      d.push(...this.textToBytes(this.formatLine(left, right)));
+      d.push(...this.commands.LINE_FEED);
+    });
+
+    d.push(...this.textToBytes(sep));
+    d.push(...this.commands.LINE_FEED);
+    d.push(...this.textToBytes(this.formatLine('Subtotal:', this.formatCurrency(transaction.subtotal))));
+    d.push(...this.commands.LINE_FEED);
+    if (transaction.discount > 0) {
+      d.push(...this.textToBytes(this.formatLine('Diskon:', '-' + this.formatCurrency(transaction.discount))));
+      d.push(...this.commands.LINE_FEED);
+    }
+    d.push(...this.commands.BOLD_ON);
+    d.push(...this.textToBytes(this.formatLine('TOTAL:', this.formatCurrency(transaction.total))));
+    d.push(...this.commands.LINE_FEED);
+    d.push(...this.commands.BOLD_OFF);
+    d.push(...this.textToBytes(this.formatLine(`Bayar(${transaction.payment_method}):`, this.formatCurrency(transaction.payment_amount))));
+    d.push(...this.commands.LINE_FEED);
+    d.push(...this.textToBytes(this.formatLine('Kembali:', this.formatCurrency(transaction.change))));
+    d.push(...this.commands.LINE_FEED);
+    d.push(...this.commands.ALIGN_CENTER);
+    d.push(...this.textToBytes('Terima kasih!'));
+    d.push(...this.commands.LINE_FEED);
+    d.push(...this.commands.LINE_FEED);
+    d.push(...this.commands.LINE_FEED);
+    d.push(...this.commands.CUT);
+
+    return await this.sendData(d);
+  }
+
   async testPrint() {
-    const data = [];
-    data.push(...this.commands.INIT);
-    data.push(...this.commands.ALIGN_CENTER);
-    data.push(...this.commands.SIZE_DOUBLE);
-    data.push(...this.commands.BOLD_ON);
-    data.push(...this.textToBytes('TEST PRINT'));
-    data.push(...this.commands.LINE_FEED);
-    data.push(...this.commands.SIZE_NORMAL);
-    data.push(...this.commands.BOLD_OFF);
-    data.push(...this.textToBytes('UD. AQIN TANI'));
-    data.push(...this.commands.LINE_FEED);
-    data.push(...this.textToBytes('Printer terhubung dengan baik'));
-    data.push(...this.commands.LINE_FEED);
-    data.push(...this.commands.LINE_FEED);
-    data.push(...this.commands.LINE_FEED);
-    data.push(...this.commands.CUT);
-    
-    return await this.sendData(data);
+    const d = [];
+    d.push(...this.commands.INIT);
+    d.push(...this.commands.ALIGN_CENTER);
+    d.push(...this.commands.SIZE_DOUBLE);
+    d.push(...this.commands.BOLD_ON);
+    d.push(...this.textToBytes('TEST PRINT'));
+    d.push(...this.commands.LINE_FEED);
+    d.push(...this.commands.SIZE_NORMAL);
+    d.push(...this.commands.BOLD_OFF);
+    d.push(...this.textToBytes('UD. AQIN TANI'));
+    d.push(...this.commands.LINE_FEED);
+    d.push(...this.textToBytes('Printer OK'));
+    d.push(...this.commands.LINE_FEED);
+    d.push(...this.commands.LINE_FEED);
+    d.push(...this.commands.CUT);
+    return await this.sendData(d);
   }
 
-  // Disconnect
   async disconnect() {
     try {
-      if (this.connectionType === 'usb' && this.device) {
-        await this.device.close();
-      } else if (this.connectionType === 'bluetooth' && this.device?.gatt) {
-        await this.device.gatt.disconnect();
-      }
+      if (this.connectionType === 'usb' && this.device) await this.device.close();
+      else if (this.connectionType === 'bluetooth' && this.device?.gatt) this.device.gatt.disconnect();
       this.device = null;
       this.characteristic = null;
-      return true;
-    } catch (error) {
-      console.error('Disconnect error:', error);
-      return false;
-    }
+    } catch (e) { console.error('Disconnect:', e); }
   }
 
-  // Check if connected
   isConnected() {
-    if (this.connectionType === 'usb') {
-      return this.device && this.device.opened;
-    } else if (this.connectionType === 'bluetooth') {
-      return this.device && this.device.gatt?.connected;
-    }
+    if (this.connectionType === 'usb') return !!(this.device && this.device.opened);
+    if (this.connectionType === 'bluetooth') return !!(this.device && this.device.gatt?.connected);
     return false;
   }
 }

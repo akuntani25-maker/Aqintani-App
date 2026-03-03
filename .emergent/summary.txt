@@ -1,64 +1,78 @@
 <analysis>**original_problem_statement**: The user wants to build a responsive web application for a pharmacy and agriculture store named UD. AQIN TANI.
 
 **PRODUCT REQUIREMENTS:**
-1.  **Core App:** A full-stack application (FastAPI, React, MongoDB) with Admin and Cashier roles.
-2.  **Admin Features:** A comprehensive dashboard to manage products, suppliers, categories, and view reports.
+1.  **Core App:** A full-stack application (FastAPI, React, MongoDB) with Admin, Cashier, and Canvasser roles.
+2.  **Admin Features:** A comprehensive dashboard to manage products, suppliers, categories, inventory, purchases, and view detailed sales reports.
 3.  **B2B / Advanced Features:**
-    *   **Canvasser Portal:** A separate login and dashboard for delivery drivers () to manage their orders, update delivery/payment status, and track outstanding balances for partner stores.
-    *   **Multi-Warehouse Inventory:** Manage stock across multiple locations (e.g., Main Warehouse, Store, Other) with different unit types (boxes vs. single items) and support for stock transfers between them.
-    *   **Purchasing & Debt Management:** Record purchases from suppliers. When adding a new product with initial stock, automatically generate a purchase record. Allow for partial payments on these purchases, with the remaining balance tracked as debt to the supplier.
-    *   **Partner Kiosk Management:** Manage partner stores, including special pricing and order fulfillment from specific warehouses.
-    *   **Analytics & Reporting:** Provide insights into sales, stock, and financials.
-4.  **UI/UX:** A modern, elegant, and responsive user interface with a custom color scheme.
-5.  **Receipt Printing:** A print-preview screen for generating transaction receipts compatible with thermal printers.
+    *   **Canvasser Portal:** A separate dashboard for delivery drivers () to manage their orders and payments.
+    *   **Partner Kiosk Portal:** A system for managing orders from partner stores, including special pricing, multi-warehouse fulfillment, and debt tracking.
+    *   **Multi-Warehouse Inventory:** Manage stock across multiple locations (e.g., Main Warehouse, Store) with different unit types (boxes vs. single items) and support for stock transfers.
+    *   **Purchasing & Debt Management:** Record purchases from suppliers, including partial payments and outstanding debt.
+    *   **POS Features:** A Point of Sale interface for the cashier, with the ability to manually adjust prices.
+    *   **Returns Management:** A system to mark orders/transactions as returned and adjust stock accordingly.
+    *   **Analytics & Reporting:** Provide detailed insights into sales, margin, and best-selling products for both POS and partner kiosk sales.
+4.  **UI/UX:** A modern, elegant, and fully responsive user interface.
+5.  **Hardware Integration:** A print-preview screen for generating transaction receipts compatible with thermal printers via Bluetooth.
 
 **User's preferred language**: The user's primary language is Indonesian. The next agent MUST respond in Indonesian.
 
 **what currently exists?**
-A full-stack application that has evolved from a simple POS into a complex inventory and B2B management system. The core Admin and Canvasser functionalities are in place. The multi-warehouse inventory system is fully integrated into the  page, which now serves as the central hub for viewing stock across all warehouses, filtering products, and initiating stock transfers. The purchasing workflow has been automated so that adding a new product also creates a purchase record. The last feature being developed is allowing partial payments for these initial purchases.
+A mature, full-stack application that serves as a comprehensive business management tool for UD. AQIN TANI. The application features role-based access for Admins, Canvassers, and Cashiers. Key functionalities include a multi-warehouse inventory system, a B2B portal for partner kiosks with custom pricing and order management, a detailed reporting suite with margin analysis and best-seller tracking, and a fully responsive UI. The system supports complex workflows like automated purchase creation, debt tracking with suppliers, product returns, and manual price adjustments at the point of sale.
 
 **Last working item**:
--   **Last item agent was working**: Implementing an Initial Payment () option when adding a new product. When a new product is created with initial stock, a purchase is automatically recorded. This feature allows the admin to specify how much was paid upfront, with the remainder being tracked as debt. The agent updated the backend  endpoint to handle this logic but has not yet added the corresponding input field to the frontend form.
+-   **Last item agent was working**: Fixing issues related to thermal printer connectivity and receipt formatting. The user reported that the Bluetooth printer connection fails on PC, tablet, and mobile, the receipt size doesn't adjust for mobile/tablet printing, and the partner kiosk receipt has too much empty space. The agent analyzed the code and identified the root causes in , , and .
 -   **Status**: IN PROGRESS
 -   **Agent Testing Done**: N
--   **Which testing method agent to use?**: Frontend testing using the screenshot tool to verify the new form field, followed by backend testing with  to validate the logic, and a final end-to-end manual test of the entire flow.
+-   **Which testing method agent to use?**: Frontend testing using the screenshot tool to verify the updated CSS for the receipt components (, ). The Bluetooth logic changes in  cannot be fully tested in the environment, so the agent should implement the fixes based on best practices and inform the user to test on their physical device.
 -   **User Testing Done**: N
 
 **All Pending/In progress Issue list**:
--   **Issue 1: Complete Partial Payment Feature on New Product Creation. (P0)**
+-   **Issue 1: Fix Thermal Printer Connectivity and Receipt Formatting (P0)**
 
 **Issues Detail**:
--   **Issue 1: Complete Partial Payment Feature on New Product Creation.**
-    -   **Attempted fixes**: The agent successfully updated the  endpoint in  to accept an  parameter and correctly calculate the purchase status ( or ) and remaining debt.
+-   **Issue 1: Fix Thermal Printer Connectivity and Receipt Formatting**
+    -   **Attempted fixes**: The agent has analyzed the code and identified the following problems:
+        1.  **Bluetooth Connection:** The name filter in  is too restrictive, the service UUID is hardcoded, and the data chunk size is too small, causing connection failures.
+        2.  **Receipt Sizing:** The print CSS in  and  is fixed for A4 paper and does not adapt to smaller thermal printer sizes on mobile/tablet.
+        3.  **Receipt Layout:** The  component uses excessive margins and padding, wasting paper.
     -   **Next debug checklist**:
-        1.  Modify : In the Add Product dialog, add a new  field for Bayar di Muka (Initial Payment).
-        2.  Update the  function in the same file to include the  in the payload of the POST request to .
-        3.  Conduct an end-to-end test: Create a product with a partial payment, then navigate to the Purchases page to verify the purchase record is created correctly with the Belum Lunas status and the correct outstanding debt amount.
-    -   **Why fix this issue and what will be achieved with the fix?**: This is a critical business requirement to accurately track credit purchases and manage financial liabilities with suppliers.
+        1.  **Edit **:
+            *   Make the Bluetooth device name filter less restrictive.
+            *   Remove the hardcoded service UUID and discover it dynamically.
+            *   Increase the chunk size for data transfer.
+        2.  **Edit  and **:
+            *   Modify the  CSS to use a flexible width (e.g.,  or ) instead of fixed sizes.
+            *   Remove fixed page sizes ().
+            *   Significantly reduce margins, padding, and font sizes within the receipt components to create a compact layout suitable for thermal printers.
+    -   **Why fix this issue and what will be achieved with the fix?**: This is crucial for the business's daily operations, enabling them to print accurate and correctly formatted receipts for customers and partner kiosks from any device.
     -   **Status**: IN PROGRESS
     -   **Is recurring issue?**: N
-    -   **Should Test frontend/backend/both after fix?**: Both
+    -   **Should Test frontend/backend/both after fix?**: Frontend
     -   **Blocked on other issue**: None
 
 **In progress Task List**:
--   **Task 1: Complete Partial Payment Feature (P0)**
-    -   **Where to resume**: . Add the Bayar di Muka input field to the new product form dialog.
-    -   **What will be achieved with this?**: A complete and realistic purchasing workflow that accurately reflects the store's credit-based transactions with suppliers.
+-   **Task 1: Implement Fixes for Thermal Printer and Receipts (P0)**
+    -   **Where to resume**: Start by editing  to fix the Bluetooth connectivity logic.
+    -   **What will be achieved with this?**: A reliable printing function that works across devices and produces compact, correctly formatted receipts.
     -   **Status**: IN PROGRESS
-    -   **Should Test frontend/backend/both after fix?**: Both
+    -   **Should Test frontend/backend/both after fix?**: Frontend
     -   **Blocked on something**: None
 
 **Upcoming and Future Tasks**
 -   **Future Tasks:**
     -   (P1) Develop a dedicated supplier debt management page to view all outstanding balances and record payments.
-    -   (P2) Refine the Analytics page with more detailed charts and reports.
 
 **Completed work in this session**
--   **Multi-Warehouse Inventory System (DONE)**: Fully implemented and integrated stock management across multiple warehouses directly into the Products page, including stock transfers and warehouse-specific filtering. The separate  page was removed for a more streamlined user experience.
--   **Canvasser Workflow (DONE)**: The entire canvasser portal was implemented and tested, including login, a dashboard with order lists, search, filtering, and real-time notifications.
--   **Advanced B2B Features (DONE)**: Created initial pages for Analytics and Purchases.
--   **Stock Synchronization Bug (DONE)**: Fixed a critical bug that caused discrepancies in stock counts between different views.
--   **Automated Purchasing Workflow (DONE)**: Implemented logic to automatically create a purchase record when a new product is added. The current task is a refinement of this feature.
+-   **Partial Payment on New Product (DONE)**: Implemented Bayar di Muka feature, allowing partial payments when adding new products, automatically tracking the remaining amount as debt.
+-   **Dynamic Summary on Purchases Page (DONE)**: Summary cards on the Purchases page now update dynamically based on the selected supplier filter.
+-   **Flexible Partner Kiosk Ordering (DONE)**: Implemented features for partner kiosks to order products using warehouse-specific units (dus/satuan) and for admins to manually edit the sale price per item in an order.
+-   **Partner Kiosk Order Deletion (DONE)**: Added functionality to delete partner orders, which also correctly adjusts the partner's outstanding debt.
+-   **Product Return Feature (DONE)**: Implemented a workflow to mark partner orders as Returned and adjust stock levels accordingly.
+-   **Receipt Generation for Kiosks (DONE)**: Created a printable receipt page for partner kiosk orders that includes previous outstanding balances.
+-   **Detailed Sales Reports (DONE)**: Revamped the Reports page with detailed, tabulated reports for POS and Kiosk sales, including margin calculations.
+-   **Best-Selling Products Report (DONE)**: Added a Produk Terlaris tab to the reports page, showing ranked products by sales volume and revenue.
+-   **Database Reset Functionality (DONE)**: Created a feature to clear all transactional data (products, orders, etc.) while preserving essential configurations (users, warehouses, store settings) for testing.
+-   **Full Application Responsiveness (DONE)**: Refactored the entire application, including the main layout, all dashboards, pages, and cards, to be fully responsive and provide a consistent user experience on mobile, tablet, and desktop devices.
 
 **Earlier issues found/mentioned but not fixed**
 -   None.
@@ -72,58 +86,65 @@ A full-stack application that has evolved from a simple POS into a complex inven
 **Key Technical Concepts**
 -   **Backend**: FastAPI, Pydantic, JWT, Motor (async MongoDB driver).
 -   **Frontend**: React, React Router, Tailwind CSS, Shadcn/UI, , , .
--   **Architecture**: The backend is a large monolith (). The frontend is component-based. The application supports multiple user roles (, ).
+-   **Architecture**: The backend is a large monolith (). The frontend is a responsive, component-based SPA supporting multiple user roles (, , ).
+-   **Hardware Integration**: Web Bluetooth API for thermal printer communication.
 
 **key DB schema**
--   **purchases**: Now includes  (Float) and  (Float) fields to track partial payments.
--   **warehouses**: {, }
--   **warehouse_stocks**: {, , , }
--   **stock_transfers**: Tracks movement of stock between warehouses.
+-   **partner_orders**: Contains  array, , , and a boolean .
+-   **transactions**: Contains  array for POS sales.
+-   **products**: Contains  (satuan),  (dus), , and .
+-   **purchases**: Contains  and  to track supplier liabilities.
+-   **warehouses**: {, } (e.g., 'Gudang Utama', 'dus').
+-   **warehouse_stocks**: {, , , }.
 
 **changes in tech stack**
 -   None.
 
 **All files of reference**
--   : The core of all business logic. The  endpoint was recently modified.
--   : The file that needs to be edited next to add the new form field for partial payments.
--   : The page to verify that the automated purchase with debt is created correctly.
--   : Main application router.
--   : Main sidebar navigation.
+-   : **Needs editing** for Bluetooth logic.
+-   : **Needs editing** for print CSS.
+-   : **Needs editing** for print CSS.
+-   : Contains all backend logic. The endpoints for returns and order deletion were recently added.
+-   : Contains the UI for creating and managing partner orders, including the Retur and Hapus buttons.
+-   : Contains the main responsive navigation structure.
 
 **Areas that need refactoring**:
--   The  file is now extremely large and complex. It is a high-priority candidate for refactoring. The logic should be split into separate files by feature (e.g., , , ) to improve maintainability.
+-   The  file is extremely large. It is a high-priority candidate for being split into a modern project structure with separate files for routers, models, and services to improve maintainability.
 
 **key api endpoints**
--   ****: This endpoint's logic was updated to accept  and automatically create a  record with a potential debt. It is the focus of the current task.
--   ****: Transfers stock between warehouses.
--   ****: Fetches aggregated stock data for the Products page.
--   ****: Creates a new purchase record and updates stock in the specified warehouse.
+-   ****: Deletes a partner order and adjusts partner debt.
+-   ****: Marks a partner order as returned and restocks the items.
+-   ****: Fetches detailed sales data for reports.
+-   ****: Fetches detailed partner kiosk sales data.
+-   ****: Fetches ranked best-selling products.
 
 **Critical Info for New Agent**
--   Your immediate task is to finish the partial payment feature. This involves a small frontend modification in  to add one input field, and then a thorough end-to-end test of the product creation and purchase verification flow.
--   The backend logic in  is already prepared to handle the partial payment.
--   Be aware that the  file is a monolith. While a refactor is needed, complete the current user request first.
+-   Your immediate and only task is to fix the thermal printer issues.
+-   The previous agent has already diagnosed the problems and laid out a clear plan.
+-   You need to edit three frontend files:  (for Bluetooth logic) and both  files (for print CSS).
+-   The Bluetooth logic fix is theoretical; you cannot test it directly. Implement the changes and inform the user that they will need to verify on their hardware.
+-   The CSS changes for the receipts can be verified using the screenshot tool to check the new compact layout.
 
 **documents and test reports created in this job**
 -    (updated)
--    (last full test report, all passed)
+-   Multiple test reports, with the latest being .
 
 **Last 10 User Messages and any pending HUMAN messages**
-1.  **User**: Fixes warehouse display sync issue. (Status: Completed)
-2.  **User**: Asks to merge the  page into the  page. (Status: Completed)
-3.  **User**: Reports bug where purchase records incorrect stock amount. (Status: Completed)
-4.  **User**: Suggests auto-creating a purchase when a new product is added. (Status: Completed)
-5.  **User**: Refines auto-purchase feature: don't mark as 'Paid' by default; add an option for partial payment and track the rest as debt. (Status: **IN PROGRESS - Current Task**)
+1.  **User**: Asks to make the entire web application responsive for mobile and tablet. (Status: Completed)
+2.  **User**: Deploys a health check agent. (Status: Completed)
+3.  **User**: Reports that summary card font sizes are too large on mobile, and action buttons are not sized consistently. (Status: Completed)
+4.  **User**: Reports that numbers on cards are still cut off on mobile. (Status: Completed)
+5.  **User**: **Reports that the thermal printer cannot connect via Bluetooth on any device, and the receipt format is incorrect on mobile/tablet. Asks for a fix.** (Status: **IN PROGRESS - Current Task**)
 
 **Project Health Check:**
--   **Broken**: The Add Product feature is currently broken because the frontend form is missing the required Initial Payment field that the backend now expects.
+-   **Broken**: The thermal printer integration is currently not functional due to Bluetooth connection issues and incorrect receipt formatting.
 -   **Mocked**: None.
 
 **3rd Party Integrations**
--   None active.
+-   None.
 
 **Testing status**
--   **Testing agent used after significant changes**: YES, successfully validated the multi-warehouse implementation.
+-   **Testing agent used after significant changes**: YES, used frequently and successfully for all major features, including responsiveness.
 -   **Troubleshoot agent used after agent stuck in loop**: NO
 -   **Test files created**: []
 -   **Known regressions**: None.
@@ -132,6 +153,9 @@ A full-stack application that has evolved from a simple POS into a complex inven
 -   **Admin**:
     -   Email: 
     -   Password: 
+-   **Canvasser**:
+    -   Email: 
+    -   Password: 
 
 **What agent forgot to execute**
--   The agent started the implementation of the partial payment on new product feature by updating the backend but did not complete the corresponding required change on the frontend. The task is left half-finished.</analysis>
+-   The agent was in the middle of addressing the user's request to fix the printer and did not forget anything. The task was interrupted mid-stream.</analysis>

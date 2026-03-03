@@ -94,26 +94,21 @@ export const ReceiptPreview = () => {
       </div>
 
       {/* Receipt Content */}
-      <div className="max-w-4xl mx-auto p-6 print:p-0 print:max-w-none">
+      <div className="max-w-md mx-auto p-4 sm:p-6 print:p-0 print:max-w-none">
         <div 
           id="receipt-content" 
-          className="bg-white rounded-xl shadow-lg p-8 print:shadow-none print:rounded-none print:p-2 print:text-xs"
+          className="bg-white rounded-xl shadow-lg p-5 sm:p-6 print:shadow-none print:rounded-none print:p-2 print:text-xs"
           data-testid="receipt-content"
         >
           {/* Receipt Header */}
-          <div className="text-center mb-6 print:mb-3 border-b-2 border-dashed border-gray-300 pb-4 print:pb-2">
-            <div className="inline-flex items-center gap-3 mb-3 print:hidden">
-              <div className="w-16 h-16 bg-primary rounded-2xl flex items-center justify-center">
-                <span className="text-3xl">🌾</span>
-              </div>
-            </div>
-            <h1 className="text-3xl print:text-base font-bold mb-2 print:mb-1">
+          <div className="text-center mb-4 print:mb-2 border-b-2 border-dashed border-gray-300 pb-3 print:pb-1">
+            <h1 className="text-xl sm:text-2xl print:text-base font-bold mb-1 print:mb-0">
               {storeSettings?.store_name || 'UD. AQIN TANI'}
             </h1>
-            <p className="text-gray-600 print:text-[10px] print:leading-tight">
+            <p className="text-gray-600 text-xs sm:text-sm print:text-[10px] print:leading-tight">
               {storeSettings?.address || 'Toko Obat & Alat Pertanian'}
             </p>
-            <p className="text-sm print:text-[9px] text-gray-500 mt-2 print:mt-1 print:leading-tight">
+            <p className="text-xs print:text-[9px] text-gray-500 mt-1 print:mt-0 print:leading-tight">
               Telp: {storeSettings?.phone || '(021) 1234-5678'}
               {storeSettings?.email && (
                 <><br className="print:hidden" />
@@ -218,7 +213,7 @@ export const ReceiptPreview = () => {
           </div>
 
           {/* Payment Details - Compact */}
-          <div className="bg-gray-50 print:bg-transparent rounded-lg print:rounded-none p-4 print:p-0 mb-4 print:mb-2">
+          <div className="bg-gray-50 print:bg-transparent rounded-lg print:rounded-none p-3 print:p-0 mb-3 print:mb-1">
             <div className="space-y-2 print:space-y-0 print:text-[9px] print:leading-tight">
               <div className="flex justify-between text-sm print:text-[9px]">
                 <span className="text-gray-600">Bayar ({transaction.payment_method}):</span>
@@ -242,88 +237,50 @@ export const ReceiptPreview = () => {
         </div>
 
         {/* Info Box - Hidden when printing */}
-        <div className="print:hidden mt-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
+        <div className="print:hidden mt-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
           <p className="text-sm text-blue-800">
-            💡 <strong>Tips:</strong> Pastikan printer sudah terhubung dan aktif. Anda bisa memilih printer mana yang akan digunakan di dialog print.
+            <strong>Tips:</strong> Pastikan printer sudah terhubung dan aktif. Anda bisa memilih printer mana yang akan digunakan di dialog print.
           </p>
         </div>
       </div>
 
-      {/* Print Styles */}
+      {/* Print Styles - optimized for thermal printers (58mm/80mm) */}
       <style>{`
         @media print {
-          body {
-            margin: 0;
-            padding: 0;
+          html, body {
+            margin: 0 !important;
+            padding: 0 !important;
+            width: 100% !important;
           }
-          
-          /* Default A4 Print */
           @page {
-            margin: 10mm;
-            size: A4 portrait;
-          }
-          
-          /* Thermal Printer 48mm */
-          @page thermal {
             margin: 2mm 1mm;
-            size: 48mm 210mm;
+            size: auto;
           }
-          
-          @media (max-width: 50mm) {
-            @page {
-              margin: 2mm 1mm;
-              size: 48mm auto;
-            }
-            
-            #receipt-content {
-              width: 44mm !important;
-              max-width: 44mm !important;
-              font-size: 7px !important;
-              line-height: 1.2 !important;
-            }
-          }
-          
-          /* Thermal Printer 58mm - Alternative */
-          @page thermal58 {
-            margin: 2mm 1mm;
-            size: 58mm 210mm;
-          }
-          
           #receipt-content {
+            width: 100% !important;
+            max-width: 76mm !important;
+            margin: 0 auto !important;
+            padding: 2mm !important;
+            font-size: 9px !important;
+            line-height: 1.3 !important;
             page-break-inside: avoid;
+            box-shadow: none !important;
+            border-radius: 0 !important;
           }
-          
           .no-print, 
           button,
           .print\\:hidden {
             display: none !important;
           }
-          
-          /* Compact spacing for thermal */
           h1 {
             margin: 0 !important;
             padding: 0 !important;
             line-height: 1.1 !important;
           }
-          
-          p, div {
-            margin: 0 !important;
-          }
-          
-          /* Remove colors for better thermal print */
+          .bg-gray-50 { background: transparent !important; }
           * {
             -webkit-print-color-adjust: exact !important;
             print-color-adjust: exact !important;
-          }
-        }
-        
-        /* Browser print preview optimization */
-        @media screen {
-          @media (prefers-color-scheme: dark) {
-            #receipt-content {
-              background: white !important;
-              color: black !important;
-            }
           }
         }
       `}</style>

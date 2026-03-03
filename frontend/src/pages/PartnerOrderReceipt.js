@@ -64,19 +64,19 @@ export const PartnerOrderReceipt = () => {
       </div>
 
       {/* Receipt */}
-      <div className="max-w-4xl mx-auto p-6 print:p-0 print:max-w-none">
-        <div id="receipt-content" className="bg-white rounded-xl shadow-lg p-8 print:shadow-none print:rounded-none print:p-2 print:text-xs" data-testid="receipt-content">
+      <div className="max-w-md mx-auto p-4 sm:p-6 print:p-0 print:max-w-none">
+        <div id="receipt-content" className="bg-white rounded-xl shadow-lg p-5 sm:p-6 print:shadow-none print:rounded-none print:p-2 print:text-xs" data-testid="receipt-content">
 
           {/* Header */}
-          <div className="text-center mb-6 print:mb-3 border-b-2 border-dashed border-gray-300 pb-4 print:pb-2">
-            <h1 className="text-3xl print:text-base font-bold mb-1">{storeSettings?.store_name || 'UD. AQIN TANI'}</h1>
-            <p className="text-gray-600 print:text-[10px]">{storeSettings?.address || 'Toko Obat & Alat Pertanian'}</p>
-            <p className="text-sm print:text-[9px] text-gray-500 mt-1">Telp: {storeSettings?.phone || '-'}</p>
+          <div className="text-center mb-4 print:mb-2 border-b-2 border-dashed border-gray-300 pb-3 print:pb-1">
+            <h1 className="text-xl sm:text-2xl print:text-base font-bold mb-1">{storeSettings?.store_name || 'UD. AQIN TANI'}</h1>
+            <p className="text-gray-600 text-xs sm:text-sm print:text-[10px]">{storeSettings?.address || 'Toko Obat & Alat Pertanian'}</p>
+            <p className="text-xs print:text-[9px] text-gray-500 mt-1">Telp: {storeSettings?.phone || '-'}</p>
           </div>
 
           {/* Order & Partner Info */}
-          <div className="mb-4 print:mb-2 text-sm print:text-[9px] space-y-1 print:space-y-0 print:leading-tight">
-            <p className="font-bold text-base print:text-[10px] mb-2 print:mb-1">STRUK PESANAN KIOS MITRA</p>
+          <div className="mb-3 print:mb-1 text-sm print:text-[9px] space-y-1 print:space-y-0 print:leading-tight">
+            <p className="font-bold text-sm print:text-[10px] mb-1 print:mb-0">STRUK PESANAN KIOS MITRA</p>
             <div className="flex justify-between"><span className="text-gray-600">No:</span><span className="font-mono font-semibold">{order.order_number}</span></div>
             <div className="flex justify-between"><span className="text-gray-600">Tgl:</span><span className="font-semibold">{new Date(order.created_at).toLocaleString('id-ID', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })}</span></div>
             <div className="flex justify-between"><span className="text-gray-600">Kios:</span><span className="font-semibold">{order.partner_store_name}</span></div>
@@ -158,9 +158,9 @@ export const PartnerOrderReceipt = () => {
           {/* Outstanding Balance Section */}
           {(previousDebt > 0 || order.remaining > 0) && (
             <>
-              <div className="border-t-2 border-dashed border-gray-400 mb-3 print:mb-2"></div>
-              <div className="mb-4 print:mb-2 p-4 print:p-1 bg-orange-50 print:bg-transparent rounded-lg print:rounded-none space-y-2 print:space-y-0 text-sm print:text-[9px] print:leading-tight">
-                <p className="font-bold text-orange-800 print:text-black mb-2 print:mb-1">REKAP BON / HUTANG</p>
+              <div className="border-t-2 border-dashed border-gray-400 mb-2 print:mb-1"></div>
+              <div className="mb-3 print:mb-1 p-3 print:p-0 bg-orange-50 print:bg-transparent rounded-lg print:rounded-none space-y-1 print:space-y-0 text-sm print:text-[9px] print:leading-tight">
+                <p className="font-bold text-orange-800 print:text-black mb-1 print:mb-0">REKAP BON / HUTANG</p>
                 {previousDebt > 0 && (
                   <div className="flex justify-between">
                     <span className="text-gray-700">Sisa Bon Sebelumnya:</span>
@@ -180,16 +180,16 @@ export const PartnerOrderReceipt = () => {
           )}
 
           {/* Grand Total with Debt */}
-          <div className="border-t-2 border-dashed border-gray-400 mb-3 print:mb-2"></div>
-          <div className="mb-4 print:mb-2 text-sm print:text-[9px] print:leading-tight">
-            <div className="flex justify-between text-xl print:text-[11px] font-bold">
+          <div className="border-t-2 border-dashed border-gray-400 mb-2 print:mb-1"></div>
+          <div className="mb-3 print:mb-1 text-sm print:text-[9px] print:leading-tight">
+            <div className="flex justify-between text-lg print:text-[11px] font-bold">
               <span>GRAND TOTAL:</span>
               <span className="text-primary">{fmt(grandTotal)}</span>
             </div>
             <p className="text-xs print:text-[8px] text-gray-500 mt-1">(Pesanan ini + Sisa bon sebelumnya)</p>
           </div>
 
-          <div className="border-t border-dashed border-gray-300 mb-3 print:mb-2"></div>
+          <div className="border-t border-dashed border-gray-300 mb-2 print:mb-1"></div>
 
           {/* Footer */}
           <div className="text-center text-sm print:text-[8px] print:leading-tight">
@@ -199,14 +199,33 @@ export const PartnerOrderReceipt = () => {
         </div>
       </div>
 
-      {/* Print styles */}
+      {/* Print styles - optimized for thermal printers (58mm/80mm) */}
       <style>{`
         @media print {
-          body { margin: 0; padding: 0; }
-          @page { margin: 10mm; size: A4 portrait; }
-          #receipt-content { page-break-inside: avoid; }
+          html, body {
+            margin: 0 !important;
+            padding: 0 !important;
+            width: 100% !important;
+          }
+          @page {
+            margin: 2mm 1mm;
+            size: auto;
+          }
+          #receipt-content {
+            width: 100% !important;
+            max-width: 76mm !important;
+            margin: 0 auto !important;
+            padding: 2mm !important;
+            font-size: 9px !important;
+            line-height: 1.3 !important;
+            page-break-inside: avoid;
+            box-shadow: none !important;
+            border-radius: 0 !important;
+          }
           .print\\:hidden { display: none !important; }
           * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+          h1 { margin: 0 !important; padding: 0 !important; }
+          .bg-orange-50 { background: transparent !important; }
         }
       `}</style>
     </div>
