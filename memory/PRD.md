@@ -70,9 +70,10 @@ Build a responsive web application for a pharmacy and agriculture store named "U
 
 ### Thermal Printer & Receipt Optimization (DONE - Mar 2026)
 - **Bluetooth Connectivity Fix**: Added 10 BLE printer profiles (including common Chinese thermal printers like Xprinter, ZJ, Gprinter), GATT retry logic (3 attempts), 300ms stabilization delay, larger data chunk sizes (200/100 bytes) with automatic fallback to smaller chunks on failure
-- **Receipt Print CSS**: Changed from A4 page size to auto with max-width 76mm for thermal printers (58mm/80mm compatible)
-- **Compact Receipt Layout**: Both POS (ReceiptPreview.js) and Partner Order (PartnerOrderReceipt.js) receipts now use narrow max-w-md container, reduced padding/margins, and thermal-optimized print styles
-- **Broader Device Support**: acceptAllDevices as primary BLE filter with extended namePrefix fallback list covering major thermal printer brands
+- **Receipt Print CSS**: Changed from A4 page size to explicit `80mm x 200mm` for thermal printers
+- **Font Size Fix**: Increased all print font sizes from 7-9px to 10-16px with proper hierarchy (store name 16px, regular text 11px, totals 13px, notes 10px). Added `-webkit-text-size-adjust: 100%` to prevent tablet browsers from shrinking fonts
+- **Consistent Output Across Devices**: All print CSS uses fixed pixel sizes and explicit page dimensions, eliminating browser-dependent rendering differences between PC and tablet. Colors forced to black for thermal readability
+- **Compact Receipt Layout**: Both POS (ReceiptPreview.js) and Partner Order (PartnerOrderReceipt.js) receipts use semantic CSS classes (`.receipt-store-name`, `.thermal-items`, `.no-print`) instead of Tailwind print: utilities for reliable cross-device printing
 
 ## Prioritized Backlog
 

@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from '../context/AuthContext';
 import { Button } from '../components/ui/button';
-import { Printer, ArrowLeft, Download } from 'lucide-react';
+import { Printer, ArrowLeft } from 'lucide-react';
 import { toast } from 'sonner';
 
 export const ReceiptPreview = () => {
@@ -38,14 +38,6 @@ export const ReceiptPreview = () => {
     }
   };
 
-  const handlePrint = () => {
-    window.print();
-  };
-
-  const handleBack = () => {
-    navigate('/pos');
-  };
-
   const formatCurrency = (value) => {
     return new Intl.NumberFormat('id-ID', {
       style: 'currency',
@@ -69,11 +61,11 @@ export const ReceiptPreview = () => {
   return (
     <div className="min-h-screen bg-gradient-mesh">
       {/* Action Buttons - Hidden when printing */}
-      <div className="print:hidden bg-white border-b shadow-sm sticky top-0 z-10">
+      <div className="no-print bg-white border-b shadow-sm sticky top-0 z-10">
         <div className="max-w-4xl mx-auto px-6 py-4 flex items-center justify-between">
           <Button
             variant="outline"
-            onClick={handleBack}
+            onClick={() => navigate('/pos')}
             data-testid="back-to-pos-button"
           >
             <ArrowLeft className="w-4 h-4 mr-2" />
@@ -82,7 +74,7 @@ export const ReceiptPreview = () => {
           <div className="flex gap-3">
             <Button
               variant="default"
-              onClick={handlePrint}
+              onClick={() => window.print()}
               className="shadow-lg"
               data-testid="print-receipt-button"
             >
@@ -94,62 +86,61 @@ export const ReceiptPreview = () => {
       </div>
 
       {/* Receipt Content */}
-      <div className="max-w-md mx-auto p-4 sm:p-6 print:p-0 print:max-w-none">
-        <div 
-          id="receipt-content" 
-          className="bg-white rounded-xl shadow-lg p-5 sm:p-6 print:shadow-none print:rounded-none print:p-2 print:text-xs"
+      <div className="receipt-wrapper max-w-md mx-auto p-4 sm:p-6">
+        <div
+          id="receipt-content"
+          className="bg-white rounded-xl shadow-lg p-5 sm:p-6"
           data-testid="receipt-content"
         >
           {/* Receipt Header */}
-          <div className="text-center mb-4 print:mb-2 border-b-2 border-dashed border-gray-300 pb-3 print:pb-1">
-            <h1 className="text-xl sm:text-2xl print:text-base font-bold mb-1 print:mb-0">
+          <div className="text-center mb-4 border-b-2 border-dashed border-gray-300 pb-3">
+            <h1 className="text-xl sm:text-2xl font-bold mb-1 receipt-store-name">
               {storeSettings?.store_name || 'UD. AQIN TANI'}
             </h1>
-            <p className="text-gray-600 text-xs sm:text-sm print:text-[10px] print:leading-tight">
+            <p className="text-gray-600 text-xs sm:text-sm receipt-address">
               {storeSettings?.address || 'Toko Obat & Alat Pertanian'}
             </p>
-            <p className="text-xs print:text-[9px] text-gray-500 mt-1 print:mt-0 print:leading-tight">
+            <p className="text-xs text-gray-500 mt-1 receipt-phone">
               Telp: {storeSettings?.phone || '(021) 1234-5678'}
               {storeSettings?.email && (
-                <><br className="print:hidden" />
-                <span className="hidden print:inline"> | </span>
+                <><br className="screen-only" />
+                <span className="thermal-only"> | </span>
                 Email: {storeSettings.email}</>
               )}
             </p>
           </div>
 
-          {/* Transaction Info - Compact for thermal */}
-          <div className="mb-4 print:mb-2 text-sm print:text-[9px] print:leading-tight">
-            <div className="space-y-1 print:space-y-0">
-              <div className="flex justify-between print:block">
-                <span className="text-gray-600 print:inline">No:</span>
-                <p className="font-mono font-semibold print:inline print:ml-1">{transaction.transaction_number}</p>
+          {/* Transaction Info */}
+          <div className="mb-4 text-sm receipt-info">
+            <div className="space-y-1">
+              <div className="flex justify-between">
+                <span className="text-gray-600">No:</span>
+                <span className="font-mono font-semibold">{transaction.transaction_number}</span>
               </div>
-              <div className="flex justify-between print:block">
-                <span className="text-gray-600 print:inline">Tgl:</span>
-                <p className="font-semibold print:inline print:ml-1">
+              <div className="flex justify-between">
+                <span className="text-gray-600">Tgl:</span>
+                <span className="font-semibold">
                   {new Date(transaction.created_at).toLocaleString('id-ID', {
                     day: '2-digit',
-                    month: '2-digit', 
+                    month: '2-digit',
                     year: '2-digit',
                     hour: '2-digit',
                     minute: '2-digit'
                   })}
-                </p>
+                </span>
               </div>
-              <div className="flex justify-between print:block">
-                <span className="text-gray-600 print:inline">Kasir:</span>
-                <p className="font-semibold print:inline print:ml-1">{transaction.cashier_name}</p>
+              <div className="flex justify-between">
+                <span className="text-gray-600">Kasir:</span>
+                <span className="font-semibold">{transaction.cashier_name}</span>
               </div>
             </div>
           </div>
 
-          <div className="border-t border-dashed border-gray-300 print:border-gray-400 mb-3 print:mb-2"></div>
+          <div className="border-t border-dashed border-gray-300 mb-3"></div>
 
-          {/* Items - Compact layout for thermal */}
-          <div className="mb-4 print:mb-2">
-            {/* Desktop/A4 Table */}
-            <table className="w-full text-sm print:hidden">
+          {/* Items - Screen table */}
+          <div className="mb-4">
+            <table className="w-full text-sm screen-table">
               <thead>
                 <tr className="border-b-2 border-gray-300">
                   <th className="text-left py-2">Produk</th>
@@ -170,10 +161,10 @@ export const ReceiptPreview = () => {
               </tbody>
             </table>
 
-            {/* Thermal Compact List */}
-            <div className="hidden print:block text-[9px] space-y-1">
+            {/* Items - Thermal print layout */}
+            <div className="thermal-items">
               {transaction.items.map((item, index) => (
-                <div key={index} className="leading-tight">
+                <div key={index} className="receipt-item">
                   <div className="font-semibold">{item.product_name}</div>
                   <div className="flex justify-between">
                     <span>{item.quantity} x {formatCurrency(item.price).replace('Rp ', '')}</span>
@@ -184,11 +175,11 @@ export const ReceiptPreview = () => {
             </div>
           </div>
 
-          <div className="border-t border-dashed border-gray-300 print:border-gray-400 mb-3 print:mb-2"></div>
+          <div className="border-t border-dashed border-gray-300 mb-3"></div>
 
-          {/* Totals - Compact for thermal */}
-          <div className="mb-4 print:mb-2">
-            <div className="space-y-2 print:space-y-0 text-sm print:text-[9px] print:leading-tight">
+          {/* Totals */}
+          <div className="mb-4 receipt-totals">
+            <div className="space-y-2 text-sm">
               <div className="flex justify-between">
                 <span className="text-gray-600">Subtotal:</span>
                 <span className="font-semibold">{formatCurrency(transaction.subtotal)}</span>
@@ -205,83 +196,132 @@ export const ReceiptPreview = () => {
                   <span className="font-semibold">{formatCurrency(transaction.tax)}</span>
                 </div>
               )}
-              <div className="flex justify-between text-xl print:text-[10px] font-bold border-t-2 print:border-t border-gray-300 print:border-gray-400 pt-2 print:pt-1 mt-2 print:mt-1">
+              <div className="flex justify-between text-xl font-bold border-t-2 border-gray-300 pt-2 mt-2 receipt-total-line">
                 <span>TOTAL:</span>
                 <span className="text-primary">{formatCurrency(transaction.total)}</span>
               </div>
             </div>
           </div>
 
-          {/* Payment Details - Compact */}
-          <div className="bg-gray-50 print:bg-transparent rounded-lg print:rounded-none p-3 print:p-0 mb-3 print:mb-1">
-            <div className="space-y-2 print:space-y-0 print:text-[9px] print:leading-tight">
-              <div className="flex justify-between text-sm print:text-[9px]">
+          {/* Payment Details */}
+          <div className="bg-gray-50 rounded-lg p-3 mb-3 receipt-payment">
+            <div className="space-y-2">
+              <div className="flex justify-between text-sm">
                 <span className="text-gray-600">Bayar ({transaction.payment_method}):</span>
                 <span className="font-semibold">{formatCurrency(transaction.payment_amount)}</span>
               </div>
-              <div className="flex justify-between text-lg print:text-[10px] font-bold text-green-600">
+              <div className="flex justify-between text-lg font-bold text-green-600 receipt-total-line">
                 <span>Kembali:</span>
                 <span>{formatCurrency(transaction.change)}</span>
               </div>
             </div>
           </div>
 
-          <div className="border-t border-dashed border-gray-300 print:border-gray-400 mb-3 print:mb-2"></div>
+          <div className="border-t border-dashed border-gray-300 mb-3"></div>
 
-          {/* Footer - Compact for thermal */}
-          <div className="text-center text-sm print:text-[8px] print:leading-tight">
-            <p className="font-semibold mb-2 print:mb-1">Terima kasih!</p>
-            <p className="text-gray-600 text-xs print:text-[7px] print:leading-tight mb-1">Barang yang sudah dibeli<br className="hidden print:inline" /> tidak dapat ditukar</p>
-            <p className="text-gray-500 text-xs print:text-[7px] print:leading-tight print:hidden">Simpan struk sebagai bukti pembelian</p>
+          {/* Footer */}
+          <div className="text-center text-sm receipt-footer">
+            <p className="font-semibold mb-2">Terima kasih!</p>
+            <p className="text-gray-600 text-xs mb-1 receipt-note">Barang yang sudah dibeli tidak dapat ditukar</p>
+            <p className="text-gray-500 text-xs screen-only receipt-note">Simpan struk sebagai bukti pembelian</p>
           </div>
         </div>
 
         {/* Info Box - Hidden when printing */}
-        <div className="print:hidden mt-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
+        <div className="no-print mt-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
           <p className="text-sm text-blue-800">
             <strong>Tips:</strong> Pastikan printer sudah terhubung dan aktif. Anda bisa memilih printer mana yang akan digunakan di dialog print.
           </p>
         </div>
       </div>
 
-      {/* Print Styles - optimized for thermal printers (58mm/80mm) */}
+      {/* Print styles - thermal printer optimized */}
       <style>{`
+        /* Hide thermal-only elements on screen */
+        .thermal-items { display: none; }
+        .thermal-only { display: none; }
+
         @media print {
+          /* Force consistent rendering across ALL devices (PC, tablet, mobile) */
           html, body {
             margin: 0 !important;
             padding: 0 !important;
-            width: 100% !important;
+            width: 80mm !important;
+            -webkit-text-size-adjust: 100% !important;
+            text-size-adjust: 100% !important;
           }
+
           @page {
-            margin: 2mm 1mm;
-            size: auto;
+            size: 80mm 200mm;
+            margin: 0mm;
           }
+
+          /* Hide non-print elements */
+          .no-print, .screen-only { display: none !important; }
+          .thermal-only { display: inline !important; }
+          .bg-gray-100, .bg-gradient-mesh, .min-h-screen { background: none !important; min-height: 0 !important; }
+
+          .receipt-wrapper {
+            max-width: none !important;
+            padding: 0 !important;
+            margin: 0 !important;
+          }
+
           #receipt-content {
-            width: 100% !important;
+            width: 76mm !important;
             max-width: 76mm !important;
-            margin: 0 auto !important;
-            padding: 2mm !important;
-            font-size: 9px !important;
-            line-height: 1.3 !important;
-            page-break-inside: avoid;
+            margin: 0 2mm !important;
+            padding: 2mm 1mm !important;
             box-shadow: none !important;
             border-radius: 0 !important;
+            font-size: 12px !important;
+            line-height: 1.35 !important;
           }
-          .no-print, 
-          button,
-          .print\\:hidden {
-            display: none !important;
-          }
-          h1 {
-            margin: 0 !important;
+
+          /* Typography hierarchy for thermal */
+          .receipt-store-name { font-size: 16px !important; line-height: 1.2 !important; margin-bottom: 2px !important; }
+          .receipt-address { font-size: 11px !important; }
+          .receipt-phone { font-size: 10px !important; }
+          .receipt-info { font-size: 11px !important; line-height: 1.4 !important; }
+          .receipt-info > div > * { margin-bottom: 0 !important; }
+
+          /* Items */
+          .screen-table { display: none !important; }
+          .thermal-items { display: block !important; font-size: 11px !important; }
+          .receipt-item { margin-bottom: 3px !important; line-height: 1.3 !important; }
+
+          /* Totals */
+          .receipt-totals { font-size: 11px !important; line-height: 1.4 !important; }
+          .receipt-totals > div > * { margin-bottom: 1px !important; }
+          .receipt-total-line { font-size: 13px !important; }
+
+          /* Payment */
+          .receipt-payment {
+            background: transparent !important;
+            border-radius: 0 !important;
             padding: 0 !important;
-            line-height: 1.1 !important;
+            font-size: 11px !important;
           }
+
+          /* Footer & notes */
+          .receipt-footer { font-size: 11px !important; }
+          .receipt-note { font-size: 10px !important; }
+
+          /* Spacing overrides for compact thermal output */
+          .mb-4, .mb-3 { margin-bottom: 3px !important; }
+          .mb-2, .mb-1 { margin-bottom: 2px !important; }
+          .pb-3, .pb-2 { padding-bottom: 2px !important; }
+          .pt-2 { padding-top: 2px !important; }
+          .p-3 { padding: 0 !important; }
+          .space-y-2 > :not(:first-child), .space-y-1 > :not(:first-child) { margin-top: 1px !important; }
+
+          /* Borders */
+          .border-dashed { border-style: dashed !important; }
+
+          /* Colors - force black for thermal printers */
+          * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+          .text-primary, .text-green-600, .text-red-600 { color: #000 !important; }
           .bg-gray-50 { background: transparent !important; }
-          * {
-            -webkit-print-color-adjust: exact !important;
-            print-color-adjust: exact !important;
-          }
         }
       `}</style>
     </div>
