@@ -68,6 +68,12 @@ Build a responsive web application for a pharmacy and agriculture store named "U
 - Date range filter and CSV export
 - Footer row with totals per table
 
+### Thermal Printer & Receipt Optimization (DONE - Mar 2026)
+- **Bluetooth Connectivity Fix**: Added 10 BLE printer profiles (including common Chinese thermal printers like Xprinter, ZJ, Gprinter), GATT retry logic (3 attempts), 300ms stabilization delay, larger data chunk sizes (200/100 bytes) with automatic fallback to smaller chunks on failure
+- **Receipt Print CSS**: Changed from A4 page size to auto with max-width 76mm for thermal printers (58mm/80mm compatible)
+- **Compact Receipt Layout**: Both POS (ReceiptPreview.js) and Partner Order (PartnerOrderReceipt.js) receipts now use narrow max-w-md container, reduced padding/margins, and thermal-optimized print styles
+- **Broader Device Support**: acceptAllDevices as primary BLE filter with extended namePrefix fallback list covering major thermal printer brands
+
 ## Prioritized Backlog
 
 ### P1 - Next Up
