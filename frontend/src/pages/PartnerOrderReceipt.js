@@ -41,39 +41,74 @@ export const PartnerOrderReceipt = () => {
   const fmt = (v) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(v);
 
   const handlePrint = useCallback(() => {
-    const receipt = document.getElementById('receipt-content');
-    if (!receipt) return;
+    if (!order) return;
 
-    // Measure actual print height by creating off-screen clone with print dimensions
-    const measureDiv = document.createElement('div');
-    measureDiv.style.cssText = 'position:fixed;left:-10000px;top:0;visibility:hidden;width:54mm;padding:2mm 1mm;font-size:12px;line-height:1.35;font-family:system-ui,-apple-system,sans-serif;';
-    const clone = receipt.cloneNode(true);
-    clone.style.cssText = 'width:100%;padding:2mm 1mm;font-size:12px;line-height:1.35;box-shadow:none;border-radius:0;';
+    const storeName = storeSettings?.store_name || 'UD. AQIN TANI';
+    const storeAddr = storeSettings?.address || 'Toko Obat & Alat Pertanian';
+    const storePhone = storeSettings?.phone || '-';
 
-    // Toggle thermal/screen elements in clone
-    clone.querySelectorAll('.screen-table,.no-print,.screen-only').forEach(el => { el.style.display = 'none'; });
-    clone.querySelectorAll('.thermal-items,.thermal-only').forEach(el => { el.style.display = 'block'; el.style.fontSize = '11px'; });
+    const previousDebt = Math.max(0, (order.partner_debt_total || 0) - (order.remaining || 0));
+    const gTotal = previousDebt + order.total;
 
-    // Compact spacing
-    clone.querySelectorAll('.mb-4,.mb-3').forEach(el => { el.style.marginBottom = '3px'; });
-    clone.querySelectorAll('.mb-2,.mb-1').forEach(el => { el.style.marginBottom = '2px'; });
-    clone.querySelectorAll('.pb-3,.pb-2').forEach(el => { el.style.paddingBottom = '2px'; });
-    clone.querySelectorAll('.space-y-2>:not(:first-child),.space-y-1>:not(:first-child)').forEach(el => { el.style.marginTop = '1px'; });
-    clone.querySelectorAll('.p-3').forEach(el => { el.style.padding = '0'; });
-    clone.querySelectorAll('.text-lg,.text-xl').forEach(el => { el.style.fontSize = '13px'; });
+    const itemsHTML = order.items.map(item => `
+      <div style="margin-bottom:1px"><b>${item.product_name}</b></div>
+      <div style="display:flex;justify-content:space-between"><span>${item.quantity} x ${fmt(item.price).replace('Rp','').trim()}</span><b>${fmt(item.subtotal).replace('Rp','').trim()}</b></div>
+    `).join('');
 
-    measureDiv.appendChild(clone);
-    document.body.appendChild(measureDiv);
-    const heightMm = Math.ceil(measureDiv.scrollHeight * 25.4 / 96) + 3;
-    document.body.removeChild(measureDiv);
+    let debtHTML = '';
+    if (previousDebt > 0 || order.remaining > 0) {
+      debtHTML = `
+        <div style="border-top:2px dashed #000;margin:2px 0"></div>
+        <div><b>REKAP BON / HUTANG</b></div>
+        ${previousDebt > 0 ? `<div style="display:flex;justify-content:space-between"><span>Bon Sebelumnya:</span><b>${fmt(previousDebt).replace('Rp','').trim()}</b></div>` : ''}
+        <div style="display:flex;justify-content:space-between"><span>Bon Pesanan Ini:</span><b>${fmt(order.remaining).replace('Rp','').trim()}</b></div>
+        <div style="border-top:1px dashed #000;margin:2px 0"></div>
+        <div style="display:flex;justify-content:space-between;font-size:12px"><b>TOTAL HUTANG:</b><b>${fmt(order.partner_debt_total || 0).replace('Rp','').trim()}</b></div>
+      `;
+    }
 
-    // Inject dynamic @page size
-    let ds = document.getElementById('receipt-dynamic-page');
-    if (!ds) { ds = document.createElement('style'); ds.id = 'receipt-dynamic-page'; document.head.appendChild(ds); }
-    ds.textContent = `@media print { @page { size: 58mm ${heightMm}mm !important; margin: 0mm !important; } }`;
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{width:48mm;max-width:48mm;padding:1mm;font:10px/1.3 sans-serif;-webkit-text-size-adjust:100%}
+@page{margin:0}
+b{font-weight:700}
+</style></head><body>
+<div style="text-align:center;border-bottom:1px dashed #000;padding-bottom:2px;margin-bottom:2px">
+<div style="font-size:13px;font-weight:bold">${storeName}</div>
+<div style="font-size:8px">${storeAddr}</div>
+<div style="font-size:8px">Telp: ${storePhone}</div>
+</div>
+<div><b>STRUK PESANAN KIOS MITRA</b></div>
+<div style="display:flex;justify-content:space-between"><span>No:</span><b>${order.order_number}</b></div>
+<div style="display:flex;justify-content:space-between"><span>Tgl:</span><b>${new Date(order.created_at).toLocaleString('id-ID', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })}</b></div>
+<div style="display:flex;justify-content:space-between"><span>Kios:</span><b>${order.partner_store_name}</b></div>
+${order.partner_phone ? `<div style="display:flex;justify-content:space-between"><span>Telp:</span><span>${order.partner_phone}</span></div>` : ''}
+${order.canvasser_name ? `<div style="display:flex;justify-content:space-between"><span>Kanvaser:</span><span>${order.canvasser_name}</span></div>` : ''}
+<div style="border-top:1px dashed #000;margin:2px 0"></div>
+${itemsHTML}
+<div style="border-top:1px dashed #000;margin:2px 0"></div>
+<div style="display:flex;justify-content:space-between"><span>Subtotal:</span><b>${fmt(order.subtotal).replace('Rp','').trim()}</b></div>
+${order.discount > 0 ? `<div style="display:flex;justify-content:space-between"><span>Diskon:</span><span>-${fmt(order.discount).replace('Rp','').trim()}</span></div>` : ''}
+<div style="border-top:1px solid #000;margin:2px 0"></div>
+<div style="display:flex;justify-content:space-between;font-size:12px"><b>TOTAL:</b><b>${fmt(order.total).replace('Rp','').trim()}</b></div>
+${order.paid > 0 ? `<div style="display:flex;justify-content:space-between"><span>Dibayar:</span><b>${fmt(order.paid).replace('Rp','').trim()}</b></div>` : ''}
+${order.remaining > 0 ? `<div style="display:flex;justify-content:space-between"><span>Sisa Bon:</span><b>${fmt(order.remaining).replace('Rp','').trim()}</b></div>` : ''}
+${debtHTML}
+<div style="border-top:2px dashed #000;margin:2px 0"></div>
+<div style="display:flex;justify-content:space-between;font-size:13px"><b>GRAND TOTAL:</b><b>${fmt(gTotal).replace('Rp','').trim()}</b></div>
+<div style="font-size:8px;color:#666">(Pesanan ini + Sisa bon)</div>
+<div style="border-top:1px dashed #000;margin:2px 0"></div>
+<div style="text-align:center;font-size:9px"><b>Terima kasih!</b></div>
+<div style="text-align:center;font-size:8px;color:#666">Simpan struk sebagai bukti pesanan</div>
+</body></html>`;
 
-    window.print();
-  }, []);
+    const win = window.open('', '', 'width=400,height=600');
+    if (!win) { toast.error('Popup diblokir. Izinkan popup untuk mencetak.'); return; }
+    win.document.write(html);
+    win.document.close();
+    setTimeout(() => { try { win.focus(); win.print(); win.close(); } catch(e) { console.error(e); } }, 400);
+  }, [order, storeSettings]);
 
   if (loading) {
     return <div className="min-h-screen flex items-center justify-center"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div></div>;
@@ -87,7 +122,7 @@ export const PartnerOrderReceipt = () => {
   return (
     <div className="min-h-screen bg-gray-100">
       {/* Action bar */}
-      <div className="no-print bg-white border-b shadow-sm sticky top-0 z-10">
+      <div className="bg-white border-b shadow-sm sticky top-0 z-10">
         <div className="max-w-4xl mx-auto px-6 py-4 flex items-center justify-between">
           <Button variant="outline" onClick={() => navigate('/admin/partner-orders')} data-testid="back-button">
             <ArrowLeft className="w-4 h-4 mr-2" />Kembali
@@ -98,20 +133,20 @@ export const PartnerOrderReceipt = () => {
         </div>
       </div>
 
-      {/* Receipt */}
-      <div className="receipt-wrapper max-w-md mx-auto p-4 sm:p-6">
+      {/* On-screen Receipt Preview */}
+      <div className="max-w-md mx-auto p-4 sm:p-6">
         <div id="receipt-content" className="bg-white rounded-xl shadow-lg p-5 sm:p-6" data-testid="receipt-content">
 
           {/* Header */}
           <div className="text-center mb-4 border-b-2 border-dashed border-gray-300 pb-3">
-            <h1 className="text-xl sm:text-2xl font-bold mb-1 receipt-store-name">{storeSettings?.store_name || 'UD. AQIN TANI'}</h1>
-            <p className="text-gray-600 text-xs sm:text-sm receipt-address">{storeSettings?.address || 'Toko Obat & Alat Pertanian'}</p>
-            <p className="text-xs text-gray-500 mt-1 receipt-phone">Telp: {storeSettings?.phone || '-'}</p>
+            <h1 className="text-xl sm:text-2xl font-bold mb-1">{storeSettings?.store_name || 'UD. AQIN TANI'}</h1>
+            <p className="text-gray-600 text-xs sm:text-sm">{storeSettings?.address || 'Toko Obat & Alat Pertanian'}</p>
+            <p className="text-xs text-gray-500 mt-1">Telp: {storeSettings?.phone || '-'}</p>
           </div>
 
-          {/* Order & Partner Info */}
-          <div className="mb-3 text-sm space-y-1 receipt-info">
-            <p className="font-bold text-sm mb-1 receipt-section-title">STRUK PESANAN KIOS MITRA</p>
+          {/* Order Info */}
+          <div className="mb-3 text-sm space-y-1">
+            <p className="font-bold text-sm mb-1">STRUK PESANAN KIOS MITRA</p>
             <div className="flex justify-between"><span className="text-gray-600">No:</span><span className="font-mono font-semibold">{order.order_number}</span></div>
             <div className="flex justify-between"><span className="text-gray-600">Tgl:</span><span className="font-semibold">{new Date(order.created_at).toLocaleString('id-ID', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })}</span></div>
             <div className="flex justify-between"><span className="text-gray-600">Kios:</span><span className="font-semibold">{order.partner_store_name}</span></div>
@@ -121,9 +156,9 @@ export const PartnerOrderReceipt = () => {
 
           <div className="border-t border-dashed border-gray-300 mb-3"></div>
 
-          {/* Items Table - Screen */}
+          {/* Items */}
           <div className="mb-4">
-            <table className="w-full text-sm screen-table">
+            <table className="w-full text-sm">
               <thead>
                 <tr className="border-b-2 border-gray-300">
                   <th className="text-left py-2">Produk</th>
@@ -143,36 +178,22 @@ export const PartnerOrderReceipt = () => {
                 ))}
               </tbody>
             </table>
-
-            {/* Items - Thermal */}
-            <div className="thermal-items">
-              {order.items.map((item, i) => (
-                <div key={i} className="receipt-item">
-                  <div className="font-semibold">{item.product_name}</div>
-                  <div className="flex justify-between">
-                    <span>{item.quantity} x {fmt(item.price).replace('Rp ', '')}</span>
-                    <span className="font-semibold">{fmt(item.subtotal).replace('Rp ', '')}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
           </div>
 
           <div className="border-t border-dashed border-gray-300 mb-3"></div>
 
           {/* Totals */}
-          <div className="mb-4 space-y-2 text-sm receipt-totals">
+          <div className="mb-4 space-y-2 text-sm">
             <div className="flex justify-between">
               <span className="text-gray-600">Subtotal:</span>
               <span className="font-semibold">{fmt(order.subtotal)}</span>
             </div>
             {order.discount > 0 && (
               <div className="flex justify-between text-red-600">
-                <span>Diskon:</span>
-                <span>-{fmt(order.discount)}</span>
+                <span>Diskon:</span><span>-{fmt(order.discount)}</span>
               </div>
             )}
-            <div className="flex justify-between text-lg font-bold border-t border-gray-300 pt-2 receipt-total-line">
+            <div className="flex justify-between text-lg font-bold border-t border-gray-300 pt-2">
               <span>TOTAL PESANAN INI:</span>
               <span className="text-primary">{fmt(order.total)}</span>
             </div>
@@ -194,8 +215,8 @@ export const PartnerOrderReceipt = () => {
           {(previousDebt > 0 || order.remaining > 0) && (
             <>
               <div className="border-t-2 border-dashed border-gray-400 mb-2"></div>
-              <div className="mb-3 p-3 bg-orange-50 rounded-lg space-y-1 text-sm receipt-debt-section">
-                <p className="font-bold text-orange-800 mb-1 receipt-section-title">REKAP BON / HUTANG</p>
+              <div className="mb-3 p-3 bg-orange-50 rounded-lg space-y-1 text-sm">
+                <p className="font-bold text-orange-800 mb-1">REKAP BON / HUTANG</p>
                 {previousDebt > 0 && (
                   <div className="flex justify-between">
                     <span className="text-gray-700">Bon Sebelumnya:</span>
@@ -206,7 +227,7 @@ export const PartnerOrderReceipt = () => {
                   <span className="text-gray-700">Bon Pesanan Ini:</span>
                   <span className="font-semibold">{fmt(order.remaining)}</span>
                 </div>
-                <div className="flex justify-between text-lg font-bold border-t border-orange-300 pt-2 mt-1 receipt-total-line">
+                <div className="flex justify-between text-lg font-bold border-t border-orange-300 pt-2 mt-1">
                   <span>TOTAL HUTANG:</span>
                   <span className="text-red-600">{fmt(order.partner_debt_total || 0)}</span>
                 </div>
@@ -217,103 +238,22 @@ export const PartnerOrderReceipt = () => {
           {/* Grand Total */}
           <div className="border-t-2 border-dashed border-gray-400 mb-2"></div>
           <div className="mb-3 text-sm">
-            <div className="flex justify-between text-lg font-bold receipt-grand-total">
+            <div className="flex justify-between text-lg font-bold">
               <span>GRAND TOTAL:</span>
               <span className="text-primary">{fmt(grandTotal)}</span>
             </div>
-            <p className="text-xs text-gray-500 mt-1 receipt-note">(Pesanan ini + Sisa bon sebelumnya)</p>
+            <p className="text-xs text-gray-500 mt-1">(Pesanan ini + Sisa bon sebelumnya)</p>
           </div>
 
           <div className="border-t border-dashed border-gray-300 mb-2"></div>
 
           {/* Footer */}
-          <div className="text-center text-sm receipt-footer">
+          <div className="text-center text-sm">
             <p className="font-semibold mb-2">Terima kasih atas kepercayaan Anda!</p>
-            <p className="text-gray-500 text-xs receipt-note">Harap simpan struk ini sebagai bukti pesanan</p>
+            <p className="text-gray-500 text-xs">Harap simpan struk ini sebagai bukti pesanan</p>
           </div>
         </div>
       </div>
-
-      {/* Print styles for 58mm thermal printer */}
-      <style>{`
-        .thermal-items { display: none; }
-
-        @media print {
-          html, body {
-            margin: 0 !important;
-            padding: 0 !important;
-            width: 58mm !important;
-            height: auto !important;
-            min-height: 0 !important;
-            -webkit-text-size-adjust: 100% !important;
-            text-size-adjust: 100% !important;
-          }
-
-          /* Fallback @page - will be overridden by dynamic JS calculation */
-          @page {
-            size: 58mm 120mm;
-            margin: 0mm;
-          }
-
-          .no-print { display: none !important; }
-          .bg-gray-100, .min-h-screen { background: none !important; min-height: 0 !important; }
-
-          .receipt-wrapper {
-            max-width: none !important;
-            padding: 0 !important;
-            margin: 0 !important;
-          }
-
-          #receipt-content {
-            width: 54mm !important;
-            max-width: 54mm !important;
-            margin: 0 2mm !important;
-            padding: 2mm 1mm !important;
-            box-shadow: none !important;
-            border-radius: 0 !important;
-            font-size: 12px !important;
-            line-height: 1.35 !important;
-          }
-
-          .receipt-store-name { font-size: 14px !important; line-height: 1.2 !important; margin-bottom: 1px !important; }
-          .receipt-address { font-size: 10px !important; }
-          .receipt-phone { font-size: 9px !important; }
-          .receipt-section-title { font-size: 11px !important; font-weight: bold !important; }
-          .receipt-info { font-size: 10px !important; line-height: 1.3 !important; }
-          .receipt-info > * { margin-bottom: 0 !important; }
-
-          .screen-table { display: none !important; }
-          .thermal-items { display: block !important; font-size: 10px !important; }
-          .receipt-item { margin-bottom: 2px !important; line-height: 1.25 !important; }
-
-          .receipt-totals { font-size: 10px !important; line-height: 1.3 !important; }
-          .receipt-totals > * { margin-bottom: 0 !important; }
-          .receipt-total-line { font-size: 12px !important; }
-          .receipt-grand-total { font-size: 13px !important; }
-
-          .receipt-debt-section {
-            background: transparent !important;
-            border-radius: 0 !important;
-            padding: 0 !important;
-            font-size: 10px !important;
-            line-height: 1.3 !important;
-          }
-
-          .receipt-footer { font-size: 10px !important; }
-          .receipt-note { font-size: 9px !important; }
-
-          .mb-4, .mb-3 { margin-bottom: 2px !important; }
-          .mb-2, .mb-1 { margin-bottom: 1px !important; }
-          .pb-3, .pb-2 { padding-bottom: 1px !important; }
-          .pt-2 { padding-top: 1px !important; }
-          .p-3 { padding: 0 !important; }
-          .space-y-2 > :not(:first-child), .space-y-1 > :not(:first-child) { margin-top: 0 !important; }
-
-          * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
-          .text-primary, .text-green-600, .text-orange-600, .text-orange-700, .text-red-600, .text-orange-800 { color: #000 !important; }
-          .bg-orange-50 { background: transparent !important; }
-        }
-      `}</style>
     </div>
   );
 };

@@ -38,48 +38,58 @@ export const ReceiptPreview = () => {
     }
   };
 
-  const formatCurrency = (value) => {
-    return new Intl.NumberFormat('id-ID', {
-      style: 'currency',
-      currency: 'IDR',
-      minimumFractionDigits: 0
-    }).format(value);
-  };
+  const fmt = (v) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(v);
 
   const handlePrint = useCallback(() => {
-    const receipt = document.getElementById('receipt-content');
-    if (!receipt) return;
+    if (!transaction) return;
 
-    // Measure actual print height by creating off-screen clone with 58mm print dimensions
-    const measureDiv = document.createElement('div');
-    measureDiv.style.cssText = 'position:fixed;left:-10000px;top:0;visibility:hidden;width:54mm;padding:2mm 1mm;font-size:12px;line-height:1.35;font-family:system-ui,-apple-system,sans-serif;';
-    const clone = receipt.cloneNode(true);
-    clone.style.cssText = 'width:100%;padding:2mm 1mm;font-size:12px;line-height:1.35;box-shadow:none;border-radius:0;';
+    const storeName = storeSettings?.store_name || 'UD. AQIN TANI';
+    const storeAddr = storeSettings?.address || 'Toko Obat & Alat Pertanian';
+    const storePhone = storeSettings?.phone || '-';
+    const storeEmail = storeSettings?.email || '';
 
-    // Toggle thermal/screen elements in clone
-    clone.querySelectorAll('.screen-table,.no-print,.screen-only').forEach(el => { el.style.display = 'none'; });
-    clone.querySelectorAll('.thermal-items,.thermal-only').forEach(el => { el.style.display = 'block'; el.style.fontSize = '11px'; });
+    const itemsHTML = transaction.items.map(item => `
+      <div style="margin-bottom:1px"><b>${item.product_name}</b></div>
+      <div style="display:flex;justify-content:space-between"><span>${item.quantity} x ${fmt(item.price).replace('Rp','').trim()}</span><b>${fmt(item.subtotal).replace('Rp','').trim()}</b></div>
+    `).join('');
 
-    // Compact spacing
-    clone.querySelectorAll('.mb-4,.mb-3').forEach(el => { el.style.marginBottom = '3px'; });
-    clone.querySelectorAll('.mb-2,.mb-1').forEach(el => { el.style.marginBottom = '2px'; });
-    clone.querySelectorAll('.pb-3,.pb-2').forEach(el => { el.style.paddingBottom = '2px'; });
-    clone.querySelectorAll('.space-y-2>:not(:first-child),.space-y-1>:not(:first-child)').forEach(el => { el.style.marginTop = '1px'; });
-    clone.querySelectorAll('.p-3').forEach(el => { el.style.padding = '0'; });
-    clone.querySelectorAll('.text-lg,.text-xl').forEach(el => { el.style.fontSize = '13px'; });
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{width:48mm;max-width:48mm;padding:1mm;font:10px/1.3 sans-serif;-webkit-text-size-adjust:100%}
+@page{margin:0}
+b{font-weight:700}
+</style></head><body>
+<div style="text-align:center;border-bottom:1px dashed #000;padding-bottom:2px;margin-bottom:2px">
+<div style="font-size:13px;font-weight:bold">${storeName}</div>
+<div style="font-size:8px">${storeAddr}</div>
+<div style="font-size:8px">Telp: ${storePhone}${storeEmail ? ' | ' + storeEmail : ''}</div>
+</div>
+<div style="display:flex;justify-content:space-between"><span>No:</span><b>${transaction.transaction_number}</b></div>
+<div style="display:flex;justify-content:space-between"><span>Tgl:</span><b>${new Date(transaction.created_at).toLocaleString('id-ID', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })}</b></div>
+<div style="display:flex;justify-content:space-between"><span>Kasir:</span><b>${transaction.cashier_name}</b></div>
+<div style="border-top:1px dashed #000;margin:2px 0"></div>
+${itemsHTML}
+<div style="border-top:1px dashed #000;margin:2px 0"></div>
+<div style="display:flex;justify-content:space-between"><span>Subtotal:</span><b>${fmt(transaction.subtotal).replace('Rp','').trim()}</b></div>
+${transaction.discount > 0 ? `<div style="display:flex;justify-content:space-between"><span>Diskon:</span><span>-${fmt(transaction.discount).replace('Rp','').trim()}</span></div>` : ''}
+${transaction.tax > 0 ? `<div style="display:flex;justify-content:space-between"><span>Pajak:</span><b>${fmt(transaction.tax).replace('Rp','').trim()}</b></div>` : ''}
+<div style="border-top:1px solid #000;margin:2px 0"></div>
+<div style="display:flex;justify-content:space-between;font-size:12px"><b>TOTAL:</b><b>${fmt(transaction.total).replace('Rp','').trim()}</b></div>
+<div style="border-top:1px dashed #000;margin:2px 0"></div>
+<div style="display:flex;justify-content:space-between"><span>Bayar (${transaction.payment_method}):</span><b>${fmt(transaction.payment_amount).replace('Rp','').trim()}</b></div>
+<div style="display:flex;justify-content:space-between;font-size:11px"><b>Kembali:</b><b>${fmt(transaction.change).replace('Rp','').trim()}</b></div>
+<div style="border-top:1px dashed #000;margin:2px 0"></div>
+<div style="text-align:center;font-size:9px"><b>Terima kasih!</b></div>
+<div style="text-align:center;font-size:8px;color:#666">Barang yg sudah dibeli tidak dapat ditukar</div>
+</body></html>`;
 
-    measureDiv.appendChild(clone);
-    document.body.appendChild(measureDiv);
-    const heightMm = Math.ceil(measureDiv.scrollHeight * 25.4 / 96) + 3;
-    document.body.removeChild(measureDiv);
-
-    // Inject dynamic @page size for exact-fit paper length
-    let ds = document.getElementById('receipt-dynamic-page');
-    if (!ds) { ds = document.createElement('style'); ds.id = 'receipt-dynamic-page'; document.head.appendChild(ds); }
-    ds.textContent = `@media print { @page { size: 58mm ${heightMm}mm !important; margin: 0mm !important; } }`;
-
-    window.print();
-  }, []);
+    const win = window.open('', '', 'width=400,height=600');
+    if (!win) { toast.error('Popup diblokir. Izinkan popup untuk mencetak.'); return; }
+    win.document.write(html);
+    win.document.close();
+    setTimeout(() => { try { win.focus(); win.print(); win.close(); } catch(e) { console.error(e); } }, 400);
+  }, [transaction, storeSettings]);
 
   if (loading) {
     return (
@@ -89,50 +99,42 @@ export const ReceiptPreview = () => {
     );
   }
 
-  if (!transaction) {
-    return null;
-  }
+  if (!transaction) return null;
 
   return (
     <div className="min-h-screen bg-gradient-mesh">
       {/* Action Buttons */}
-      <div className="no-print bg-white border-b shadow-sm sticky top-0 z-10">
+      <div className="bg-white border-b shadow-sm sticky top-0 z-10">
         <div className="max-w-4xl mx-auto px-6 py-4 flex items-center justify-between">
           <Button variant="outline" onClick={() => navigate('/pos')} data-testid="back-to-pos-button">
-            <ArrowLeft className="w-4 h-4 mr-2" />
-            Kembali ke POS
+            <ArrowLeft className="w-4 h-4 mr-2" />Kembali ke POS
           </Button>
           <Button variant="default" onClick={handlePrint} className="shadow-lg" data-testid="print-receipt-button">
-            <Printer className="w-4 h-4 mr-2" />
-            Print Struk
+            <Printer className="w-4 h-4 mr-2" />Print Struk
           </Button>
         </div>
       </div>
 
-      {/* Receipt Content */}
-      <div className="receipt-wrapper max-w-md mx-auto p-4 sm:p-6">
+      {/* On-screen Receipt Preview */}
+      <div className="max-w-md mx-auto p-4 sm:p-6">
         <div id="receipt-content" className="bg-white rounded-xl shadow-lg p-5 sm:p-6" data-testid="receipt-content">
 
           {/* Header */}
           <div className="text-center mb-4 border-b-2 border-dashed border-gray-300 pb-3">
-            <h1 className="text-xl sm:text-2xl font-bold mb-1 receipt-store-name">
+            <h1 className="text-xl sm:text-2xl font-bold mb-1">
               {storeSettings?.store_name || 'UD. AQIN TANI'}
             </h1>
-            <p className="text-gray-600 text-xs sm:text-sm receipt-address">
+            <p className="text-gray-600 text-xs sm:text-sm">
               {storeSettings?.address || 'Toko Obat & Alat Pertanian'}
             </p>
-            <p className="text-xs text-gray-500 mt-1 receipt-phone">
+            <p className="text-xs text-gray-500 mt-1">
               Telp: {storeSettings?.phone || '(021) 1234-5678'}
-              {storeSettings?.email && (
-                <><br className="screen-only" />
-                <span className="thermal-only"> | </span>
-                Email: {storeSettings.email}</>
-              )}
+              {storeSettings?.email && (<><br />Email: {storeSettings.email}</>)}
             </p>
           </div>
 
           {/* Transaction Info */}
-          <div className="mb-4 text-sm receipt-info">
+          <div className="mb-4 text-sm">
             <div className="space-y-1">
               <div className="flex justify-between">
                 <span className="text-gray-600">No:</span>
@@ -156,9 +158,9 @@ export const ReceiptPreview = () => {
 
           <div className="border-t border-dashed border-gray-300 mb-3"></div>
 
-          {/* Items - Screen table */}
+          {/* Items */}
           <div className="mb-4">
-            <table className="w-full text-sm screen-table">
+            <table className="w-full text-sm">
               <thead>
                 <tr className="border-b-2 border-gray-300">
                   <th className="text-left py-2">Produk</th>
@@ -172,65 +174,50 @@ export const ReceiptPreview = () => {
                   <tr key={index} className="border-b border-gray-200">
                     <td className="py-3">{item.product_name}</td>
                     <td className="text-center">{item.quantity}</td>
-                    <td className="text-right">{formatCurrency(item.price)}</td>
-                    <td className="text-right font-semibold">{formatCurrency(item.subtotal)}</td>
+                    <td className="text-right">{fmt(item.price)}</td>
+                    <td className="text-right font-semibold">{fmt(item.subtotal)}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
-
-            {/* Items - Thermal print layout */}
-            <div className="thermal-items">
-              {transaction.items.map((item, index) => (
-                <div key={index} className="receipt-item">
-                  <div className="font-semibold">{item.product_name}</div>
-                  <div className="flex justify-between">
-                    <span>{item.quantity} x {formatCurrency(item.price).replace('Rp ', '')}</span>
-                    <span className="font-semibold">{formatCurrency(item.subtotal).replace('Rp ', '')}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
           </div>
 
           <div className="border-t border-dashed border-gray-300 mb-3"></div>
 
           {/* Totals */}
-          <div className="mb-4 receipt-totals">
+          <div className="mb-4">
             <div className="space-y-2 text-sm">
               <div className="flex justify-between">
                 <span className="text-gray-600">Subtotal:</span>
-                <span className="font-semibold">{formatCurrency(transaction.subtotal)}</span>
+                <span className="font-semibold">{fmt(transaction.subtotal)}</span>
               </div>
               {transaction.discount > 0 && (
                 <div className="flex justify-between text-red-600">
-                  <span>Diskon:</span>
-                  <span className="font-semibold">-{formatCurrency(transaction.discount)}</span>
+                  <span>Diskon:</span><span className="font-semibold">-{fmt(transaction.discount)}</span>
                 </div>
               )}
               {transaction.tax > 0 && (
                 <div className="flex justify-between">
                   <span className="text-gray-600">Pajak:</span>
-                  <span className="font-semibold">{formatCurrency(transaction.tax)}</span>
+                  <span className="font-semibold">{fmt(transaction.tax)}</span>
                 </div>
               )}
-              <div className="flex justify-between text-xl font-bold border-t-2 border-gray-300 pt-2 mt-2 receipt-total-line">
+              <div className="flex justify-between text-xl font-bold border-t-2 border-gray-300 pt-2 mt-2">
                 <span>TOTAL:</span>
-                <span className="text-primary">{formatCurrency(transaction.total)}</span>
+                <span className="text-primary">{fmt(transaction.total)}</span>
               </div>
             </div>
           </div>
 
           {/* Payment */}
-          <div className="bg-gray-50 rounded-lg p-3 mb-3 receipt-payment">
+          <div className="bg-gray-50 rounded-lg p-3 mb-3">
             <div className="space-y-2">
               <div className="flex justify-between text-sm">
                 <span className="text-gray-600">Bayar ({transaction.payment_method}):</span>
-                <span className="font-semibold">{formatCurrency(transaction.payment_amount)}</span>
+                <span className="font-semibold">{fmt(transaction.payment_amount)}</span>
               </div>
-              <div className="flex justify-between text-lg font-bold text-green-600 receipt-total-line">
-                <span>Kembali:</span>
-                <span>{formatCurrency(transaction.change)}</span>
+              <div className="flex justify-between text-lg font-bold text-green-600">
+                <span>Kembali:</span><span>{fmt(transaction.change)}</span>
               </div>
             </div>
           </div>
@@ -238,100 +225,20 @@ export const ReceiptPreview = () => {
           <div className="border-t border-dashed border-gray-300 mb-3"></div>
 
           {/* Footer */}
-          <div className="text-center text-sm receipt-footer">
+          <div className="text-center text-sm">
             <p className="font-semibold mb-2">Terima kasih!</p>
-            <p className="text-gray-600 text-xs mb-1 receipt-note">Barang yang sudah dibeli tidak dapat ditukar</p>
-            <p className="text-gray-500 text-xs screen-only receipt-note">Simpan struk sebagai bukti pembelian</p>
+            <p className="text-gray-600 text-xs mb-1">Barang yang sudah dibeli tidak dapat ditukar</p>
+            <p className="text-gray-500 text-xs">Simpan struk sebagai bukti pembelian</p>
           </div>
         </div>
 
-        {/* Tips - screen only */}
-        <div className="no-print mt-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
+        {/* Tips */}
+        <div className="mt-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
           <p className="text-sm text-blue-800">
             <strong>Tips:</strong> Pastikan printer sudah terhubung dan aktif. Anda bisa memilih printer mana yang akan digunakan di dialog print.
           </p>
         </div>
       </div>
-
-      {/* Print styles for 58mm thermal printer */}
-      <style>{`
-        .thermal-items { display: none; }
-        .thermal-only { display: none; }
-
-        @media print {
-          html, body {
-            margin: 0 !important;
-            padding: 0 !important;
-            width: 58mm !important;
-            height: auto !important;
-            min-height: 0 !important;
-            -webkit-text-size-adjust: 100% !important;
-            text-size-adjust: 100% !important;
-          }
-
-          /* Fallback @page - overridden by dynamic JS calculation */
-          @page {
-            size: 58mm 120mm;
-            margin: 0mm;
-          }
-
-          .no-print, .screen-only { display: none !important; }
-          .thermal-only { display: inline !important; }
-          .bg-gradient-mesh, .min-h-screen { background: none !important; min-height: 0 !important; }
-
-          .receipt-wrapper {
-            max-width: none !important;
-            padding: 0 !important;
-            margin: 0 !important;
-          }
-
-          #receipt-content {
-            width: 54mm !important;
-            max-width: 54mm !important;
-            margin: 0 2mm !important;
-            padding: 2mm 1mm !important;
-            box-shadow: none !important;
-            border-radius: 0 !important;
-            font-size: 12px !important;
-            line-height: 1.35 !important;
-          }
-
-          .receipt-store-name { font-size: 14px !important; line-height: 1.2 !important; margin-bottom: 1px !important; }
-          .receipt-address { font-size: 10px !important; }
-          .receipt-phone { font-size: 9px !important; }
-          .receipt-info { font-size: 10px !important; line-height: 1.3 !important; }
-          .receipt-info > div > * { margin-bottom: 0 !important; }
-
-          .screen-table { display: none !important; }
-          .thermal-items { display: block !important; font-size: 10px !important; }
-          .receipt-item { margin-bottom: 2px !important; line-height: 1.25 !important; }
-
-          .receipt-totals { font-size: 10px !important; line-height: 1.3 !important; }
-          .receipt-totals > div > * { margin-bottom: 0 !important; }
-          .receipt-total-line { font-size: 12px !important; }
-
-          .receipt-payment {
-            background: transparent !important;
-            border-radius: 0 !important;
-            padding: 0 !important;
-            font-size: 10px !important;
-          }
-
-          .receipt-footer { font-size: 10px !important; }
-          .receipt-note { font-size: 9px !important; }
-
-          .mb-4, .mb-3 { margin-bottom: 2px !important; }
-          .mb-2, .mb-1 { margin-bottom: 1px !important; }
-          .pb-3, .pb-2 { padding-bottom: 1px !important; }
-          .pt-2 { padding-top: 1px !important; }
-          .p-3 { padding: 0 !important; }
-          .space-y-2 > :not(:first-child), .space-y-1 > :not(:first-child) { margin-top: 0 !important; }
-
-          * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
-          .text-primary, .text-green-600, .text-red-600 { color: #000 !important; }
-          .bg-gray-50 { background: transparent !important; }
-        }
-      `}</style>
     </div>
   );
 };
