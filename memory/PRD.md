@@ -76,19 +76,18 @@ Build a responsive web application for a pharmacy and agriculture store named "U
 - **Compact Receipt Layout**: Both POS (ReceiptPreview.js) and Partner Order (PartnerOrderReceipt.js) receipts use semantic CSS classes (`.receipt-store-name`, `.thermal-items`, `.no-print`) instead of Tailwind print: utilities for reliable cross-device printing
 
 ### Supplier Debt Management (DONE - Mar 2026)
-- **Halaman Hutang Supplier**: Daftar semua supplier dengan total hutang, jumlah pembelian belum lunas, dan indikator jatuh tempo
-- **Summary Cards**: Total Hutang, Jumlah Supplier Berhutang, Dibayar Bulan Ini, Jatuh Tempo (>30 hari)
-- **Detail per Supplier**: Panel expandable dengan tab Pembelian (belum lunas) dan Riwayat Pembayaran
-- **Catat Pembayaran**: Modal dengan auto-distribusi ke pembelian paling lama, quick-fill 25%/50%/Lunasi
+- **Halaman Hutang Supplier**: Menggantikan halaman Pembelian. Layout konsisten dengan halaman lain (Card, Table, Dialog shadcn)
+- **Summary Cards**: Total Hutang, Supplier Berhutang, Dibayar Bulan Ini, Jatuh Tempo (>30 hari)
+- **Detail per Supplier**: Panel expandable dengan tab Pembelian dan Riwayat Pembayaran
+- **Catat Pembayaran**: Dialog modal dengan auto-distribusi ke pembelian paling lama, quick-fill 25%/50%/Lunasi
 - **Filter & Search**: Cari supplier, filter Semua/Ada Hutang/Jatuh Tempo/Lunas
-- **Export CSV**: Download laporan hutang ke file CSV
-- **Notifikasi Jatuh Tempo**: Alert banner untuk hutang lebih dari 30 hari
-- **Responsive**: Tampilan optimal di desktop, tablet, dan mobile
+- **Export CSV & Notifikasi Jatuh Tempo**: Download CSV, alert card hutang >30 hari
+- **Auto-purchase**: Produk baru otomatis membuat record pembelian ke supplier terkait
+- **Responsive**: Optimal di desktop, tablet, dan mobile
 
 ## Prioritized Backlog
 
 ### P1 - Next Up
-- **Supplier Debt Management Page**: Dedicated page to view all outstanding balances per supplier and record payments against them
 
 ### P2 - Future
 - **Enhanced Analytics**: More detailed charts, filters, date ranges, export options

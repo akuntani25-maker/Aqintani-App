@@ -2,9 +2,13 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { api } from '../context/AuthContext';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
+import { Label } from '../components/ui/label';
+import { Card } from '../components/ui/card';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../components/ui/dialog';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
 import {
   DollarSign, AlertTriangle, CreditCard, Users, Search, Download,
-  ChevronDown, ChevronUp, X, Clock, CheckCircle, FileText, Bell
+  ChevronDown, ChevronUp, Clock, FileText, Bell, Banknote
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -15,17 +19,18 @@ export const SupplierDebt = () => {
   const [summary, setSummary] = useState(null);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
-  const [filter, setFilter] = useState('all'); // all, has_debt, overdue, no_debt
+  const [filter, setFilter] = useState('all');
   const [expandedSupplier, setExpandedSupplier] = useState(null);
   const [supplierPurchases, setSupplierPurchases] = useState([]);
   const [supplierPayments, setSupplierPayments] = useState([]);
   const [detailLoading, setDetailLoading] = useState(false);
-  const [payModalOpen, setPayModalOpen] = useState(null);
+  const [payModalOpen, setPayModalOpen] = useState(false);
+  const [paySupplier, setPaySupplier] = useState(null);
   const [payAmount, setPayAmount] = useState('');
   const [payNotes, setPayNotes] = useState('');
   const [paySubmitting, setPaySubmitting] = useState(false);
   const [showAllPurchases, setShowAllPurchases] = useState(false);
-  const [detailTab, setDetailTab] = useState('purchases'); // purchases, payments
+  const [detailTab, setDetailTab] = useState('purchases');
 
   const fetchData = useCallback(async () => {
     try {
@@ -76,24 +81,30 @@ export const SupplierDebt = () => {
     }
   };
 
+  const openPayModal = (supplier) => {
+    setPaySupplier(supplier);
+    setPayAmount('');
+    setPayNotes('');
+    setPayModalOpen(true);
+  };
+
   const handlePay = async () => {
-    if (!payModalOpen || !payAmount || parseFloat(payAmount) <= 0) {
+    if (!paySupplier || !payAmount || parseFloat(payAmount) <= 0) {
       toast.error('Masukkan jumlah pembayaran yang valid');
       return;
     }
     setPaySubmitting(true);
     try {
-      const res = await api.post(
-        `/supplier-debts/${payModalOpen}/pay?amount=${parseFloat(payAmount)}&notes=${encodeURIComponent(payNotes)}`
+      await api.post(
+        `/supplier-debts/${paySupplier.supplier_id}/pay?amount=${parseFloat(payAmount)}&notes=${encodeURIComponent(payNotes)}`
       );
       toast.success(`Pembayaran ${fmt(parseFloat(payAmount))} berhasil dicatat`);
-      setPayModalOpen(null);
-      setPayAmount('');
-      setPayNotes('');
+      setPayModalOpen(false);
       fetchData();
-      if (expandedSupplier === payModalOpen) {
-        toggleSupplier(payModalOpen);
-        setTimeout(() => toggleSupplier(payModalOpen), 100);
+      if (expandedSupplier === paySupplier.supplier_id) {
+        const sid = paySupplier.supplier_id;
+        setExpandedSupplier(null);
+        setTimeout(() => toggleSupplier(sid), 200);
       }
     } catch (error) {
       toast.error(error.response?.data?.detail || 'Gagal mencatat pembayaran');
@@ -131,118 +142,104 @@ export const SupplierDebt = () => {
   });
 
   if (loading) {
-    return (
-      <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
-      </div>
-    );
+    return <div className="flex items-center justify-center min-h-screen"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div></div>;
   }
 
   return (
-    <div className="space-y-4 sm:space-y-6" data-testid="supplier-debt-page">
+    <div className="p-4 md:p-6 lg:p-8 space-y-6" data-testid="supplier-debt-page">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-        <div>
-          <h1 className="text-xl sm:text-2xl font-bold text-gray-900" data-testid="page-title">Manajemen Hutang Supplier</h1>
-          <p className="text-sm text-gray-500 mt-1">Kelola dan pantau hutang ke semua supplier</p>
+      <div className="flex flex-col gap-4">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div>
+            <h1 className="text-2xl md:text-3xl lg:text-4xl font-bold tracking-tight" data-testid="page-title">Hutang Supplier</h1>
+            <p className="text-sm text-muted-foreground mt-1">Kelola dan pantau hutang ke semua supplier</p>
+          </div>
+          <Button onClick={handleExportCSV} variant="outline" className="w-full sm:w-auto gap-2" data-testid="export-csv-btn">
+            <Download className="w-4 h-4" /> Export CSV
+          </Button>
         </div>
-        <Button onClick={handleExportCSV} variant="outline" className="gap-2 self-start" data-testid="export-csv-btn">
-          <Download className="w-4 h-4" /> Export CSV
-        </Button>
       </div>
 
       {/* Summary Cards */}
       {summary && (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4" data-testid="summary-cards">
-          <SummaryCard
-            icon={DollarSign}
-            label="Total Hutang"
-            value={fmt(summary.total_debt)}
-            color="text-red-600"
-            bg="bg-red-50"
-            testId="total-debt-card"
-          />
-          <SummaryCard
-            icon={Users}
-            label="Supplier Berhutang"
-            value={summary.suppliers_with_debt}
-            color="text-orange-600"
-            bg="bg-orange-50"
-            testId="suppliers-with-debt-card"
-          />
-          <SummaryCard
-            icon={CreditCard}
-            label="Dibayar Bulan Ini"
-            value={fmt(summary.total_paid_this_month)}
-            sub={`${summary.payments_this_month_count} pembayaran`}
-            color="text-green-600"
-            bg="bg-green-50"
-            testId="paid-this-month-card"
-          />
-          <SummaryCard
-            icon={AlertTriangle}
-            label="Jatuh Tempo (>30hr)"
-            value={summary.overdue_count}
-            sub={summary.overdue_total > 0 ? fmt(summary.overdue_total) : ''}
-            color="text-yellow-600"
-            bg="bg-yellow-50"
-            testId="overdue-card"
-          />
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4" data-testid="summary-cards">
+          <Card className="p-3 md:p-4" data-testid="total-debt-card">
+            <div className="flex items-center gap-2 mb-1">
+              <DollarSign className="w-4 h-4 text-red-600" />
+              <span className="text-xs md:text-sm text-muted-foreground font-medium">Total Hutang</span>
+            </div>
+            <p className="text-base md:text-xl font-bold text-red-600 truncate">{fmt(summary.total_debt)}</p>
+          </Card>
+          <Card className="p-3 md:p-4" data-testid="suppliers-with-debt-card">
+            <div className="flex items-center gap-2 mb-1">
+              <Users className="w-4 h-4 text-orange-600" />
+              <span className="text-xs md:text-sm text-muted-foreground font-medium">Supplier Berhutang</span>
+            </div>
+            <p className="text-base md:text-xl font-bold text-orange-600">{summary.suppliers_with_debt}</p>
+          </Card>
+          <Card className="p-3 md:p-4" data-testid="paid-this-month-card">
+            <div className="flex items-center gap-2 mb-1">
+              <CreditCard className="w-4 h-4 text-green-600" />
+              <span className="text-xs md:text-sm text-muted-foreground font-medium">Dibayar Bulan Ini</span>
+            </div>
+            <p className="text-base md:text-xl font-bold text-green-600 truncate">{fmt(summary.total_paid_this_month)}</p>
+            <p className="text-[10px] md:text-xs text-muted-foreground mt-0.5">{summary.payments_this_month_count} pembayaran</p>
+          </Card>
+          <Card className="p-3 md:p-4" data-testid="overdue-card">
+            <div className="flex items-center gap-2 mb-1">
+              <AlertTriangle className="w-4 h-4 text-yellow-600" />
+              <span className="text-xs md:text-sm text-muted-foreground font-medium">Jatuh Tempo (&gt;30hr)</span>
+            </div>
+            <p className="text-base md:text-xl font-bold text-yellow-600">{summary.overdue_count}</p>
+            {summary.overdue_total > 0 && <p className="text-[10px] md:text-xs text-muted-foreground mt-0.5">{fmt(summary.overdue_total)}</p>}
+          </Card>
         </div>
       )}
 
       {/* Overdue Alert */}
       {summary && summary.overdue_count > 0 && (
-        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 sm:p-4 flex items-start gap-3" data-testid="overdue-alert">
-          <Bell className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" />
-          <div>
-            <p className="font-semibold text-yellow-800 text-sm">Peringatan Hutang Jatuh Tempo</p>
-            <p className="text-yellow-700 text-xs sm:text-sm mt-1">
-              Ada <b>{summary.overdue_count} pembelian</b> dengan hutang lebih dari 30 hari senilai <b>{fmt(summary.overdue_total)}</b>. Segera lakukan pembayaran.
-            </p>
+        <Card className="p-3 md:p-4 border-yellow-300 bg-yellow-50" data-testid="overdue-alert">
+          <div className="flex items-start gap-3">
+            <Bell className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" />
+            <div>
+              <p className="font-semibold text-yellow-800 text-sm">Peringatan Hutang Jatuh Tempo</p>
+              <p className="text-yellow-700 text-xs md:text-sm mt-1">
+                Ada <b>{summary.overdue_count} pembelian</b> dengan hutang lebih dari 30 hari senilai <b>{fmt(summary.overdue_total)}</b>. Segera lakukan pembayaran.
+              </p>
+            </div>
           </div>
-        </div>
+        </Card>
       )}
 
       {/* Search & Filter */}
-      <div className="flex flex-col sm:flex-row gap-3" data-testid="search-filter-bar">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-          <Input
-            placeholder="Cari supplier..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-10"
-            data-testid="search-input"
-          />
+      <Card className="p-4" data-testid="search-filter-bar">
+        <div className="flex flex-col md:flex-row gap-3">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <Input placeholder="Cari supplier..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-10" data-testid="search-input" />
+          </div>
+          <div className="flex gap-2 flex-wrap">
+            {[
+              { key: 'all', label: 'Semua' },
+              { key: 'has_debt', label: 'Ada Hutang' },
+              { key: 'overdue', label: 'Jatuh Tempo' },
+              { key: 'no_debt', label: 'Lunas' },
+            ].map(f => (
+              <Button key={f.key} variant={filter === f.key ? 'default' : 'outline'} size="sm" onClick={() => setFilter(f.key)} data-testid={`filter-${f.key}-btn`}>
+                {f.label}
+              </Button>
+            ))}
+          </div>
         </div>
-        <div className="flex gap-2 flex-wrap">
-          {[
-            { key: 'all', label: 'Semua' },
-            { key: 'has_debt', label: 'Ada Hutang' },
-            { key: 'overdue', label: 'Jatuh Tempo' },
-            { key: 'no_debt', label: 'Lunas' },
-          ].map(f => (
-            <Button
-              key={f.key}
-              variant={filter === f.key ? 'default' : 'outline'}
-              size="sm"
-              onClick={() => setFilter(f.key)}
-              data-testid={`filter-${f.key}-btn`}
-            >
-              {f.label}
-            </Button>
-          ))}
-        </div>
-      </div>
+      </Card>
 
       {/* Supplier List */}
       <div className="space-y-3" data-testid="supplier-list">
         {filteredOverview.length === 0 && (
-          <div className="text-center py-12 text-gray-500" data-testid="empty-state">
-            <Users className="w-12 h-12 mx-auto mb-3 opacity-30" />
-            <p>Tidak ada data supplier yang cocok dengan filter.</p>
-          </div>
+          <Card className="p-12 text-center" data-testid="empty-state">
+            <Users className="w-12 h-12 mx-auto mb-3 opacity-20" />
+            <p className="text-muted-foreground">Tidak ada data supplier yang cocok dengan filter.</p>
+          </Card>
         )}
 
         {filteredOverview.map(s => {
@@ -253,31 +250,27 @@ export const SupplierDebt = () => {
             : 0;
 
           return (
-            <div
-              key={s.supplier_id}
-              className={`bg-white rounded-xl border shadow-sm overflow-hidden transition-all ${isOverdue ? 'border-yellow-300' : 'border-gray-200'}`}
-              data-testid={`supplier-card-${s.supplier_id}`}
-            >
+            <Card key={s.supplier_id} className={`overflow-hidden ${isOverdue ? 'border-yellow-300' : ''}`} data-testid={`supplier-card-${s.supplier_id}`}>
               {/* Supplier Row */}
               <div
-                className="p-3 sm:p-4 cursor-pointer hover:bg-gray-50 transition-colors"
+                className="p-3 md:p-4 cursor-pointer hover:bg-accent/50 transition-colors"
                 onClick={() => toggleSupplier(s.supplier_id)}
                 data-testid={`supplier-row-${s.supplier_id}`}
               >
                 <div className="flex items-center justify-between gap-3">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <h3 className="font-semibold text-gray-900 text-sm sm:text-base truncate">{s.supplier_name}</h3>
+                      <h3 className="font-semibold text-sm md:text-base truncate">{s.supplier_name}</h3>
                       {isOverdue && (
-                        <span className="text-[10px] sm:text-xs bg-yellow-100 text-yellow-800 px-2 py-0.5 rounded-full font-medium whitespace-nowrap" data-testid="overdue-badge">
+                        <span className="text-[10px] md:text-xs bg-yellow-100 text-yellow-800 px-2 py-0.5 rounded-full font-medium whitespace-nowrap" data-testid="overdue-badge">
                           {daysSinceOldest}hr jatuh tempo
                         </span>
                       )}
                       {s.outstanding <= 0 && s.purchase_count > 0 && (
-                        <span className="text-[10px] sm:text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-medium">Lunas</span>
+                        <span className="text-[10px] md:text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-medium">Lunas</span>
                       )}
                     </div>
-                    <div className="flex items-center gap-3 sm:gap-4 mt-1 text-xs text-gray-500 flex-wrap">
+                    <div className="flex items-center gap-3 md:gap-4 mt-1 text-xs text-muted-foreground flex-wrap">
                       {s.phone && <span>{s.phone}</span>}
                       <span>{s.purchase_count} pembelian</span>
                       {s.unpaid_count > 0 && <span className="text-orange-600">{s.unpaid_count} belum lunas</span>}
@@ -285,34 +278,22 @@ export const SupplierDebt = () => {
                   </div>
                   <div className="flex items-center gap-3 flex-shrink-0">
                     <div className="text-right">
-                      <p className={`font-bold text-sm sm:text-base ${s.outstanding > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                      <p className={`font-bold text-sm md:text-base ${s.outstanding > 0 ? 'text-red-600' : 'text-green-600'}`}>
                         {s.outstanding > 0 ? fmt(s.outstanding) : 'Rp 0'}
                       </p>
-                      <p className="text-[10px] sm:text-xs text-gray-400">Sisa hutang</p>
+                      <p className="text-[10px] md:text-xs text-muted-foreground">Sisa hutang</p>
                     </div>
                     {s.outstanding > 0 && (
-                      <Button
-                        size="sm"
-                        variant="default"
-                        className="hidden sm:flex gap-1"
-                        onClick={(e) => { e.stopPropagation(); setPayModalOpen(s.supplier_id); setPayAmount(''); setPayNotes(''); }}
-                        data-testid={`pay-btn-${s.supplier_id}`}
-                      >
+                      <Button size="sm" className="hidden md:flex gap-1" onClick={(e) => { e.stopPropagation(); openPayModal(s); }} data-testid={`pay-btn-${s.supplier_id}`}>
                         <CreditCard className="w-3.5 h-3.5" /> Bayar
                       </Button>
                     )}
-                    {isExpanded ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
+                    {isExpanded ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
                   </div>
                 </div>
                 {/* Mobile pay button */}
                 {s.outstanding > 0 && (
-                  <Button
-                    size="sm"
-                    variant="default"
-                    className="sm:hidden mt-2 w-full gap-1"
-                    onClick={(e) => { e.stopPropagation(); setPayModalOpen(s.supplier_id); setPayAmount(''); setPayNotes(''); }}
-                    data-testid={`pay-btn-mobile-${s.supplier_id}`}
-                  >
+                  <Button size="sm" className="md:hidden mt-2 w-full gap-1" onClick={(e) => { e.stopPropagation(); openPayModal(s); }} data-testid={`pay-btn-mobile-${s.supplier_id}`}>
                     <CreditCard className="w-3.5 h-3.5" /> Bayar Hutang
                   </Button>
                 )}
@@ -320,13 +301,13 @@ export const SupplierDebt = () => {
 
               {/* Expanded Detail */}
               {isExpanded && (
-                <div className="border-t bg-gray-50 p-3 sm:p-4" data-testid={`supplier-detail-${s.supplier_id}`}>
+                <div className="border-t bg-muted/30 p-3 md:p-4" data-testid={`supplier-detail-${s.supplier_id}`}>
                   {detailLoading ? (
                     <div className="flex justify-center py-6"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div></div>
                   ) : (
                     <>
                       {/* Tabs */}
-                      <div className="flex gap-2 mb-3">
+                      <div className="flex gap-2 mb-4">
                         <Button size="sm" variant={detailTab === 'purchases' ? 'default' : 'outline'} onClick={() => setDetailTab('purchases')} data-testid="tab-purchases">
                           <FileText className="w-3.5 h-3.5 mr-1" /> Pembelian {supplierPurchases.length > 0 && `(${supplierPurchases.length})`}
                         </Button>
@@ -337,59 +318,59 @@ export const SupplierDebt = () => {
 
                       {/* Purchases Tab */}
                       {detailTab === 'purchases' && (
-                        <div className="space-y-2">
+                        <div className="space-y-3">
                           {supplierPurchases.length === 0 ? (
-                            <p className="text-center text-gray-500 py-4 text-sm">{showAllPurchases ? 'Tidak ada pembelian.' : 'Tidak ada pembelian yang belum lunas.'}</p>
+                            <p className="text-center text-muted-foreground py-4 text-sm">{showAllPurchases ? 'Tidak ada pembelian.' : 'Tidak ada pembelian yang belum lunas.'}</p>
                           ) : (
                             <>
-                              {/* Table - Desktop */}
-                              <div className="hidden sm:block overflow-x-auto">
-                                <table className="w-full text-sm">
-                                  <thead>
-                                    <tr className="border-b text-left text-gray-500">
-                                      <th className="pb-2 font-medium">Tanggal</th>
-                                      <th className="pb-2 font-medium">Total</th>
-                                      <th className="pb-2 font-medium">Dibayar</th>
-                                      <th className="pb-2 font-medium">Sisa</th>
-                                      <th className="pb-2 font-medium">Status</th>
-                                      <th className="pb-2 font-medium">Catatan</th>
-                                    </tr>
-                                  </thead>
-                                  <tbody>
+                              {/* Desktop Table */}
+                              <div className="hidden md:block rounded-lg border overflow-hidden">
+                                <Table>
+                                  <TableHeader>
+                                    <TableRow>
+                                      <TableHead>Tanggal</TableHead>
+                                      <TableHead>Total</TableHead>
+                                      <TableHead>Dibayar</TableHead>
+                                      <TableHead>Sisa</TableHead>
+                                      <TableHead>Status</TableHead>
+                                      <TableHead>Catatan</TableHead>
+                                    </TableRow>
+                                  </TableHeader>
+                                  <TableBody>
                                     {supplierPurchases.map(p => {
                                       const age = Math.floor((new Date(today) - new Date(p.date)) / 86400000);
                                       const isOld = p.remaining > 0 && age > 30;
                                       return (
-                                        <tr key={p.id} className={`border-b last:border-0 ${isOld ? 'bg-yellow-50' : ''}`}>
-                                          <td className="py-2">{new Date(p.date).toLocaleDateString('id-ID')}</td>
-                                          <td className="py-2">{fmt(p.total)}</td>
-                                          <td className="py-2 text-green-600">{fmt(p.paid)}</td>
-                                          <td className="py-2 font-semibold text-red-600">{fmt(p.remaining)}</td>
-                                          <td className="py-2">
+                                        <TableRow key={p.id} className={isOld ? 'bg-yellow-50' : ''}>
+                                          <TableCell>{new Date(p.date).toLocaleDateString('id-ID')}</TableCell>
+                                          <TableCell>{fmt(p.total)}</TableCell>
+                                          <TableCell className="text-green-600">{fmt(p.paid)}</TableCell>
+                                          <TableCell className="font-semibold text-red-600">{fmt(p.remaining)}</TableCell>
+                                          <TableCell>
                                             {p.remaining <= 0
                                               ? <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">Lunas</span>
                                               : isOld
                                                 ? <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-0.5 rounded-full">{age}hr</span>
                                                 : <span className="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full">Tempo</span>
                                             }
-                                          </td>
-                                          <td className="py-2 text-gray-500 text-xs max-w-[150px] truncate">{p.notes || '-'}</td>
-                                        </tr>
+                                          </TableCell>
+                                          <TableCell className="text-muted-foreground text-xs max-w-[150px] truncate">{p.notes || '-'}</TableCell>
+                                        </TableRow>
                                       );
                                     })}
-                                  </tbody>
-                                </table>
+                                  </TableBody>
+                                </Table>
                               </div>
 
-                              {/* Cards - Mobile */}
-                              <div className="sm:hidden space-y-2">
+                              {/* Mobile Cards */}
+                              <div className="md:hidden space-y-2">
                                 {supplierPurchases.map(p => {
                                   const age = Math.floor((new Date(today) - new Date(p.date)) / 86400000);
                                   const isOld = p.remaining > 0 && age > 30;
                                   return (
-                                    <div key={p.id} className={`p-3 rounded-lg border text-sm ${isOld ? 'bg-yellow-50 border-yellow-200' : 'bg-white border-gray-200'}`}>
+                                    <Card key={p.id} className={`p-3 text-sm ${isOld ? 'bg-yellow-50 border-yellow-200' : ''}`}>
                                       <div className="flex justify-between items-start">
-                                        <span className="text-gray-600">{new Date(p.date).toLocaleDateString('id-ID')}</span>
+                                        <span className="text-muted-foreground">{new Date(p.date).toLocaleDateString('id-ID')}</span>
                                         {p.remaining > 0
                                           ? isOld
                                             ? <span className="text-[10px] bg-yellow-100 text-yellow-800 px-2 py-0.5 rounded-full">{age}hr jatuh tempo</span>
@@ -401,24 +382,18 @@ export const SupplierDebt = () => {
                                         <span>Total: {fmt(p.total)}</span>
                                         <span className="font-bold text-red-600">Sisa: {fmt(p.remaining)}</span>
                                       </div>
-                                      {p.notes && <p className="text-xs text-gray-400 mt-1">{p.notes}</p>}
-                                    </div>
+                                      {p.notes && <p className="text-xs text-muted-foreground mt-1">{p.notes}</p>}
+                                    </Card>
                                   );
                                 })}
                               </div>
                             </>
                           )}
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="text-xs"
-                            onClick={() => {
-                              const newVal = !showAllPurchases;
-                              setShowAllPurchases(newVal);
-                              fetchPurchases(s.supplier_id, newVal);
-                            }}
-                            data-testid="toggle-all-purchases"
-                          >
+                          <Button size="sm" variant="ghost" className="text-xs" onClick={() => {
+                            const newVal = !showAllPurchases;
+                            setShowAllPurchases(newVal);
+                            fetchPurchases(s.supplier_id, newVal);
+                          }} data-testid="toggle-all-purchases">
                             {showAllPurchases ? 'Tampilkan belum lunas saja' : 'Tampilkan semua pembelian'}
                           </Button>
                         </div>
@@ -428,22 +403,20 @@ export const SupplierDebt = () => {
                       {detailTab === 'payments' && (
                         <div className="space-y-2">
                           {supplierPayments.length === 0 ? (
-                            <p className="text-center text-gray-500 py-4 text-sm">Belum ada riwayat pembayaran.</p>
+                            <p className="text-center text-muted-foreground py-4 text-sm">Belum ada riwayat pembayaran.</p>
                           ) : (
-                            <div className="space-y-2">
-                              {supplierPayments.map(p => (
-                                <div key={p.id} className="p-3 bg-white rounded-lg border border-gray-200 flex items-center justify-between text-sm">
-                                  <div>
-                                    <p className="font-semibold text-green-700">{fmt(p.amount)}</p>
-                                    <p className="text-xs text-gray-500 mt-0.5">{p.notes || '-'}</p>
-                                  </div>
-                                  <div className="text-right">
-                                    <p className="text-xs text-gray-500">{new Date(p.created_at).toLocaleDateString('id-ID')}</p>
-                                    <p className="text-[10px] text-gray-400">{new Date(p.created_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}</p>
-                                  </div>
+                            supplierPayments.map(p => (
+                              <Card key={p.id} className="p-3 flex items-center justify-between text-sm">
+                                <div>
+                                  <p className="font-semibold text-green-700">{fmt(p.amount)}</p>
+                                  <p className="text-xs text-muted-foreground mt-0.5">{p.notes || '-'}</p>
                                 </div>
-                              ))}
-                            </div>
+                                <div className="text-right">
+                                  <p className="text-xs text-muted-foreground">{new Date(p.created_at).toLocaleDateString('id-ID')}</p>
+                                  <p className="text-[10px] text-muted-foreground">{new Date(p.created_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}</p>
+                                </div>
+                              </Card>
+                            ))
                           )}
                         </div>
                       )}
@@ -451,82 +424,49 @@ export const SupplierDebt = () => {
                   )}
                 </div>
               )}
-            </div>
+            </Card>
           );
         })}
       </div>
 
-      {/* Payment Modal */}
-      {payModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4" data-testid="pay-modal">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-5 sm:p-6">
-            <div className="flex justify-between items-center mb-4">
-              <h2 className="text-lg font-bold">Catat Pembayaran</h2>
-              <button onClick={() => setPayModalOpen(null)} className="p-1 hover:bg-gray-100 rounded" data-testid="close-pay-modal">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            {(() => {
-              const supplier = overview.find(s => s.supplier_id === payModalOpen);
-              return supplier ? (
-                <div className="space-y-4">
-                  <div className="bg-gray-50 rounded-lg p-3">
-                    <p className="font-semibold">{supplier.supplier_name}</p>
-                    <p className="text-sm text-red-600 font-bold mt-1">Sisa hutang: {fmt(supplier.outstanding)}</p>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Jumlah Bayar</label>
-                    <Input
-                      type="number"
-                      placeholder="Masukkan jumlah..."
-                      value={payAmount}
-                      onChange={(e) => setPayAmount(e.target.value)}
-                      data-testid="pay-amount-input"
-                    />
-                    <div className="flex gap-2 mt-2">
-                      {[0.25, 0.5, 1].map(pct => (
-                        <button
-                          key={pct}
-                          className="text-xs bg-gray-100 hover:bg-gray-200 px-2 py-1 rounded transition-colors"
-                          onClick={() => setPayAmount(String(Math.round(supplier.outstanding * pct)))}
-                        >
-                          {pct === 1 ? 'Lunasi' : `${pct * 100}%`}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Catatan (opsional)</label>
-                    <Input
-                      placeholder="Catatan pembayaran..."
-                      value={payNotes}
-                      onChange={(e) => setPayNotes(e.target.value)}
-                      data-testid="pay-notes-input"
-                    />
-                  </div>
-                  <Button onClick={handlePay} disabled={paySubmitting || !payAmount} className="w-full" data-testid="submit-pay-btn">
-                    {paySubmitting ? 'Memproses...' : `Bayar ${payAmount ? fmt(parseFloat(payAmount) || 0) : ''}`}
-                  </Button>
+      {/* Payment Dialog */}
+      <Dialog open={payModalOpen} onOpenChange={setPayModalOpen}>
+        <DialogContent className="max-w-md" data-testid="pay-modal">
+          <DialogHeader>
+            <DialogTitle>Catat Pembayaran</DialogTitle>
+          </DialogHeader>
+          {paySupplier && (
+            <div className="space-y-4">
+              <Card className="p-3 bg-muted/50">
+                <p className="font-semibold">{paySupplier.supplier_name}</p>
+                <p className="text-sm text-red-600 font-bold mt-1">Sisa hutang: {fmt(paySupplier.outstanding)}</p>
+              </Card>
+              <div className="space-y-2">
+                <Label>Jumlah Bayar</Label>
+                <Input type="number" placeholder="Masukkan jumlah..." value={payAmount} onChange={(e) => setPayAmount(e.target.value)} data-testid="pay-amount-input" />
+                <div className="flex gap-2 mt-1">
+                  {[0.25, 0.5, 1].map(pct => (
+                    <button key={pct} className="text-xs bg-muted hover:bg-muted-foreground/10 px-2 py-1 rounded transition-colors"
+                      onClick={() => setPayAmount(String(Math.round(paySupplier.outstanding * pct)))}>
+                      {pct === 1 ? 'Lunasi' : `${pct * 100}%`}
+                    </button>
+                  ))}
                 </div>
-              ) : null;
-            })()}
-          </div>
-        </div>
-      )}
+              </div>
+              <div className="space-y-2">
+                <Label>Catatan (opsional)</Label>
+                <Input placeholder="Catatan pembayaran..." value={payNotes} onChange={(e) => setPayNotes(e.target.value)} data-testid="pay-notes-input" />
+              </div>
+              <div className="flex gap-2 justify-end pt-2">
+                <Button variant="outline" onClick={() => setPayModalOpen(false)}>Batal</Button>
+                <Button onClick={handlePay} disabled={paySubmitting || !payAmount} data-testid="submit-pay-btn">
+                  {paySubmitting ? 'Memproses...' : `Bayar ${payAmount ? fmt(parseFloat(payAmount) || 0) : ''}`}
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
-
-function SummaryCard({ icon: Icon, label, value, sub, color, bg, testId }) {
-  return (
-    <div className={`${bg} rounded-xl p-3 sm:p-4 border`} data-testid={testId}>
-      <div className="flex items-center gap-2 mb-1">
-        <Icon className={`w-4 h-4 ${color}`} />
-        <span className="text-xs sm:text-sm text-gray-600 font-medium">{label}</span>
-      </div>
-      <p className={`text-base sm:text-xl font-bold ${color} truncate`}>{value}</p>
-      {sub && <p className="text-[10px] sm:text-xs text-gray-500 mt-0.5">{sub}</p>}
-    </div>
-  );
-}

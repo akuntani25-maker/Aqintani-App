@@ -21,7 +21,6 @@ export const AdminLayout = () => {
     { to: '/admin/products', icon: Package, label: 'Produk' },
     { to: '/admin/categories', icon: Layers, label: 'Kategori' },
     { to: '/admin/suppliers', icon: Users, label: 'Supplier' },
-    { to: '/admin/purchases', icon: ShoppingBag, label: 'Pembelian' },
     { to: '/admin/supplier-debts', icon: Banknote, label: 'Hutang Supplier' },
     { to: '/admin/partner-stores', icon: Store, label: 'Kios Mitra' },
     { to: '/admin/partner-orders', icon: ShoppingCart, label: 'Pesanan Kios' },
