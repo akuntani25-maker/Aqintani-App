@@ -75,6 +75,16 @@ Build a responsive web application for a pharmacy and agriculture store named "U
 - **Consistent Output Across Devices**: All print CSS uses fixed pixel sizes and explicit page dimensions, eliminating browser-dependent rendering differences between PC and tablet. Colors forced to black for thermal readability
 - **Compact Receipt Layout**: Both POS (ReceiptPreview.js) and Partner Order (PartnerOrderReceipt.js) receipts use semantic CSS classes (`.receipt-store-name`, `.thermal-items`, `.no-print`) instead of Tailwind print: utilities for reliable cross-device printing
 
+### Supplier Debt Management (DONE - Mar 2026)
+- **Halaman Hutang Supplier**: Daftar semua supplier dengan total hutang, jumlah pembelian belum lunas, dan indikator jatuh tempo
+- **Summary Cards**: Total Hutang, Jumlah Supplier Berhutang, Dibayar Bulan Ini, Jatuh Tempo (>30 hari)
+- **Detail per Supplier**: Panel expandable dengan tab Pembelian (belum lunas) dan Riwayat Pembayaran
+- **Catat Pembayaran**: Modal dengan auto-distribusi ke pembelian paling lama, quick-fill 25%/50%/Lunasi
+- **Filter & Search**: Cari supplier, filter Semua/Ada Hutang/Jatuh Tempo/Lunas
+- **Export CSV**: Download laporan hutang ke file CSV
+- **Notifikasi Jatuh Tempo**: Alert banner untuk hutang lebih dari 30 hari
+- **Responsive**: Tampilan optimal di desktop, tablet, dan mobile
+
 ## Prioritized Backlog
 
 ### P1 - Next Up
