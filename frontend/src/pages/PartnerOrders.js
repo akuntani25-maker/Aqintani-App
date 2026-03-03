@@ -243,14 +243,15 @@ export const PartnerOrders = () => {
   return (
     <div className="p-4 md:p-6 lg:p-8 space-y-6" data-testid="partner-orders-page">
       <div className="flex flex-col gap-4">
-        <div>
-          <h1 className="text-2xl md:text-3xl lg:text-4xl font-bold tracking-tight">Pesanan Kios Mitra</h1>
-          <p className="text-sm text-muted-foreground mt-1">Buat dan kelola pesanan untuk kios mitra</p>
-        </div>
-        <Dialog open={isDialogOpen} onOpenChange={(open) => { setIsDialogOpen(open); if (!open) resetForm(); }}>
-          <DialogTrigger asChild>
-            <Button className="w-full md:w-auto" data-testid="create-order-button"><Plus className="w-4 h-4 mr-2" />Buat Pesanan</Button>
-          </DialogTrigger>
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div>
+            <h1 className="text-2xl md:text-3xl lg:text-4xl font-bold tracking-tight">Pesanan Kios Mitra</h1>
+            <p className="text-sm text-muted-foreground mt-1">Buat dan kelola pesanan untuk kios mitra</p>
+          </div>
+          <Dialog open={isDialogOpen} onOpenChange={(open) => { setIsDialogOpen(open); if (!open) resetForm(); }}>
+            <DialogTrigger asChild>
+              <Button className="w-auto self-start" data-testid="create-order-button"><Plus className="w-4 h-4 mr-2" />Buat Pesanan</Button>
+            </DialogTrigger>
           <DialogContent className="max-w-5xl max-h-[90vh] overflow-y-auto">
             <DialogHeader><DialogTitle>Buat Pesanan Kios Mitra</DialogTitle></DialogHeader>
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -375,7 +376,8 @@ export const PartnerOrders = () => {
               </div>
             </div>
           </DialogContent>
-        </Dialog>
+          </Dialog>
+        </div>
       </div>
 
       {/* Today Summary Cards */}

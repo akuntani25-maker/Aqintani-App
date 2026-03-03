@@ -171,17 +171,18 @@ export const Products = () => {
   return (
     <div className="p-4 md:p-6 lg:p-8 space-y-6" data-testid="products-page">
       <div className="flex flex-col gap-4">
-        <div>
-          <h1 className="text-2xl md:text-3xl lg:text-4xl font-bold tracking-tight">Produk</h1>
-          <p className="text-sm text-muted-foreground mt-1">Kelola produk, stok gudang & transfer</p>
-        </div>
-        <Dialog open={isDialogOpen} onOpenChange={(open) => { setIsDialogOpen(open); if (!open) resetForm(); }}>
-          <DialogTrigger asChild>
-            <Button data-testid="add-product-button">
-              <Plus className="w-4 h-4 mr-2" />
-              Tambah Produk
-            </Button>
-          </DialogTrigger>
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <div>
+            <h1 className="text-2xl md:text-3xl lg:text-4xl font-bold tracking-tight">Produk</h1>
+            <p className="text-sm text-muted-foreground mt-1">Kelola produk, stok gudang & transfer</p>
+          </div>
+          <Dialog open={isDialogOpen} onOpenChange={(open) => { setIsDialogOpen(open); if (!open) resetForm(); }}>
+            <DialogTrigger asChild>
+              <Button className="w-auto self-start" data-testid="add-product-button">
+                <Plus className="w-4 h-4 mr-2" />
+                Tambah Produk
+              </Button>
+            </DialogTrigger>
           <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>{editingProduct ? 'Edit Produk' : 'Tambah Produk Baru'}</DialogTitle>
@@ -300,7 +301,8 @@ export const Products = () => {
               </div>
             </form>
           </DialogContent>
-        </Dialog>
+          </Dialog>
+        </div>
       </div>
 
       {/* Search & Filters */}
