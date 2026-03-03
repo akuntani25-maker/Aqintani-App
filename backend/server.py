@@ -1125,6 +1125,205 @@ async def get_supplier_debt(supplier_id: str, admin: dict = Depends(require_admi
         "purchase_count": len(purchases)
     }
 
+# ============= SUPPLIER DEBT MANAGEMENT =============
+@api_router.get("/supplier-debts/overview")
+async def get_supplier_debts_overview(admin: dict = Depends(require_admin)):
+    """Returns all suppliers with their aggregated debt summary."""
+    suppliers = await db.suppliers.find({}, {"_id": 0}).sort("name", 1).to_list(1000)
+    purchases = await db.purchases.find({}, {"_id": 0}).to_list(10000)
+
+    # Group purchases by supplier
+    supplier_purchases = {}
+    for p in purchases:
+        sid = p.get("supplier_id", "")
+        if sid not in supplier_purchases:
+            supplier_purchases[sid] = []
+        supplier_purchases[sid].append(p)
+
+    result = []
+    for s in suppliers:
+        sid = s["id"]
+        sp = supplier_purchases.get(sid, [])
+        total_purchases = sum(p.get("total", 0) for p in sp)
+        total_paid = sum(p.get("paid", 0) for p in sp)
+        outstanding = total_purchases - total_paid
+        unpaid_purchases = [p for p in sp if p.get("remaining", 0) > 0]
+        last_purchase_date = max((p.get("date", "") for p in sp), default="") if sp else ""
+
+        # Calculate oldest unpaid purchase date as "due indicator"
+        oldest_unpaid_date = ""
+        if unpaid_purchases:
+            oldest_unpaid_date = min(p.get("date", "") for p in unpaid_purchases)
+
+        result.append({
+            "supplier_id": sid,
+            "supplier_name": s["name"],
+            "phone": s.get("phone", ""),
+            "contact_person": s.get("contact_person", ""),
+            "total_purchases": total_purchases,
+            "total_paid": total_paid,
+            "outstanding": outstanding,
+            "purchase_count": len(sp),
+            "unpaid_count": len(unpaid_purchases),
+            "last_purchase_date": last_purchase_date,
+            "oldest_unpaid_date": oldest_unpaid_date,
+        })
+
+    # Sort: suppliers with debt first, then by outstanding descending
+    result.sort(key=lambda x: (-1 if x["outstanding"] > 0 else 0, -x["outstanding"]))
+    return result
+
+@api_router.get("/supplier-debts/summary")
+async def get_supplier_debts_summary(admin: dict = Depends(require_admin)):
+    """Aggregate summary: total debt, suppliers with debt, payments this month."""
+    purchases = await db.purchases.find({}, {"_id": 0}).to_list(10000)
+
+    total_debt = sum(max(0, p.get("remaining", 0)) for p in purchases)
+    suppliers_with_debt = len(set(
+        p["supplier_id"] for p in purchases if p.get("remaining", 0) > 0
+    ))
+
+    # Payments this month
+    now = datetime.now(timezone.utc)
+    month_start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0).isoformat()
+    payments_this_month = await db.payment_history.find(
+        {"type": "supplier", "created_at": {"$gte": month_start}},
+        {"_id": 0}
+    ).to_list(10000)
+    total_paid_this_month = sum(p.get("amount", 0) for p in payments_this_month)
+
+    # Overdue count (purchases older than 30 days with remaining > 0)
+    thirty_days_ago = (now - timedelta(days=30)).strftime("%Y-%m-%d")
+    overdue_purchases = [
+        p for p in purchases
+        if p.get("remaining", 0) > 0 and p.get("date", "") <= thirty_days_ago
+    ]
+    overdue_total = sum(p.get("remaining", 0) for p in overdue_purchases)
+
+    return {
+        "total_debt": total_debt,
+        "suppliers_with_debt": suppliers_with_debt,
+        "total_paid_this_month": total_paid_this_month,
+        "payments_this_month_count": len(payments_this_month),
+        "overdue_count": len(overdue_purchases),
+        "overdue_total": overdue_total,
+    }
+
+@api_router.get("/supplier-debts/{supplier_id}/purchases")
+async def get_supplier_unpaid_purchases(supplier_id: str, show_all: bool = False, admin: dict = Depends(require_admin)):
+    """Returns purchases for a supplier, optionally filtering to unpaid only."""
+    query = {"supplier_id": supplier_id}
+    if not show_all:
+        query["remaining"] = {"$gt": 0}
+    purchases = await db.purchases.find(query, {"_id": 0}).sort("date", -1).to_list(1000)
+    return purchases
+
+@api_router.post("/supplier-debts/{supplier_id}/pay")
+async def pay_supplier_debt(supplier_id: str, amount: float, notes: str = "", admin: dict = Depends(require_admin)):
+    """Pay supplier debt — distributes payment to oldest unpaid purchases first."""
+    supplier = await db.suppliers.find_one({"id": supplier_id}, {"_id": 0})
+    if not supplier:
+        raise HTTPException(status_code=404, detail="Supplier not found")
+
+    # Get unpaid purchases sorted by date (oldest first)
+    unpaid = await db.purchases.find(
+        {"supplier_id": supplier_id, "remaining": {"$gt": 0}},
+        {"_id": 0}
+    ).sort("date", 1).to_list(1000)
+
+    if not unpaid:
+        raise HTTPException(status_code=400, detail="Tidak ada hutang untuk supplier ini")
+
+    remaining_amount = amount
+    paid_purchases = []
+
+    for purchase in unpaid:
+        if remaining_amount <= 0:
+            break
+        purchase_remaining = purchase.get("remaining", 0)
+        pay_this = min(remaining_amount, purchase_remaining)
+
+        new_paid = purchase["paid"] + pay_this
+        new_remaining = purchase["total"] - new_paid
+
+        await db.purchases.update_one(
+            {"id": purchase["id"]},
+            {"$set": {"paid": new_paid, "remaining": max(0, new_remaining)}}
+        )
+        paid_purchases.append({"purchase_id": purchase["id"], "amount": pay_this})
+        remaining_amount -= pay_this
+
+    # Record payment history
+    payment_doc = {
+        "id": str(uuid.uuid4()),
+        "type": "supplier",
+        "reference_id": supplier_id,
+        "supplier_id": supplier_id,
+        "supplier_name": supplier["name"],
+        "amount": amount,
+        "notes": notes or f"Pembayaran hutang ke {supplier['name']}",
+        "paid_purchases": paid_purchases,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+        "date": datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    }
+    await db.payment_history.insert_one(payment_doc)
+
+    # Recalculate remaining debt
+    all_purchases = await db.purchases.find({"supplier_id": supplier_id}, {"_id": 0}).to_list(1000)
+    new_total_debt = sum(max(0, p.get("remaining", 0)) for p in all_purchases)
+
+    return {
+        "message": "Pembayaran berhasil dicatat",
+        "amount_paid": amount,
+        "new_total_debt": new_total_debt,
+        "paid_purchases": paid_purchases,
+        "payment_id": payment_doc["id"]
+    }
+
+@api_router.get("/supplier-debts/export-csv")
+async def export_supplier_debts_csv(admin: dict = Depends(require_admin)):
+    """Export supplier debts to CSV."""
+    from io import StringIO
+    import csv
+    from starlette.responses import StreamingResponse
+
+    suppliers = await db.suppliers.find({}, {"_id": 0}).sort("name", 1).to_list(1000)
+    purchases = await db.purchases.find({}, {"_id": 0}).to_list(10000)
+
+    supplier_purchases = {}
+    for p in purchases:
+        sid = p.get("supplier_id", "")
+        if sid not in supplier_purchases:
+            supplier_purchases[sid] = []
+        supplier_purchases[sid].append(p)
+
+    output = StringIO()
+    writer = csv.writer(output)
+    writer.writerow(["Supplier", "Kontak", "Telepon", "Jml Pembelian", "Total Pembelian", "Total Dibayar", "Sisa Hutang", "Pembelian Belum Lunas", "Tanggal Pembelian Terakhir"])
+
+    for s in suppliers:
+        sid = s["id"]
+        sp = supplier_purchases.get(sid, [])
+        total = sum(p.get("total", 0) for p in sp)
+        paid = sum(p.get("paid", 0) for p in sp)
+        outstanding = total - paid
+        unpaid_count = len([p for p in sp if p.get("remaining", 0) > 0])
+        last_date = max((p.get("date", "") for p in sp), default="-") if sp else "-"
+
+        if outstanding > 0 or len(sp) > 0:
+            writer.writerow([
+                s["name"], s.get("contact_person", ""), s.get("phone", ""),
+                len(sp), f"{total:.0f}", f"{paid:.0f}", f"{outstanding:.0f}",
+                unpaid_count, last_date
+            ])
+
+    output.seek(0)
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": f"attachment; filename=hutang_supplier_{datetime.now(timezone.utc).strftime('%Y%m%d')}.csv"}
+    )
+
 # ============= PARTNER STORES (Kios Mitra) =============
 @api_router.get("/partner-stores", response_model=List[PartnerStore])
 async def get_partner_stores(current_user: dict = Depends(get_current_user)):

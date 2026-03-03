@@ -5,7 +5,7 @@ import { Button } from './ui/button';
 import { 
   LayoutDashboard, Package, Users, Layers, FileText, Settings, LogOut,
   Sprout, UserCog, Printer, Store, ShoppingCart, Truck, TrendingUp, ShoppingBag,
-  Menu, X
+  Menu, X, Banknote
 } from 'lucide-react';
 
 export const AdminLayout = () => {
@@ -22,6 +22,7 @@ export const AdminLayout = () => {
     { to: '/admin/categories', icon: Layers, label: 'Kategori' },
     { to: '/admin/suppliers', icon: Users, label: 'Supplier' },
     { to: '/admin/purchases', icon: ShoppingBag, label: 'Pembelian' },
+    { to: '/admin/supplier-debts', icon: Banknote, label: 'Hutang Supplier' },
     { to: '/admin/partner-stores', icon: Store, label: 'Kios Mitra' },
     { to: '/admin/partner-orders', icon: ShoppingCart, label: 'Pesanan Kios' },
     { to: '/admin/canvassers', icon: Truck, label: 'Kanvaser' },
