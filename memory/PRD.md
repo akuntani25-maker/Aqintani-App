@@ -86,6 +86,15 @@ Build a responsive web application for a pharmacy and agriculture store named "U
 - **Auto-purchase**: Produk baru otomatis membuat record pembelian ke supplier terkait
 - **Responsive**: Optimal di desktop, tablet, dan mobile
 
+### Bulk Data Import (DONE - Mar 2026)
+- **Halaman Import Data**: Admin page (`/admin/import-data`) for importing CSV/XLSX files directly into the database, **bypassing all business logic** (no auto-purchase, no stock deduction, no debt recalculation).
+- **9 Import Types**: Gudang, Kategori, Supplier, Produk, Stok per Gudang, Pembelian Supplier, Pembayaran Hutang, Kios Mitra, Pesanan Kios Mitra — displayed in correct dependency order.
+- **Smart Validation**: Name-based matching for foreign keys (e.g., category/supplier names mapped to IDs). Duplicate detection by name. Missing references reported as errors.
+- **Grouped Imports**: Purchases and Partner Orders support multi-row grouping by `no_pembelian`/`no_pesanan` for multi-item records.
+- **Template Download**: CSV templates with correct column headers for each type.
+- **Clear Collection**: "Hapus Semua" button to wipe and re-import any collection.
+- **API Endpoints**: `GET /api/import/types`, `GET /api/import/counts`, `GET /api/import/template/{type}`, `POST /api/import/{type}`, `DELETE /api/import/clear/{type}`
+
 ## Prioritized Backlog
 
 ### P1 - Next Up
