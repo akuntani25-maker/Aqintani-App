@@ -125,7 +125,7 @@ export const PartnerOrderReceipt = () => {
     const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width">
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
-body{width:48mm;max-width:48mm;padding:1mm 0.5mm;font:10px/1.4 'Courier New',Courier,monospace;-webkit-text-size-adjust:100%;color:#000}
+body{width:48mm;max-width:48mm;padding:1mm 0.5mm;font:10px/1.4 Consolas,'Droid Sans Mono','Liberation Mono','Lucida Console',monospace;-webkit-text-size-adjust:100%;color:#000}
 @page{margin:0}
 b{font-weight:900}
 .sep{overflow:hidden;letter-spacing:-0.5px;font-size:9px;line-height:1}
@@ -161,7 +161,7 @@ b{font-weight:900}
 
       {/* On-screen Preview */}
       <div className="max-w-md mx-auto p-4 sm:p-6">
-        <div id="receipt-content" className="bg-white rounded-xl shadow-lg p-5 sm:p-6 font-mono text-sm" data-testid="receipt-content">
+        <div id="receipt-content" className="bg-white rounded-xl shadow-lg p-5 sm:p-6 text-sm" style={{fontFamily: "Consolas, 'Droid Sans Mono', 'Liberation Mono', 'Lucida Console', monospace"}} data-testid="receipt-content">
           <div className="text-center mb-3 pb-3 border-b border-gray-300">
             <h1 className="text-lg font-bold">{storeSettings?.store_name || 'UD. AQIN TANI'}</h1>
             <p className="text-xs text-gray-600">{storeSettings?.address || 'Toko Obat & Alat Pertanian'}</p>
