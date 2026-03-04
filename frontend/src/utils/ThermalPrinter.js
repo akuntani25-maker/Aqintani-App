@@ -224,21 +224,28 @@ class ThermalPrinter {
     return 'Rp ' + new Intl.NumberFormat('id-ID', { minimumFractionDigits: 0 }).format(v);
   }
 
-  async printReceipt(transaction) {
+  async printReceipt(transaction, storeSettings = {}) {
     const d = [];
     const w = this.getCharWidth();
     const sep = '-'.repeat(w);
+    const storeName = storeSettings?.store_name || 'UD. AQIN TANI';
+    const storeAddr = storeSettings?.address || 'Toko Obat & Alat Pertanian';
+    const storePhone = storeSettings?.phone || '';
 
     d.push(...this.commands.INIT);
     d.push(...this.commands.ALIGN_CENTER);
     d.push(...this.commands.SIZE_DOUBLE);
     d.push(...this.commands.BOLD_ON);
-    d.push(...this.textToBytes('UD. AQIN TANI'));
+    d.push(...this.textToBytes(storeName));
     d.push(...this.commands.LINE_FEED);
     d.push(...this.commands.SIZE_NORMAL);
     d.push(...this.commands.BOLD_OFF);
-    d.push(...this.textToBytes('Toko Obat & Alat Pertanian'));
+    d.push(...this.textToBytes(storeAddr));
     d.push(...this.commands.LINE_FEED);
+    if (storePhone) {
+      d.push(...this.textToBytes('Telp: ' + storePhone));
+      d.push(...this.commands.LINE_FEED);
+    }
     d.push(...this.commands.ALIGN_LEFT);
     d.push(...this.textToBytes(sep));
     d.push(...this.commands.LINE_FEED);
@@ -286,6 +293,132 @@ class ThermalPrinter {
     return await this.sendData(d);
   }
 
+  async printPartnerOrderReceipt(order, storeSettings = {}) {
+    const d = [];
+    const w = this.getCharWidth();
+    const sep = '-'.repeat(w);
+    const storeName = storeSettings?.store_name || 'UD. AQIN TANI';
+    const storeAddr = storeSettings?.address || '';
+    const storePhone = storeSettings?.phone || '';
+
+    d.push(...this.commands.INIT);
+    d.push(...this.commands.ALIGN_CENTER);
+    d.push(...this.commands.SIZE_DOUBLE);
+    d.push(...this.commands.BOLD_ON);
+    d.push(...this.textToBytes(storeName));
+    d.push(...this.commands.LINE_FEED);
+    d.push(...this.commands.SIZE_NORMAL);
+    d.push(...this.commands.BOLD_OFF);
+    if (storeAddr) {
+      d.push(...this.textToBytes(storeAddr));
+      d.push(...this.commands.LINE_FEED);
+    }
+    if (storePhone) {
+      d.push(...this.textToBytes('Telp: ' + storePhone));
+      d.push(...this.commands.LINE_FEED);
+    }
+
+    d.push(...this.commands.ALIGN_LEFT);
+    d.push(...this.textToBytes(sep));
+    d.push(...this.commands.LINE_FEED);
+    d.push(...this.commands.BOLD_ON);
+    d.push(...this.textToBytes('STRUK PESANAN KIOS MITRA'));
+    d.push(...this.commands.LINE_FEED);
+    d.push(...this.commands.BOLD_OFF);
+    const tgl = new Date(order.created_at).toLocaleString('id-ID', {
+      day: '2-digit', month: '2-digit', year: '2-digit',
+      hour: '2-digit', minute: '2-digit'
+    });
+    d.push(...this.textToBytes('No   : ' + order.order_number));
+    d.push(...this.commands.LINE_FEED);
+    d.push(...this.textToBytes('Tgl  : ' + tgl));
+    d.push(...this.commands.LINE_FEED);
+    d.push(...this.textToBytes('Kios : ' + order.partner_store_name));
+    d.push(...this.commands.LINE_FEED);
+    if (order.partner_phone) {
+      d.push(...this.textToBytes('Telp : ' + order.partner_phone));
+      d.push(...this.commands.LINE_FEED);
+    }
+    if (order.canvasser_name) {
+      d.push(...this.textToBytes('Sales: ' + order.canvasser_name));
+      d.push(...this.commands.LINE_FEED);
+    }
+    d.push(...this.textToBytes(sep));
+    d.push(...this.commands.LINE_FEED);
+
+    order.items.forEach(item => {
+      d.push(...this.textToBytes(item.product_name));
+      d.push(...this.commands.LINE_FEED);
+      const left = `${item.quantity}x${this.formatCurrency(item.price)}`;
+      const right = this.formatCurrency(item.subtotal);
+      d.push(...this.textToBytes(this.formatLine(left, right)));
+      d.push(...this.commands.LINE_FEED);
+    });
+
+    d.push(...this.textToBytes(sep));
+    d.push(...this.commands.LINE_FEED);
+    d.push(...this.textToBytes(this.formatLine('Subtotal:', this.formatCurrency(order.subtotal))));
+    d.push(...this.commands.LINE_FEED);
+    if (order.discount > 0) {
+      d.push(...this.textToBytes(this.formatLine('Diskon:', '-' + this.formatCurrency(order.discount))));
+      d.push(...this.commands.LINE_FEED);
+    }
+    d.push(...this.commands.BOLD_ON);
+    d.push(...this.textToBytes(this.formatLine('TOTAL:', this.formatCurrency(order.total))));
+    d.push(...this.commands.LINE_FEED);
+    d.push(...this.commands.BOLD_OFF);
+
+    if (order.paid > 0) {
+      d.push(...this.textToBytes(this.formatLine('Dibayar:', this.formatCurrency(order.paid))));
+      d.push(...this.commands.LINE_FEED);
+    }
+    if (order.remaining > 0) {
+      d.push(...this.textToBytes(this.formatLine('Sisa Bon:', this.formatCurrency(order.remaining))));
+      d.push(...this.commands.LINE_FEED);
+    }
+
+    const previousDebt = Math.max(0, (order.partner_debt_total || 0) - (order.remaining || 0));
+    if (previousDebt > 0 || order.remaining > 0) {
+      d.push(...this.textToBytes(sep));
+      d.push(...this.commands.LINE_FEED);
+      d.push(...this.commands.BOLD_ON);
+      d.push(...this.textToBytes('REKAP BON / HUTANG'));
+      d.push(...this.commands.LINE_FEED);
+      d.push(...this.commands.BOLD_OFF);
+      if (previousDebt > 0) {
+        d.push(...this.textToBytes(this.formatLine('Bon Lama:', this.formatCurrency(previousDebt))));
+        d.push(...this.commands.LINE_FEED);
+      }
+      d.push(...this.textToBytes(this.formatLine('Bon Ini:', this.formatCurrency(order.remaining))));
+      d.push(...this.commands.LINE_FEED);
+      d.push(...this.commands.BOLD_ON);
+      d.push(...this.textToBytes(this.formatLine('TTL HUTANG:', this.formatCurrency(order.partner_debt_total || 0))));
+      d.push(...this.commands.LINE_FEED);
+      d.push(...this.commands.BOLD_OFF);
+    }
+
+    const grandTotal = previousDebt + order.total;
+    d.push(...this.textToBytes(sep));
+    d.push(...this.commands.LINE_FEED);
+    d.push(...this.commands.BOLD_ON);
+    d.push(...this.textToBytes(this.formatLine('GRAND TOTAL:', this.formatCurrency(grandTotal))));
+    d.push(...this.commands.LINE_FEED);
+    d.push(...this.commands.BOLD_OFF);
+
+    d.push(...this.commands.ALIGN_CENTER);
+    d.push(...this.textToBytes(sep));
+    d.push(...this.commands.LINE_FEED);
+    d.push(...this.textToBytes('Terima kasih!'));
+    d.push(...this.commands.LINE_FEED);
+    d.push(...this.textToBytes('Simpan struk sebagai bukti'));
+    d.push(...this.commands.LINE_FEED);
+    d.push(...this.commands.LINE_FEED);
+    d.push(...this.commands.LINE_FEED);
+    d.push(...this.commands.CUT);
+
+    return await this.sendData(d);
+  }
+
   async testPrint() {
     const d = [];
     d.push(...this.commands.INIT);
@@ -321,4 +454,5 @@ class ThermalPrinter {
   }
 }
 
+export const thermalPrinter = new ThermalPrinter();
 export default ThermalPrinter;

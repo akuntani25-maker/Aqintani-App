@@ -2,8 +2,9 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from '../context/AuthContext';
 import { Button } from '../components/ui/button';
-import { Printer, ArrowLeft } from 'lucide-react';
+import { Printer, ArrowLeft, Bluetooth, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { thermalPrinter } from '../utils/ThermalPrinter';
 
 const SEP = '================================';
 const SEP_THIN = '--------------------------------';
@@ -29,6 +30,34 @@ export const ReceiptPreview = () => {
   const [transaction, setTransaction] = useState(null);
   const [storeSettings, setStoreSettings] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [btStatus, setBtStatus] = useState('idle');
+
+  const handleBluetoothPrint = async () => {
+    if (!transaction) return;
+    try {
+      if (!thermalPrinter.isConnected()) {
+        setBtStatus('connecting');
+        const res = await thermalPrinter.connectBluetooth();
+        if (!res.success) {
+          toast.error(res.message);
+          setBtStatus('idle');
+          return;
+        }
+        toast.success(res.message);
+      }
+      setBtStatus('printing');
+      const ok = await thermalPrinter.printReceipt(transaction, storeSettings);
+      if (ok) {
+        toast.success('Struk berhasil dicetak via Bluetooth!');
+      } else {
+        toast.error('Gagal mencetak. Coba ulangi.');
+      }
+    } catch (err) {
+      toast.error('Error: ' + err.message);
+    } finally {
+      setBtStatus('idle');
+    }
+  };
 
   useEffect(() => {
     const transactionId = searchParams.get('id');
@@ -136,9 +165,15 @@ b{font-weight:900}
           <Button variant="outline" onClick={() => navigate('/pos')} data-testid="back-to-pos-button">
             <ArrowLeft className="w-4 h-4 mr-2" />Kembali ke POS
           </Button>
-          <Button variant="default" onClick={handlePrint} className="shadow-lg" data-testid="print-receipt-button">
-            <Printer className="w-4 h-4 mr-2" />Print Struk
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={handlePrint} data-testid="print-receipt-button">
+              <Printer className="w-4 h-4 mr-2" />Print Struk
+            </Button>
+            <Button onClick={handleBluetoothPrint} disabled={btStatus !== 'idle'} data-testid="bluetooth-print-button">
+              {btStatus !== 'idle' ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Bluetooth className="w-4 h-4 mr-2" />}
+              {btStatus === 'connecting' ? 'Menghubungkan...' : btStatus === 'printing' ? 'Mencetak...' : 'Cetak via Bluetooth'}
+            </Button>
+          </div>
         </div>
       </div>
 

@@ -11,8 +11,8 @@
   },
   "test_report_links": [],
   "passed_tests": [
-    "Partner Order Receipt page loads at /partner-receipt?id=4bc9f7ca-1445-47a8-a21c-7ea96f1f4e81 - PASS",
-    "POS Receipt page loads at /receipt-preview?id=401cf15a-1a80-4e12-b2e6-57b41bcf0cb1 - PASS",
+    "Partner Order Receipt page loads at /partner-receipt?id=aqin-inventory - PASS",
+    "POS Receipt page loads at /receipt-preview?id=aqin-inventory - PASS",
     "Partner Receipt shows store name, order details, items, totals correctly - PASS",
     "POS Receipt shows store name, transaction details, items, totals, payment info correctly - PASS",
     "Both receipts display compact layout (max-w-md container) on desktop - PASS",

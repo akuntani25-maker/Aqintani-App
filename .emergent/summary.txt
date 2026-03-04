@@ -17,62 +17,57 @@
 **User's preferred language**: The user's primary language is Indonesian. The next agent MUST respond in Indonesian.
 
 **what currently exists?**
-A mature, full-stack application that serves as a comprehensive business management tool for UD. AQIN TANI. The application features role-based access for Admins, Canvassers, and Cashiers. Key functionalities include a multi-warehouse inventory system, a B2B portal for partner kiosks with custom pricing and order management, a detailed reporting suite with margin analysis and best-seller tracking, and a fully responsive UI. The system supports complex workflows like automated purchase creation, debt tracking with suppliers, product returns, and manual price adjustments at the point of sale.
+A mature, full-stack application serving as a comprehensive business management tool. It includes role-based access, multi-warehouse inventory, a B2B portal, detailed sales/margin reporting, and a POS. Recent additions include a full-featured supplier debt management page and a globally collapsible sidebar for improved UI on all devices. The application is fully responsive. The primary blocker is the thermal printer integration, which is currently non-functional.
 
 **Last working item**:
--   **Last item agent was working**: Fixing issues related to thermal printer connectivity and receipt formatting. The user reported that the Bluetooth printer connection fails on PC, tablet, and mobile, the receipt size doesn't adjust for mobile/tablet printing, and the partner kiosk receipt has too much empty space. The agent analyzed the code and identified the root causes in , , and .
+-   **Last item agent was working**: The agent was about to refactor the thermal printing mechanism. After multiple failed attempts to fix printing issues (incorrect paper length, small fonts, inconsistent output) using browser-based printing (), the user revealed that their printer has a built-in font (). The agent correctly identified that using this font requires bypassing the browser's print rendering entirely and sending raw ESC/POS commands directly to the printer via the Web Bluetooth API.
 -   **Status**: IN PROGRESS
 -   **Agent Testing Done**: N
--   **Which testing method agent to use?**: Frontend testing using the screenshot tool to verify the updated CSS for the receipt components (, ). The Bluetooth logic changes in  cannot be fully tested in the environment, so the agent should implement the fixes based on best practices and inform the user to test on their physical device.
+-   **Which testing method agent to use?**: This functionality cannot be tested automatically. The agent must implement the logic to generate and send ESC/POS commands and then instruct the user to test it on their physical hardware, as the environment lacks a Bluetooth thermal printer.
 -   **User Testing Done**: N
 
 **All Pending/In progress Issue list**:
--   **Issue 1: Fix Thermal Printer Connectivity and Receipt Formatting (P0)**
+-   **Issue 1: Implement Direct ESC/POS Command Printing via Bluetooth (P0)**
 
 **Issues Detail**:
--   **Issue 1: Fix Thermal Printer Connectivity and Receipt Formatting**
-    -   **Attempted fixes**: The agent has analyzed the code and identified the following problems:
-        1.  **Bluetooth Connection:** The name filter in  is too restrictive, the service UUID is hardcoded, and the data chunk size is too small, causing connection failures.
-        2.  **Receipt Sizing:** The print CSS in  and  is fixed for A4 paper and does not adapt to smaller thermal printer sizes on mobile/tablet.
-        3.  **Receipt Layout:** The  component uses excessive margins and padding, wasting paper.
+-   **Issue 1: Implement Direct ESC/POS Command Printing via Bluetooth**
+    -   **Attempted fixes**: All previous fixes using standard web technologies failed because the user's third-party printing app on their tablet () overrides browser settings.
+        1.  **CSS  rules**: Ignored by the print service, resulting in incorrect paper length.
+        2.  **Popup/Iframe Printing**: Did not resolve the issue and were sometimes blocked on mobile.
+        3.  **Web Fonts (, )**: Failed because they are rendered as images, not using the printer's sharper, built-in hardware font.
     -   **Next debug checklist**:
-        1.  **Edit **:
-            *   Make the Bluetooth device name filter less restrictive.
-            *   Remove the hardcoded service UUID and discover it dynamically.
-            *   Increase the chunk size for data transfer.
-        2.  **Edit  and **:
-            *   Modify the  CSS to use a flexible width (e.g.,  or ) instead of fixed sizes.
-            *   Remove fixed page sizes ().
-            *   Significantly reduce margins, padding, and font sizes within the receipt components to create a compact layout suitable for thermal printers.
-    -   **Why fix this issue and what will be achieved with the fix?**: This is crucial for the business's daily operations, enabling them to print accurate and correctly formatted receipts for customers and partner kiosks from any device.
+        1.  Add a new button, Cetak via Bluetooth, to the receipt pages (, ).
+        2.  On click, this button should trigger a function that converts the receipt's text content into a raw text string.
+        3.  Modify  to create a new function that takes this raw text and constructs a proper ESC/POS command buffer (including commands for initialization, text encoding, line feeds, and paper cutting).
+        4.  Use the existing Web Bluetooth logic in  to send this command buffer directly to the connected printer.
+    -   **Why fix this issue and what will be achieved with the fix?**: This will finally provide a reliable printing solution that bypasses the problematic browser/app rendering layer. It will use the printer's native font for fast, crisp, and correctly formatted receipts, resolving a critical business requirement.
     -   **Status**: IN PROGRESS
-    -   **Is recurring issue?**: N
-    -   **Should Test frontend/backend/both after fix?**: Frontend
+    -   **Is recurring issue?**: Y
+    -   **Should Test frontend/backend/both after fix?**: User testing on physical hardware is required.
     -   **Blocked on other issue**: None
 
 **In progress Task List**:
--   **Task 1: Implement Fixes for Thermal Printer and Receipts (P0)**
-    -   **Where to resume**: Start by editing  to fix the Bluetooth connectivity logic.
-    -   **What will be achieved with this?**: A reliable printing function that works across devices and produces compact, correctly formatted receipts.
+-   **Task 1: Implement Direct ESC/POS Bluetooth Printing (P0)**
+    -   **Where to resume**: The agent had just concluded that ESC/POS is the correct path and was about to examine  to plan the implementation. The next step is to start modifying this file.
+    -   **What will be achieved with this?**: A working Cetak via Bluetooth feature that sends raw text and commands to the printer.
     -   **Status**: IN PROGRESS
-    -   **Should Test frontend/backend/both after fix?**: Frontend
+    -   **Should Test frontend/backend/both after fix?**: User testing required.
     -   **Blocked on something**: None
 
 **Upcoming and Future Tasks**
--   **Future Tasks:**
-    -   (P1) Develop a dedicated supplier debt management page to view all outstanding balances and record payments.
+-   None. The previously planned future task (Supplier Debt Management) has been completed.
 
 **Completed work in this session**
--   **Partial Payment on New Product (DONE)**: Implemented Bayar di Muka feature, allowing partial payments when adding new products, automatically tracking the remaining amount as debt.
--   **Dynamic Summary on Purchases Page (DONE)**: Summary cards on the Purchases page now update dynamically based on the selected supplier filter.
--   **Flexible Partner Kiosk Ordering (DONE)**: Implemented features for partner kiosks to order products using warehouse-specific units (dus/satuan) and for admins to manually edit the sale price per item in an order.
--   **Partner Kiosk Order Deletion (DONE)**: Added functionality to delete partner orders, which also correctly adjusts the partner's outstanding debt.
--   **Product Return Feature (DONE)**: Implemented a workflow to mark partner orders as Returned and adjust stock levels accordingly.
--   **Receipt Generation for Kiosks (DONE)**: Created a printable receipt page for partner kiosk orders that includes previous outstanding balances.
--   **Detailed Sales Reports (DONE)**: Revamped the Reports page with detailed, tabulated reports for POS and Kiosk sales, including margin calculations.
--   **Best-Selling Products Report (DONE)**: Added a Produk Terlaris tab to the reports page, showing ranked products by sales volume and revenue.
--   **Database Reset Functionality (DONE)**: Created a feature to clear all transactional data (products, orders, etc.) while preserving essential configurations (users, warehouses, store settings) for testing.
--   **Full Application Responsiveness (DONE)**: Refactored the entire application, including the main layout, all dashboards, pages, and cards, to be fully responsive and provide a consistent user experience on mobile, tablet, and desktop devices.
+-   **Supplier Debt Management Feature (DONE)**:
+    -   Created a new page () to track, view history, and record payments for debts to suppliers.
+    -   Added 4 new backend endpoints in  to support this functionality.
+    -   The old  page and navigation link were removed, as this new page supersedes it.
+-   **Global Collapsible Sidebar (DONE)**:
+    -   Refactored  to make the sidebar collapsible on all devices, including desktop, providing more screen real estate.
+-   **UI Layout Fixes (DONE)**:
+    -   Standardized button widths on  and  to prevent them from stretching to full width on larger screens.
+-   **Multiple Failed Printer Fixes (ABANDONED)**:
+    -   Attempted to control print layout via CSS  size, dynamic JS height calculation, and various web fonts (, ), all of which were ineffective due to the user's specific printing environment.
 
 **Earlier issues found/mentioned but not fixed**
 -   None.
@@ -84,67 +79,67 @@ A mature, full-stack application that serves as a comprehensive business managem
 
 
 **Key Technical Concepts**
--   **Backend**: FastAPI, Pydantic, JWT, Motor (async MongoDB driver).
--   **Frontend**: React, React Router, Tailwind CSS, Shadcn/UI, , , .
--   **Architecture**: The backend is a large monolith (). The frontend is a responsive, component-based SPA supporting multiple user roles (, , ).
--   **Hardware Integration**: Web Bluetooth API for thermal printer communication.
+-   **Backend**: FastAPI, Pydantic, JWT, Motor.
+-   **Frontend**: React, React Router, Tailwind CSS, Shadcn/UI.
+-   **Hardware Integration**: The focus has shifted from browser-based printing to direct hardware communication using the **Web Bluetooth API** and **ESC/POS printer command language**.
 
 **key DB schema**
--   **partner_orders**: Contains  array, , , and a boolean .
--   **transactions**: Contains  array for POS sales.
--   **products**: Contains  (satuan),  (dus), , and .
--   **purchases**: Contains  and  to track supplier liabilities.
--   **warehouses**: {, } (e.g., 'Gudang Utama', 'dus').
--   **warehouse_stocks**: {, , , }.
+-   No changes made to the database schema in this session. New endpoints query existing collections.
 
 **changes in tech stack**
 -   None.
 
 **All files of reference**
--   : **Needs editing** for Bluetooth logic.
--   : **Needs editing** for print CSS.
--   : **Needs editing** for print CSS.
--   : Contains all backend logic. The endpoints for returns and order deletion were recently added.
--   : Contains the UI for creating and managing partner orders, including the Retur and Hapus buttons.
--   : Contains the main responsive navigation structure.
+-   : **Primary file to be modified** for ESC/POS logic.
+-   : **Needs modification** to add the new print button and call the ESC/POS function.
+-   : **Needs modification** for the same reason.
+-   : Was modified to add supplier debt endpoints.
+-   : Newly created page.
+-   : Recently refactored.
+-   : Recently refactored to remove old route.
 
 **Areas that need refactoring**:
--   The  file is extremely large. It is a high-priority candidate for being split into a modern project structure with separate files for routers, models, and services to improve maintainability.
+-   The  file remains a large monolith and is a prime candidate for being split into a proper project structure (routers, models, services).
+-   The two receipt components (, ) could share logic. A custom hook (e.g., ) could encapsulate the logic for both browser printing (as a fallback) and direct ESC/POS printing, reducing code duplication.
 
 **key api endpoints**
--   ****: Deletes a partner order and adjusts partner debt.
--   ****: Marks a partner order as returned and restocks the items.
--   ****: Fetches detailed sales data for reports.
--   ****: Fetches detailed partner kiosk sales data.
--   ****: Fetches ranked best-selling products.
+-   
+-   
+-   
+-   
 
 **Critical Info for New Agent**
--   Your immediate and only task is to fix the thermal printer issues.
--   The previous agent has already diagnosed the problems and laid out a clear plan.
--   You need to edit three frontend files:  (for Bluetooth logic) and both  files (for print CSS).
--   The Bluetooth logic fix is theoretical; you cannot test it directly. Implement the changes and inform the user that they will need to verify on their hardware.
--   The CSS changes for the receipts can be verified using the screenshot tool to check the new compact layout.
+-   Your immediate and only task is to fix the thermal printer by implementing **direct ESC/POS command printing via Bluetooth**.
+-   **DO NOT** attempt to use  or any CSS-based solutions. They have all failed and been rejected by the user's environment.
+-   The goal is to use the printer's built-in font () by sending raw text commands, not by rendering HTML.
+-   You will need to add a new Cetak via Bluetooth button and implement the logic in  to generate and send the appropriate ESC/POS byte sequence.
+-   This feature can only be validated by the user on their physical device. Your task is to implement the code correctly and explain to the user how to test it.
 
 **documents and test reports created in this job**
 -    (updated)
--   Multiple test reports, with the latest being .
+-   Multiple test reports, with the latest being  (from testing the Supplier Debt feature).
 
 **Last 10 User Messages and any pending HUMAN messages**
-1.  **User**: Asks to make the entire web application responsive for mobile and tablet. (Status: Completed)
-2.  **User**: Deploys a health check agent. (Status: Completed)
-3.  **User**: Reports that summary card font sizes are too large on mobile, and action buttons are not sized consistently. (Status: Completed)
-4.  **User**: Reports that numbers on cards are still cut off on mobile. (Status: Completed)
-5.  **User**: **Reports that the thermal printer cannot connect via Bluetooth on any device, and the receipt format is incorrect on mobile/tablet. Asks for a fix.** (Status: **IN PROGRESS - Current Task**)
+1.  **User**: The printout is still too long.
+2.  **Agent**: Proposes a new solution: print from a clean popup window to avoid extra page elements.
+3.  **User**: Agrees to the new plan (halaman manajemen utang supplier). (This seems to be a context switch from the user).
+4.  **Agent**: Proposes a detailed plan for the Supplier Debt page.
+5.  **User**: Approves the plan (iya sudah sesuai, tambahin fitur tambahan yang kamu tawarkan juga).
+6.  **User**: Asks for layout changes: make the Supplier Debt page layout consistent with others and remove the old Pembelian page.
+7.  **User**: Requests a globally collapsible sidebar and fixed-width buttons.
+8.  **User**: **Reports that printing from a tablet/mobile fails, the dashed lines add extra length, and asks for a standard receipt font.**
+9.  **User**: Provides a picture of the desired font and then corrects the name to Merchant Copy. After the agent implements it, the user corrects it again to bitArray-A2.
+10. **User**: **Clarifies that  is a font built into the printer's firmware and asks how to use it.**
 
 **Project Health Check:**
--   **Broken**: The thermal printer integration is currently not functional due to Bluetooth connection issues and incorrect receipt formatting.
+-   **Broken**: Thermal printing is non-functional and is a critical business workflow.
 -   **Mocked**: None.
 
 **3rd Party Integrations**
--   None.
+-   The user's workflow relies on a third-party Android application named **ESC POS Print Service**, which intercepts browser print jobs. Its behavior is the root cause of the printing issues, necessitating the switch to direct ESC/POS commands.
 
 **Testing status**
--   **Testing agent used after significant changes**: YES, used frequently and successfully for all major features, including responsiveness.
+-   **Testing agent used after significant changes**: YES, for the Supplier Debt Management feature. All tests passed.
 -   **Troubleshoot agent used after agent stuck in loop**: NO
 -   **Test files created**: []
 -   **Known regressions**: None.
@@ -158,4 +153,4 @@ A mature, full-stack application that serves as a comprehensive business managem
     -   Password: 
 
 **What agent forgot to execute**
--   The agent was in the middle of addressing the user's request to fix the printer and did not forget anything. The task was interrupted mid-stream.</analysis>
+-   Nothing. The agent was actively working on the user's core problem and the session ended just as the correct, conclusive solution (ESC/POS) was identified.</analysis>
