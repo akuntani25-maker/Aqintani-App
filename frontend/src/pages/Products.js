@@ -375,13 +375,14 @@ export const Products = () => {
                 <TableHead className="text-center">G. Lainnya<br/><span className="text-xs font-normal">(dus)</span></TableHead>
                 <TableHead className="text-center">Total<br/><span className="text-xs font-normal">(satuan)</span></TableHead>
                 <TableHead className="text-right">Harga Satuan</TableHead>
+                <TableHead className="text-right">HPP/Satuan</TableHead>
                 <TableHead className="text-center">Aksi</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {filteredProducts.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={9} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={10} className="text-center py-8 text-muted-foreground">
                     <Package className="w-12 h-12 mx-auto mb-2 opacity-50" />
                     <p>Tidak ada produk</p>
                   </TableCell>
@@ -415,6 +416,7 @@ export const Products = () => {
                       {isLow && <AlertTriangle className="w-3 h-3 text-orange-500 inline ml-1" />}
                     </TableCell>
                     <TableCell className="text-right">{fmt(product.price)}</TableCell>
+                    <TableCell className="text-right text-muted-foreground">{fmt(product.cost_price / Math.max(1, product.items_per_box || 1))}</TableCell>
                     <TableCell>
                       <div className="flex items-center justify-center gap-1">
                         <Button size="sm" variant="ghost" onClick={() => openTransfer(product)} title="Transfer Stok" data-testid={`transfer-${product.id}`}>

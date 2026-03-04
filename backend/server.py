@@ -539,7 +539,7 @@ async def create_product(data: ProductCreate, admin: dict = Depends(require_admi
                 "paid": paid,
                 "remaining": remaining,
                 "warehouse_id": warehouse_id,
-                "notes": f"Pembelian awal - {data.name}" + (f" (Tempo)" if remaining > 0 else ""),
+                "notes": f"Pembelian awal - {data.name}" + (" (Tempo)" if remaining > 0 else ""),
                 "created_at": now.isoformat(),
                 "date": now.strftime("%Y-%m-%d")
             }
@@ -923,13 +923,51 @@ async def get_dashboard_stats(admin: dict = Depends(require_admin)):
         daily_total = sum(t["total"] for t in trans)
         last_7_days.append({"date": date, "sales": daily_total})
     
+    # Inventory value (stock x HPP per satuan)
+    products = await db.products.find({}, {"_id": 0}).to_list(100000)
+    inventory_value = sum(
+        p.get("stock", 0) * (p.get("cost_price", 0) / max(1, p.get("items_per_box", 1)))
+        for p in products
+    )
+    
+    # Supplier debt
+    unpaid_purchases = await db.purchases.find({"remaining": {"$gt": 0}}, {"_id": 0}).to_list(10000)
+    total_supplier_debt = sum(p.get("remaining", 0) for p in unpaid_purchases)
+    
+    # Partner debt
+    partner_stores = await db.partner_stores.find({}, {"_id": 0, "current_debt": 1}).to_list(10000)
+    total_partner_debt = sum(ps.get("current_debt", 0) for ps in partner_stores)
+    
+    # Due this month
+    now = datetime.now(timezone.utc)
+    month_start = now.strftime("%Y-%m-01")
+    month_end = f"{now.strftime('%Y-%m')}-31"
+    due_this_month = await db.purchases.find(
+        {"due_date": {"$gte": month_start, "$lte": month_end}, "remaining": {"$gt": 0}},
+        {"_id": 0}
+    ).to_list(100)
+    
     return {
         "today_sales": today_sales,
         "today_transactions": len(today_transactions),
         "total_products": total_products,
         "low_stock_count": low_stock_count,
-        "last_7_days": last_7_days
+        "last_7_days": last_7_days,
+        "inventory_value": inventory_value,
+        "total_supplier_debt": total_supplier_debt,
+        "total_partner_debt": total_partner_debt,
+        "due_this_month": [{k: v for k, v in d.items() if k != "_id"} for d in due_this_month]
     }
+
+@api_router.get("/dashboard/due-calendar")
+async def get_due_calendar(year: int, month: int, admin: dict = Depends(require_admin)):
+    month_start = f"{year:04d}-{month:02d}-01"
+    month_end = f"{year:04d}-{month:02d}-31"
+    purchases = await db.purchases.find(
+        {"due_date": {"$gte": month_start, "$lte": month_end}, "remaining": {"$gt": 0}},
+        {"_id": 0}
+    ).to_list(1000)
+    return [{k: v for k, v in p.items() if k != "_id"} for p in purchases]
 
 @api_router.get("/users", response_model=List[User])
 async def get_users(admin: dict = Depends(require_admin)):
@@ -976,6 +1014,14 @@ async def get_purchases(
         query["supplier_id"] = supplier_id
     purchases = await db.purchases.find(query, {"_id": 0}).sort("created_at", -1).to_list(1000)
     return purchases
+
+@api_router.put("/purchases/{purchase_id}/due-date")
+async def set_purchase_due_date(purchase_id: str, due_date: str = "", admin: dict = Depends(require_admin)):
+    update = {"$set": {"due_date": due_date}} if due_date else {"$unset": {"due_date": ""}}
+    result = await db.purchases.update_one({"id": purchase_id}, update)
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Pembelian tidak ditemukan")
+    return {"message": "Tanggal jatuh tempo berhasil diperbarui"}
 
 @api_router.post("/purchases", response_model=Purchase)
 async def create_purchase(data: PurchaseCreate, admin: dict = Depends(require_admin)):
@@ -1610,6 +1656,27 @@ async def get_canvasser_notifications(current_user: dict = Depends(get_current_u
     new_today = await db.partner_orders.count_documents({"canvasser_id": canvasser_id, "date": today})
     
     return {"new_orders": new_today, "pending_orders": pending, "total_remaining": total_remaining}
+
+@api_router.get("/canvassers/product-search")
+async def canvasser_product_search(q: str = "", current_user: dict = Depends(get_current_user)):
+    if not q or len(q) < 1:
+        return []
+    query = {"name": {"$regex": q, "$options": "i"}}
+    products = await db.products.find(query, {"_id": 0}).sort("name", 1).to_list(50)
+    warehouses = await db.warehouses.find({}, {"_id": 0}).to_list(100)
+    wh_map = {w["id"]: w["name"] for w in warehouses}
+    result = []
+    for p in products:
+        stocks = await db.warehouse_stock.find({"product_id": p["id"]}, {"_id": 0}).to_list(10)
+        wh_stocks = [{"warehouse": wh_map.get(s["warehouse_id"], s["warehouse_id"]), "stock": s.get("stock", 0)} for s in stocks if s.get("stock", 0) > 0]
+        result.append({
+            "id": p["id"], "name": p["name"], "barcode": p.get("barcode", ""),
+            "stock": p.get("stock", 0), "price": p.get("price", 0),
+            "box_price": p.get("box_price", 0), "items_per_box": p.get("items_per_box", 1),
+            "cost_price": p.get("cost_price", 0),
+            "warehouse_stock": wh_stocks
+        })
+    return result
 
 @api_router.post("/canvassers", response_model=Canvasser)
 async def create_canvasser(data: CanvasserCreate, admin: dict = Depends(require_admin)):

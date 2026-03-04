@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../components/
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
 import {
   DollarSign, AlertTriangle, CreditCard, Users, Search, Download,
-  ChevronDown, ChevronUp, Clock, FileText, Bell, Banknote
+  ChevronDown, ChevronUp, Clock, FileText, Bell, Banknote, CalendarDays
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -332,6 +332,7 @@ export const SupplierDebt = () => {
                                       <TableHead>Total</TableHead>
                                       <TableHead>Dibayar</TableHead>
                                       <TableHead>Sisa</TableHead>
+                                      <TableHead>Jatuh Tempo</TableHead>
                                       <TableHead>Status</TableHead>
                                       <TableHead>Catatan</TableHead>
                                     </TableRow>
@@ -340,12 +341,33 @@ export const SupplierDebt = () => {
                                     {supplierPurchases.map(p => {
                                       const age = Math.floor((new Date(today) - new Date(p.date)) / 86400000);
                                       const isOld = p.remaining > 0 && age > 30;
+                                      const handleDueDate = async (e) => {
+                                        try {
+                                          await api.put(`/purchases/${p.id}/due-date?due_date=${e.target.value}`);
+                                          toast.success('Jatuh tempo diperbarui');
+                                          const res = await api.get(`/supplier-debts/${expandedSupplier}/purchases?show_all=${showAllPurchases}`);
+                                          setSupplierPurchases(res.data);
+                                        } catch { toast.error('Gagal update jatuh tempo'); }
+                                      };
                                       return (
                                         <TableRow key={p.id} className={isOld ? 'bg-yellow-50' : ''}>
                                           <TableCell>{new Date(p.date).toLocaleDateString('id-ID')}</TableCell>
                                           <TableCell>{fmt(p.total)}</TableCell>
                                           <TableCell className="text-green-600">{fmt(p.paid)}</TableCell>
                                           <TableCell className="font-semibold text-red-600">{fmt(p.remaining)}</TableCell>
+                                          <TableCell>
+                                            {p.remaining > 0 ? (
+                                              <input
+                                                type="date"
+                                                className="text-xs border rounded px-1.5 py-0.5 w-32"
+                                                value={p.due_date || ''}
+                                                onChange={handleDueDate}
+                                                data-testid={`due-date-${p.id}`}
+                                              />
+                                            ) : (
+                                              <span className="text-xs text-muted-foreground">-</span>
+                                            )}
+                                          </TableCell>
                                           <TableCell>
                                             {p.remaining <= 0
                                               ? <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">Lunas</span>
@@ -367,6 +389,14 @@ export const SupplierDebt = () => {
                                 {supplierPurchases.map(p => {
                                   const age = Math.floor((new Date(today) - new Date(p.date)) / 86400000);
                                   const isOld = p.remaining > 0 && age > 30;
+                                  const handleMobileDueDate = async (e) => {
+                                    try {
+                                      await api.put(`/purchases/${p.id}/due-date?due_date=${e.target.value}`);
+                                      toast.success('Jatuh tempo diperbarui');
+                                      const res = await api.get(`/supplier-debts/${expandedSupplier}/purchases?show_all=${showAllPurchases}`);
+                                      setSupplierPurchases(res.data);
+                                    } catch { toast.error('Gagal update'); }
+                                  };
                                   return (
                                     <Card key={p.id} className={`p-3 text-sm ${isOld ? 'bg-yellow-50 border-yellow-200' : ''}`}>
                                       <div className="flex justify-between items-start">
@@ -382,6 +412,12 @@ export const SupplierDebt = () => {
                                         <span>Total: {fmt(p.total)}</span>
                                         <span className="font-bold text-red-600">Sisa: {fmt(p.remaining)}</span>
                                       </div>
+                                      {p.remaining > 0 && (
+                                        <div className="flex items-center gap-2 mt-2">
+                                          <CalendarDays className="w-3.5 h-3.5 text-muted-foreground" />
+                                          <input type="date" className="text-xs border rounded px-1.5 py-0.5 flex-1" value={p.due_date || ''} onChange={handleMobileDueDate} />
+                                        </div>
+                                      )}
                                       {p.notes && <p className="text-xs text-muted-foreground mt-1">{p.notes}</p>}
                                     </Card>
                                   );

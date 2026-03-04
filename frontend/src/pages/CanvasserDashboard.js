@@ -8,7 +8,9 @@ import { Label } from '../components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../components/ui/dialog';
 import { toast } from 'sonner';
-import { Package, MapPin, DollarSign, CheckCircle, Truck, LogOut, Search, Bell, Filter, X } from 'lucide-react';
+import { Package, MapPin, DollarSign, CheckCircle, Truck, LogOut, Search, Bell, Filter, X, ShoppingBag, Warehouse } from 'lucide-react';
+
+const fmtCurrency = (v) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(v);
 
 export const CanvasserDashboard = () => {
   const { user, logout } = useAuth();
@@ -24,6 +26,11 @@ export const CanvasserDashboard = () => {
   // Search & filter
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+
+  // Product search
+  const [productQuery, setProductQuery] = useState('');
+  const [productResults, setProductResults] = useState([]);
+  const [productSearching, setProductSearching] = useState(false);
 
   useEffect(() => {
     fetchMyOrders();
@@ -49,6 +56,22 @@ export const CanvasserDashboard = () => {
       setNotifications(res.data);
     } catch {}
   };
+
+  useEffect(() => {
+    if (!productQuery || productQuery.length < 2) {
+      setProductResults([]);
+      return;
+    }
+    const timer = setTimeout(async () => {
+      setProductSearching(true);
+      try {
+        const res = await api.get(`/canvassers/product-search?q=${encodeURIComponent(productQuery)}`);
+        setProductResults(res.data);
+      } catch {}
+      setProductSearching(false);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [productQuery]);
 
   const updateOrderStatus = async (orderId, newStatus) => {
     try {
@@ -190,6 +213,61 @@ export const CanvasserDashboard = () => {
             </div>
           </Card>
         </div>
+
+        {/* Product Search */}
+        <Card className="p-4 md:p-6" data-testid="product-search-section">
+          <div className="flex items-center gap-2 mb-4">
+            <ShoppingBag className="w-5 h-5 text-primary" />
+            <h2 className="text-lg font-bold">Cari Produk</h2>
+          </div>
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <Input
+              placeholder="Ketik nama produk (min 2 huruf)..."
+              value={productQuery}
+              onChange={(e) => setProductQuery(e.target.value)}
+              className="pl-10"
+              data-testid="product-search-input"
+            />
+            {productQuery && (
+              <button className="absolute right-3 top-1/2 -translate-y-1/2" onClick={() => setProductQuery('')}>
+                <X className="w-4 h-4 text-muted-foreground hover:text-foreground" />
+              </button>
+            )}
+          </div>
+          {productSearching && <p className="text-sm text-muted-foreground mt-3 text-center">Mencari...</p>}
+          {productResults.length > 0 && (
+            <div className="mt-3 space-y-2 max-h-80 overflow-y-auto" data-testid="product-search-results">
+              {productResults.map(p => (
+                <div key={p.id} className="border rounded-lg p-3 hover:bg-muted/50 transition-colors" data-testid={`product-result-${p.id}`}>
+                  <div className="flex justify-between items-start">
+                    <div>
+                      <p className="font-semibold text-sm">{p.name}</p>
+                      {p.barcode && <p className="text-xs text-muted-foreground">{p.barcode}</p>}
+                    </div>
+                    <div className="text-right">
+                      <p className="font-bold text-primary text-sm">{fmtCurrency(p.price)}</p>
+                      {p.box_price > 0 && <p className="text-xs text-muted-foreground">{fmtCurrency(p.box_price)}/dus ({p.items_per_box}pcs)</p>}
+                    </div>
+                  </div>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${p.stock > 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                      Stok: {p.stock}
+                    </span>
+                    {p.warehouse_stock?.map((ws, i) => (
+                      <span key={i} className="text-xs px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 flex items-center gap-1">
+                        <Warehouse className="w-3 h-3" />{ws.warehouse}: {ws.stock}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+          {!productSearching && productQuery.length >= 2 && productResults.length === 0 && (
+            <p className="text-sm text-muted-foreground mt-3 text-center" data-testid="no-product-results">Produk tidak ditemukan</p>
+          )}
+        </Card>
 
         {/* Search & Filter */}
         <div className="flex flex-col md:flex-row gap-3">
