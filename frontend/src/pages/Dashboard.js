@@ -51,9 +51,20 @@ export const Dashboard = () => {
     );
   }
 
-  const dueDates = calData.map(p => new Date(p.due_date + 'T00:00:00'));
+  const dueDates = calData.map(p => {
+    const [y, m, d] = p.due_date.split('-').map(Number);
+    return new Date(y, m - 1, d);
+  });
+
+  const fmtLocalDate = (date) => {
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  };
+
   const selectedDayItems = selectedDate
-    ? calData.filter(p => p.due_date === selectedDate.toISOString().slice(0, 10))
+    ? calData.filter(p => p.due_date === fmtLocalDate(selectedDate))
     : [];
 
   const statCards = [

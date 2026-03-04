@@ -162,7 +162,7 @@ export const SupplierDebt = () => {
 
       {/* Summary Cards */}
       {summary && (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4" data-testid="summary-cards">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 md:gap-4" data-testid="summary-cards">
           <Card className="p-3 md:p-4" data-testid="total-debt-card">
             <div className="flex items-center gap-2 mb-1">
               <DollarSign className="w-4 h-4 text-red-600" />
@@ -184,14 +184,6 @@ export const SupplierDebt = () => {
             </div>
             <p className="text-base md:text-xl font-bold text-green-600 truncate">{fmt(summary.total_paid_this_month)}</p>
             <p className="text-[10px] md:text-xs text-muted-foreground mt-0.5">{summary.payments_this_month_count} pembayaran</p>
-          </Card>
-          <Card className="p-3 md:p-4" data-testid="overdue-card">
-            <div className="flex items-center gap-2 mb-1">
-              <AlertTriangle className="w-4 h-4 text-yellow-600" />
-              <span className="text-xs md:text-sm text-muted-foreground font-medium">Jatuh Tempo (&gt;30hr)</span>
-            </div>
-            <p className="text-base md:text-xl font-bold text-yellow-600">{summary.overdue_count}</p>
-            {summary.overdue_total > 0 && <p className="text-[10px] md:text-xs text-muted-foreground mt-0.5">{fmt(summary.overdue_total)}</p>}
           </Card>
         </div>
       )}
