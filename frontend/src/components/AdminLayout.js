@@ -5,7 +5,7 @@ import { Button } from './ui/button';
 import { 
   LayoutDashboard, Package, Users, Layers, FileText, Settings, LogOut,
   Sprout, UserCog, Printer, Store, ShoppingCart, Truck, TrendingUp,
-  Menu, X, Banknote, PanelLeftClose, PanelLeft
+  Menu, X, Banknote, PanelLeftClose, PanelLeft, Database
 } from 'lucide-react';
 
 export const AdminLayout = () => {
@@ -28,6 +28,7 @@ export const AdminLayout = () => {
     { to: '/admin/reports', icon: FileText, label: 'Laporan' },
     { to: '/admin/users', icon: UserCog, label: 'Pengguna' },
     { to: '/admin/store-settings', icon: Settings, label: 'Toko' },
+    { to: '/admin/import-data', icon: Database, label: 'Import Data' },
     { to: '/admin/settings', icon: Printer, label: 'Printer' },
     { to: '/admin/profile', icon: Settings, label: 'Profil' },
   ];
