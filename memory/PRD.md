@@ -86,6 +86,23 @@ Build a responsive web application for a pharmacy and agriculture store named "U
 - **Auto-purchase**: Produk baru otomatis membuat record pembelian ke supplier terkait
 - **Responsive**: Optimal di desktop, tablet, dan mobile
 
+### Dashboard Enhancement (DONE - Mar 2026)
+- **3 Card Finansial Baru**: Nilai Barang Gudang (stok × HPP/satuan), Total Bon Supplier Belum Bayar, Total Bon Kios Mitra Belum Bayar.
+- **Notifikasi Jatuh Tempo**: Daftar pembelian yang jatuh tempo di bulan berjalan ditampilkan di dashboard.
+- **Kalender Jatuh Tempo**: Kalender navigable (bisa ke bulan lain) yang menandai tanggal-tanggal jatuh tempo hutang. Klik tanggal untuk melihat detail.
+- **API**: `GET /api/dashboard/stats` (enhanced), `GET /api/dashboard/due-calendar?year=&month=`
+
+### Tempo Hutang Supplier per Pembelian (DONE - Mar 2026)
+- **Set Jatuh Tempo Manual**: Kolom "Jatuh Tempo" baru di tabel pembelian di halaman Hutang Supplier. Admin bisa set tanggal jatuh tempo per pembelian via date picker.
+- **API**: `PUT /api/purchases/{id}/due-date?due_date=YYYY-MM-DD`
+
+### HPP per Satuan di Produk (DONE - Mar 2026)
+- Kolom baru "HPP/Satuan" di tabel produk. Menghitung cost_price / items_per_box untuk menampilkan harga pokok per satuan.
+
+### Pencarian Produk untuk Canvasser (DONE - Mar 2026)
+- **Fitur Cari Produk**: Section baru di dashboard Canvasser. Cari produk dengan debounce, tampilkan nama, stok total, stok per gudang, harga jual, dan harga per dus.
+- **API**: `GET /api/canvassers/product-search?q=`
+
 ### Bulk Data Import (DONE - Mar 2026)
 - **Halaman Import Data**: Admin page (`/admin/import-data`) for importing CSV/XLSX files directly into the database, **bypassing all business logic** (no auto-purchase, no stock deduction, no debt recalculation).
 - **9 Import Types**: Gudang, Kategori, Supplier, Produk, Stok per Gudang, Pembelian Supplier, Pembayaran Hutang, Kios Mitra, Pesanan Kios Mitra — displayed in correct dependency order.
