@@ -284,6 +284,14 @@ class ThermalPrinter {
     d.push(...this.textToBytes(this.formatLine('Kembali:', this.formatCurrency(transaction.change))));
     d.push(...this.commands.LINE_FEED);
     d.push(...this.commands.ALIGN_CENTER);
+    d.push(...this.textToBytes(sep));
+    d.push(...this.commands.LINE_FEED);
+    d.push(...this.textToBytes('Barang yg sudah dibeli'));
+    d.push(...this.commands.LINE_FEED);
+    d.push(...this.textToBytes('tidak bisa dikembalikan'));
+    d.push(...this.commands.LINE_FEED);
+    d.push(...this.textToBytes(sep));
+    d.push(...this.commands.LINE_FEED);
     d.push(...this.textToBytes('Terima kasih!'));
     d.push(...this.commands.LINE_FEED);
     d.push(...this.commands.LINE_FEED);

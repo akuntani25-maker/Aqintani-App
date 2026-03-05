@@ -8,9 +8,10 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../components/
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
 import {
   DollarSign, AlertTriangle, CreditCard, Users, Search, Download,
-  ChevronDown, ChevronUp, Clock, FileText, Bell, Banknote, CalendarDays
+  ChevronDown, ChevronUp, Clock, FileText, Bell, Banknote, CalendarDays, RotateCcw
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { CurrencyInput } from '../components/CurrencyInput';
 
 const fmt = (v) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(v);
 
@@ -31,6 +32,13 @@ export const SupplierDebt = () => {
   const [paySubmitting, setPaySubmitting] = useState(false);
   const [showAllPurchases, setShowAllPurchases] = useState(false);
   const [detailTab, setDetailTab] = useState('purchases');
+  const [returnModalOpen, setReturnModalOpen] = useState(false);
+  const [returnPurchase, setReturnPurchase] = useState(null);
+  const [returnItems, setReturnItems] = useState([]);
+  const [returnNotes, setReturnNotes] = useState('');
+  const [returnSubmitting, setReturnSubmitting] = useState(false);
+  const [warehouses, setWarehouses] = useState([]);
+  const [returnWarehouse, setReturnWarehouse] = useState('gudang_utama');
 
   const fetchData = useCallback(async () => {
     try {
@@ -48,6 +56,40 @@ export const SupplierDebt = () => {
   }, []);
 
   useEffect(() => { fetchData(); }, [fetchData]);
+
+  useEffect(() => {
+    api.get('/warehouses').then(res => setWarehouses(res.data)).catch(() => {});
+  }, []);
+
+  const openReturnModal = (purchase) => {
+    setReturnPurchase(purchase);
+    setReturnItems(purchase.items.map(it => ({ ...it, return_qty: 0 })));
+    setReturnNotes('');
+    setReturnWarehouse('gudang_utama');
+    setReturnModalOpen(true);
+  };
+
+  const handleReturn = async () => {
+    const items = returnItems.filter(it => it.return_qty > 0).map(it => ({
+      product_id: it.product_id, quantity: it.return_qty
+    }));
+    if (items.length === 0) { toast.error('Pilih minimal 1 item untuk diretur'); return; }
+    setReturnSubmitting(true);
+    try {
+      const res = await api.post(`/purchases/${returnPurchase.id}/return`, {
+        items, notes: returnNotes, warehouse_id: returnWarehouse
+      });
+      toast.success(res.data.message);
+      setReturnModalOpen(false);
+      const purchRes = await api.get(`/supplier-debts/${expandedSupplier}/purchases?show_all=${showAllPurchases}`);
+      setSupplierPurchases(purchRes.data);
+      fetchData();
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Gagal memproses retur');
+    } finally {
+      setReturnSubmitting(false);
+    }
+  };
 
   const toggleSupplier = async (supplierId) => {
     if (expandedSupplier === supplierId) {
@@ -327,6 +369,7 @@ export const SupplierDebt = () => {
                                       <TableHead>Jatuh Tempo</TableHead>
                                       <TableHead>Status</TableHead>
                                       <TableHead>Catatan</TableHead>
+                                      <TableHead></TableHead>
                                     </TableRow>
                                   </TableHeader>
                                   <TableBody>
@@ -369,6 +412,13 @@ export const SupplierDebt = () => {
                                             }
                                           </TableCell>
                                           <TableCell className="text-muted-foreground text-xs max-w-[150px] truncate">{p.notes || '-'}</TableCell>
+                                          <TableCell>
+                                            {p.remaining > 0 && (
+                                              <Button variant="ghost" size="sm" className="text-orange-600 hover:text-orange-700 h-7 px-2" onClick={() => openReturnModal(p)} data-testid={`return-btn-${p.id}`}>
+                                                <RotateCcw className="w-3.5 h-3.5 mr-1" />Retur
+                                              </Button>
+                                            )}
+                                          </TableCell>
                                         </TableRow>
                                       );
                                     })}
@@ -408,6 +458,9 @@ export const SupplierDebt = () => {
                                         <div className="flex items-center gap-2 mt-2">
                                           <CalendarDays className="w-3.5 h-3.5 text-muted-foreground" />
                                           <input type="date" className="text-xs border rounded px-1.5 py-0.5 flex-1" value={p.due_date || ''} onChange={handleMobileDueDate} />
+                                          <Button variant="ghost" size="sm" className="text-orange-600 h-7 px-2" onClick={() => openReturnModal(p)}>
+                                            <RotateCcw className="w-3.5 h-3.5 mr-1" />Retur
+                                          </Button>
                                         </div>
                                       )}
                                       {p.notes && <p className="text-xs text-muted-foreground mt-1">{p.notes}</p>}
@@ -471,7 +524,7 @@ export const SupplierDebt = () => {
               </Card>
               <div className="space-y-2">
                 <Label>Jumlah Bayar</Label>
-                <Input type="number" placeholder="Masukkan jumlah..." value={payAmount} onChange={(e) => setPayAmount(e.target.value)} data-testid="pay-amount-input" />
+                <CurrencyInput value={parseInt(payAmount) || 0} onChange={(v) => setPayAmount(String(v))} data-testid="pay-amount-input" />
                 <div className="flex gap-2 mt-1">
                   {[0.25, 0.5, 1].map(pct => (
                     <button key={pct} className="text-xs bg-muted hover:bg-muted-foreground/10 px-2 py-1 rounded transition-colors"
@@ -489,6 +542,68 @@ export const SupplierDebt = () => {
                 <Button variant="outline" onClick={() => setPayModalOpen(false)}>Batal</Button>
                 <Button onClick={handlePay} disabled={paySubmitting || !payAmount} data-testid="submit-pay-btn">
                   {paySubmitting ? 'Memproses...' : `Bayar ${payAmount ? fmt(parseFloat(payAmount) || 0) : ''}`}
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Return Dialog */}
+      <Dialog open={returnModalOpen} onOpenChange={setReturnModalOpen}>
+        <DialogContent className="max-w-lg" data-testid="return-modal">
+          <DialogHeader>
+            <DialogTitle>Retur Barang ke Supplier</DialogTitle>
+          </DialogHeader>
+          {returnPurchase && (
+            <div className="space-y-4">
+              <Card className="p-3 bg-muted/50">
+                <p className="font-semibold">{returnPurchase.supplier_name}</p>
+                <p className="text-sm text-red-600 font-bold mt-1">Sisa hutang: {fmt(returnPurchase.remaining)}</p>
+              </Card>
+              <div className="space-y-2">
+                <Label>Pilih item & jumlah retur:</Label>
+                <div className="space-y-2 max-h-48 overflow-y-auto">
+                  {returnItems.map((item, idx) => (
+                    <div key={idx} className="flex items-center gap-2 p-2 border rounded text-sm">
+                      <span className="flex-1 truncate">{item.product_name}</span>
+                      <span className="text-xs text-muted-foreground">maks {item.quantity}</span>
+                      <Input
+                        type="number" min="0" max={item.quantity}
+                        className="w-20 h-8 text-center"
+                        value={item.return_qty || ''}
+                        onChange={(e) => {
+                          const val = Math.min(parseInt(e.target.value) || 0, item.quantity);
+                          setReturnItems(prev => prev.map((it, i) => i === idx ? { ...it, return_qty: val } : it));
+                        }}
+                        data-testid={`return-qty-${idx}`}
+                      />
+                    </div>
+                  ))}
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label>Gudang asal stok</Label>
+                <select className="w-full border rounded px-3 py-2 text-sm" value={returnWarehouse} onChange={(e) => setReturnWarehouse(e.target.value)}>
+                  {warehouses.map(wh => <option key={wh.id} value={wh.id}>{wh.name}</option>)}
+                </select>
+              </div>
+              <div className="space-y-2">
+                <Label>Catatan (opsional)</Label>
+                <Input placeholder="Alasan retur..." value={returnNotes} onChange={(e) => setReturnNotes(e.target.value)} data-testid="return-notes-input" />
+              </div>
+              {returnItems.some(it => it.return_qty > 0) && (
+                <Card className="p-3 bg-orange-50 border-orange-200">
+                  <p className="text-sm font-semibold text-orange-800">Estimasi pengurangan hutang:</p>
+                  <p className="text-lg font-bold text-orange-700">
+                    {fmt(returnItems.reduce((sum, it) => sum + (it.return_qty * it.cost_price), 0))}
+                  </p>
+                </Card>
+              )}
+              <div className="flex gap-2 justify-end pt-2">
+                <Button variant="outline" onClick={() => setReturnModalOpen(false)}>Batal</Button>
+                <Button onClick={handleReturn} disabled={returnSubmitting || !returnItems.some(it => it.return_qty > 0)} className="bg-orange-600 hover:bg-orange-700" data-testid="submit-return-btn">
+                  {returnSubmitting ? 'Memproses...' : 'Proses Retur'}
                 </Button>
               </div>
             </div>

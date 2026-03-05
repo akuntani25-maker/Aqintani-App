@@ -7,6 +7,7 @@ import { Card } from '../components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { toast } from 'sonner';
 import { Search, Plus, Minus, Trash2, ShoppingCart, LogOut, CreditCard, Banknote, Smartphone, Printer, Pencil } from 'lucide-react';
+import { CurrencyInput } from '../components/CurrencyInput';
 import { useReactToPrint } from 'react-to-print';
 import ThermalPrinter from '../utils/ThermalPrinter';
 
@@ -359,10 +360,9 @@ export const POS = () => {
                 </div>
                 <div className="flex items-center gap-1 mb-2">
                   <Pencil className="w-3 h-3 text-muted-foreground" />
-                  <Input
-                    type="number"
+                  <CurrencyInput
                     value={item.price}
-                    onChange={(e) => updateItemPrice(item.product_id, parseFloat(e.target.value) || 0)}
+                    onChange={(v) => updateItemPrice(item.product_id, v)}
                     className="h-7 text-sm font-medium w-32"
                     data-testid={`edit-price-${item.product_id}`}
                   />
@@ -439,10 +439,9 @@ export const POS = () => {
 
               <div className="space-y-2">
                 <label className="text-sm font-medium">Jumlah Bayar</label>
-                <Input
-                  type="number"
+                <CurrencyInput
                   value={paymentAmount}
-                  onChange={(e) => setPaymentAmount(parseFloat(e.target.value) || 0)}
+                  onChange={(v) => setPaymentAmount(v)}
                   data-testid="payment-amount-input"
                 />
                 <div className="flex gap-2">

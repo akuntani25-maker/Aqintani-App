@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Depends, status, UploadFile, File
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, status, UploadFile, File, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
@@ -551,6 +551,8 @@ async def create_product(data: ProductCreate, admin: dict = Depends(require_admi
 async def update_product(product_id: str, data: ProductCreate, admin: dict = Depends(require_admin)):
     update_data = data.model_dump()
     update_data.pop("warehouse_id", None)
+    update_data.pop("stock", None)
+    update_data.pop("initial_paid", None)
     update_data["updated_at"] = datetime.now(timezone.utc).isoformat()
     
     result = await db.products.find_one_and_update(
@@ -1022,6 +1024,82 @@ async def set_purchase_due_date(purchase_id: str, due_date: str = "", admin: dic
     if result.matched_count == 0:
         raise HTTPException(status_code=404, detail="Pembelian tidak ditemukan")
     return {"message": "Tanggal jatuh tempo berhasil diperbarui"}
+
+@api_router.post("/purchases/{purchase_id}/return")
+async def process_purchase_return(purchase_id: str, request: Request, admin: dict = Depends(require_admin)):
+    body = await request.json()
+    items = body.get("items", [])
+    notes = body.get("notes", "")
+    warehouse_id = body.get("warehouse_id", "gudang_utama")
+
+    purchase = await db.purchases.find_one({"id": purchase_id}, {"_id": 0})
+    if not purchase:
+        raise HTTPException(status_code=404, detail="Pembelian tidak ditemukan")
+
+    now = datetime.now(timezone.utc)
+    total_return_value = 0
+    return_items = []
+
+    for item in items:
+        product_id = item.get("product_id")
+        qty = int(item.get("quantity", 0))
+        if qty <= 0:
+            continue
+        product = await db.products.find_one({"id": product_id}, {"_id": 0})
+        if not product:
+            continue
+        purchase_item = next((pi for pi in purchase.get("items", []) if pi["product_id"] == product_id), None)
+        cost = purchase_item["cost_price"] if purchase_item else product.get("cost_price", 0)
+        subtotal = qty * cost
+        total_return_value += subtotal
+        return_items.append({
+            "product_id": product_id,
+            "product_name": product["name"],
+            "quantity": qty,
+            "cost_price": cost,
+            "subtotal": subtotal
+        })
+        # Reduce warehouse stock
+        wh_stock = await db.warehouse_stock.find_one({"product_id": product_id, "warehouse_id": warehouse_id})
+        if wh_stock:
+            new_stock = max(0, wh_stock.get("stock", 0) - qty)
+            await db.warehouse_stock.update_one(
+                {"product_id": product_id, "warehouse_id": warehouse_id},
+                {"$set": {"stock": new_stock}}
+            )
+        await recalculate_product_stock(product_id)
+
+    if not return_items:
+        raise HTTPException(status_code=400, detail="Tidak ada item yang diretur")
+
+    # Reduce purchase remaining
+    new_remaining = max(0, purchase.get("remaining", 0) - total_return_value)
+    await db.purchases.update_one(
+        {"id": purchase_id},
+        {"$set": {"remaining": new_remaining}}
+    )
+
+    # Create return record
+    return_doc = {
+        "id": str(uuid.uuid4()),
+        "type": "supplier_return",
+        "purchase_id": purchase_id,
+        "supplier_id": purchase.get("supplier_id"),
+        "supplier_name": purchase.get("supplier_name"),
+        "items": return_items,
+        "total": total_return_value,
+        "warehouse_id": warehouse_id,
+        "notes": notes or f"Retur ke {purchase.get('supplier_name', '')}",
+        "created_at": now.isoformat(),
+        "date": now.strftime("%Y-%m-%d")
+    }
+    await db.payment_history.insert_one(return_doc)
+
+    return {
+        "message": f"Retur berhasil. Hutang berkurang {total_return_value}",
+        "return_value": total_return_value,
+        "new_remaining": new_remaining
+    }
 
 @api_router.post("/purchases", response_model=Purchase)
 async def create_purchase(data: PurchaseCreate, admin: dict = Depends(require_admin)):

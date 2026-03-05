@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
 import { toast } from 'sonner';
 import { Plus, Search, Package, Trash2, ShoppingCart, Warehouse, FileText, DollarSign, TrendingUp, RotateCcw, Pencil, Trash } from 'lucide-react';
+import { CurrencyInput } from '../components/CurrencyInput';
 
 export const PartnerOrders = () => {
   const navigate = useNavigate();
@@ -340,8 +341,8 @@ export const PartnerOrders = () => {
                         </div>
                         <div className="flex items-center gap-1">
                           <Pencil className="w-3 h-3 text-muted-foreground shrink-0" />
-                          <Input type="number" value={item.price} className="h-7 text-xs font-medium w-28"
-                            onChange={(e) => updateItemPrice(idx, parseFloat(e.target.value) || 0)}
+                          <CurrencyInput value={item.price} className="h-7 text-xs font-medium w-28"
+                            onChange={(v) => updateItemPrice(idx, v)}
                             data-testid={`cart-price-${idx}`} />
                           <span className="text-xs text-muted-foreground">/{unit}</span>
                         </div>
@@ -365,7 +366,7 @@ export const PartnerOrders = () => {
                   <div className="flex justify-between text-sm"><span>Subtotal:</span><span className="font-semibold">{fmt(subtotal)}</span></div>
                   <div className="space-y-2">
                     <Label>Diskon</Label>
-                    <Input type="number" value={discount} onChange={(e) => setDiscount(parseFloat(e.target.value) || 0)} placeholder="0" data-testid="order-discount" />
+                    <CurrencyInput value={discount} onChange={(v) => setDiscount(v)} data-testid="order-discount" />
                   </div>
                   <div className="flex justify-between text-lg font-bold border-t pt-2"><span>Total:</span><span className="text-primary">{fmt(total)}</span></div>
                 </div>

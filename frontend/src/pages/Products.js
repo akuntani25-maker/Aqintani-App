@@ -9,6 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { toast } from 'sonner';
 import { Plus, Search, Pencil, Trash2, Package, ArrowRightLeft, Filter, AlertTriangle } from 'lucide-react';
+import { CurrencyInput } from '../components/CurrencyInput';
 
 export const Products = () => {
   const [products, setProducts] = useState([]);
@@ -96,7 +97,7 @@ export const Products = () => {
     setEditingProduct(product);
     setFormData({
       name: product.name, barcode: product.barcode, category_id: product.category_id,
-      supplier_id: product.supplier_id, stock: 0, warehouse_id: 'gudang_utama',
+      supplier_id: product.supplier_id, stock: product.stock, warehouse_id: 'gudang_utama',
       price: product.price, cost_price: product.cost_price,
       box_price: product.box_price || 0, items_per_box: product.items_per_box || 1,
       expiry_date: product.expiry_date, batch_number: product.batch_number,
@@ -215,17 +216,21 @@ export const Products = () => {
                 </div>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="space-y-2">
-                  <Label>Stok Awal (dus)</Label>
-                  <Input type="number" value={formData.stock} onChange={(e) => setFormData({ ...formData, stock: parseInt(e.target.value) || 0 })} data-testid="product-stock-input" />
-                </div>
-                <div className="space-y-2">
-                  <Label>Gudang Tujuan</Label>
-                  <Select value={formData.warehouse_id} onValueChange={(v) => setFormData({ ...formData, warehouse_id: v })}>
-                    <SelectTrigger data-testid="product-warehouse-select"><SelectValue /></SelectTrigger>
-                    <SelectContent>{warehouses.map(wh => <SelectItem key={wh.id} value={wh.id}>{wh.name} ({wh.unit})</SelectItem>)}</SelectContent>
-                  </Select>
-                </div>
+                {!editingProduct && (
+                  <>
+                    <div className="space-y-2">
+                      <Label>Stok Awal (dus)</Label>
+                      <Input type="number" value={formData.stock} onChange={(e) => setFormData({ ...formData, stock: parseInt(e.target.value) || 0 })} data-testid="product-stock-input" />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Gudang Tujuan</Label>
+                      <Select value={formData.warehouse_id} onValueChange={(v) => setFormData({ ...formData, warehouse_id: v })}>
+                        <SelectTrigger data-testid="product-warehouse-select"><SelectValue /></SelectTrigger>
+                        <SelectContent>{warehouses.map(wh => <SelectItem key={wh.id} value={wh.id}>{wh.name} ({wh.unit})</SelectItem>)}</SelectContent>
+                      </Select>
+                    </div>
+                  </>
+                )}
                 <div className="space-y-2">
                   <Label>Isi per Dus *</Label>
                   <Input type="number" min="1" value={formData.items_per_box} onChange={(e) => setFormData({ ...formData, items_per_box: parseInt(e.target.value) || 1 })} required data-testid="product-items-per-box-input" />
@@ -249,13 +254,9 @@ export const Products = () => {
                     </div>
                     <div className="space-y-2">
                       <Label className="text-amber-900">Bayar di Muka</Label>
-                      <Input
-                        type="number"
-                        min="0"
-                        max={totalPurchase}
+                      <CurrencyInput
                         value={formData.initial_paid}
-                        onChange={(e) => setFormData({ ...formData, initial_paid: parseFloat(e.target.value) || 0 })}
-                        placeholder="0"
+                        onChange={(v) => setFormData({ ...formData, initial_paid: v })}
                         data-testid="product-initial-paid-input"
                       />
                     </div>
@@ -270,15 +271,15 @@ export const Products = () => {
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="space-y-2">
                   <Label>Harga Beli/Dus *</Label>
-                  <Input type="number" value={formData.cost_price} onChange={(e) => setFormData({ ...formData, cost_price: parseFloat(e.target.value) || 0 })} required data-testid="product-cost-input" />
+                  <CurrencyInput value={formData.cost_price} onChange={(v) => setFormData({ ...formData, cost_price: v })} required data-testid="product-cost-input" />
                 </div>
                 <div className="space-y-2">
                   <Label>Harga Jual Satuan *</Label>
-                  <Input type="number" value={formData.price} onChange={(e) => setFormData({ ...formData, price: parseFloat(e.target.value) || 0 })} required data-testid="product-price-input" />
+                  <CurrencyInput value={formData.price} onChange={(v) => setFormData({ ...formData, price: v })} required data-testid="product-price-input" />
                 </div>
                 <div className="space-y-2">
                   <Label>Harga Jual/Dus</Label>
-                  <Input type="number" value={formData.box_price} onChange={(e) => setFormData({ ...formData, box_price: parseFloat(e.target.value) || 0 })} data-testid="product-box-price-input" />
+                  <CurrencyInput value={formData.box_price} onChange={(v) => setFormData({ ...formData, box_price: v })} data-testid="product-box-price-input" />
                 </div>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
