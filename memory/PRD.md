@@ -112,6 +112,21 @@ Build a responsive web application for a pharmacy and agriculture store named "U
 - **Clear Collection**: "Hapus Semua" button to wipe and re-import any collection.
 - **API Endpoints**: `GET /api/import/types`, `GET /api/import/counts`, `GET /api/import/template/{type}`, `POST /api/import/{type}`, `DELETE /api/import/clear/{type}`
 
+### CurrencyInput & Digit Separator (DONE - Mar 2026)
+- **Shared CurrencyInput Component**: `/components/CurrencyInput.js` — menampilkan angka dengan pemisah ribuan (1.000.000) pada semua input nominal.
+- **Diterapkan di**: Products (harga beli, harga jual, harga dus, bayar di muka), POS (pembayaran), PartnerOrders (harga, diskon), SupplierDebt (jumlah bayar).
+
+### Fix Product Edit Stock Reset (DONE - Mar 2026)
+- **Bug**: Edit produk selalu reset stok ke 0. Penyebab: form `handleEdit` hardcode `stock: 0` dan backend tidak exclude `stock` dari update data.
+- **Fix**: Frontend menyembunyikan field stok/gudang di edit mode. Backend `update_product` menghapus `stock`, `warehouse_id`, `initial_paid` dari update data.
+
+### Retur Barang Supplier (DONE - Mar 2026)
+- **Fitur**: Tombol "Retur" di setiap pembelian yang belum lunas di halaman Hutang Supplier. Dialog memilih item dan jumlah retur. Otomatis mengurangi hutang supplier dan stok gudang.
+- **API**: `POST /api/purchases/{id}/return` — menerima items[], notes, warehouse_id. Membuat record retur di payment_history, mengurangi remaining, dan mengurangi warehouse_stock.
+
+### Receipt Disclaimer (DONE - Mar 2026)
+- Struk POS via Bluetooth: ditambahkan garis putus-putus + "Barang yg sudah dibeli tidak bisa dikembalikan" sebelum "Terima kasih!".
+
 ## Prioritized Backlog
 
 ### P1 - Next Up
