@@ -135,6 +135,19 @@ Build a responsive web application for a pharmacy and agriculture store named "U
 - **Search Added**: Search inputs added to Suppliers, PartnerStores, PartnerOrders pages for filtering.
 - **Backend**: `/api/products` endpoint response_model removed to support optional server-side pagination via `?page=&per_page=` params.
 
+### Koreksi Stok / Stock Adjustment (DONE - Mar 2026)
+- **Fitur**: Tombol koreksi stok (ikon clipboard) di setiap baris produk. Dialog edit stok per gudang.
+- **Dialog**: Stok saat ini, input baru, indikator selisih (+/- hijau/merah), dropdown alasan.
+- **Backend**: `POST /api/stock-adjustments`, `GET /api/stock-adjustments`
+- **DB**: `stock_adjustments` collection.
+
+### POS Sticky Cart (DONE - Mar 2026)
+- Panel keranjang POS fixed/sticky, tidak ikut scroll. Produk grid scrollable.
+
+### Export PDF Kop Surat (DONE - Mar 2026)
+- Tombol "Export PDF" di halaman Laporan. PDF landscape A4 dengan kop surat UD. AQIN TANI.
+- Library: jsPDF + jspdf-autotable. Support semua 3 tipe laporan.
+
 ## Prioritized Backlog
 
 ### P1 - Next Up
@@ -148,6 +161,7 @@ Build a responsive web application for a pharmacy and agriculture store named "U
 - **purchases**: supplier_id, supplier_name, items[], total, paid, remaining, warehouse_id, notes, date
 - **warehouse_stock**: product_id, warehouse_id, stock (in respective units)
 - **stock_transfers**: product_id, from_warehouse_id, to_warehouse_id, quantity, notes
+- **stock_adjustments**: id, product_id, product_name, warehouse_id, old_stock, new_stock, difference, reason, adjusted_by, date
 
 ## Key API Endpoints
 - POST /api/products - Create product (with initial_paid for auto-purchase)
@@ -155,3 +169,5 @@ Build a responsive web application for a pharmacy and agriculture store named "U
 - GET /api/warehouse-stock - Aggregated stock data
 - GET /api/purchases - List all purchases
 - POST /api/purchases - Manual purchase creation
+- POST /api/stock-adjustments - Create stock adjustment
+- GET /api/stock-adjustments - Get adjustment history
