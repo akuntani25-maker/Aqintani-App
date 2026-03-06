@@ -282,7 +282,7 @@ export const POS = () => {
   ];
 
   return (
-    <div className="min-h-screen bg-background flex" data-testid="pos-page">
+    <div className="h-screen bg-background flex overflow-hidden" data-testid="pos-page">
       <div className="flex-1 p-6 overflow-auto">
         <div className="mb-6">
           <div className="flex items-center justify-between mb-4">
@@ -341,7 +341,7 @@ export const POS = () => {
         </div>
       </div>
 
-      <div className="w-full md:w-96 bg-white border-l shadow-xl flex flex-col" data-testid="cart-panel">
+      <div className="w-full md:w-96 bg-white border-l shadow-xl flex flex-col h-screen sticky top-0" data-testid="cart-panel">
         <div className="p-6 border-b">
           <h2 className="text-xl font-bold flex items-center gap-2">
             <ShoppingCart className="w-5 h-5" />

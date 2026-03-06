@@ -6,7 +6,9 @@ import { Label } from '../components/ui/label';
 import { Card } from '../components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
 import { toast } from 'sonner';
-import { FileText, Download, TrendingUp, TrendingDown, DollarSign, ShoppingCart, Store, Award } from 'lucide-react';
+import { FileText, Download, TrendingUp, TrendingDown, DollarSign, ShoppingCart, Store, Award, FileDown } from 'lucide-react';
+import jsPDF from 'jspdf';
+import 'jspdf-autotable';
 
 export const Reports = () => {
   const [activeTab, setActiveTab] = useState('pos');
@@ -60,6 +62,101 @@ export const Reports = () => {
     link.click();
     document.body.removeChild(link);
     toast.success('CSV berhasil diexport');
+  };
+
+  const exportPDF = () => {
+    if (!reportData || !reportData.rows.length) return;
+    const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+    const pageWidth = doc.internal.pageSize.getWidth();
+
+    // Kop Surat
+    doc.setFillColor(15, 23, 42);
+    doc.rect(0, 0, pageWidth, 32, 'F');
+    doc.setFillColor(37, 99, 235);
+    doc.rect(0, 32, pageWidth, 2, 'F');
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(18);
+    doc.setTextColor(255, 255, 255);
+    doc.text('UD. AQIN TANI', 14, 14);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.setTextColor(148, 163, 184);
+    doc.text('Toko Pertanian & Farmasi', 14, 20);
+    doc.text('Jl. Raya No. 1  |  Telp: (021) 000-0000', 14, 26);
+
+    const tabLabels = { pos: 'Penjualan POS', partner: 'Penjualan Kios Mitra', bestseller: 'Produk Terlaris' };
+    doc.setFontSize(9);
+    doc.setTextColor(255, 255, 255);
+    doc.text(`Laporan ${tabLabels[reportData.type]} | Periode: ${dateFrom} s/d ${dateTo}`, pageWidth - 14, 14, { align: 'right' });
+    doc.text(`Dicetak: ${new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}`, pageWidth - 14, 20, { align: 'right' });
+
+    let startY = 40;
+
+    // Summary boxes
+    doc.setTextColor(30, 41, 59);
+    if (reportData.type === 'pos' || reportData.type === 'partner') {
+      const summaryItems = [
+        { label: 'Total Penjualan', value: fmt(reportData.total_sales) },
+        { label: 'Total HPP', value: fmt(reportData.total_cost) },
+        { label: 'Total Margin', value: fmt(reportData.total_margin) },
+        { label: 'Margin %', value: marginPercent + '%' },
+      ];
+      const boxW = (pageWidth - 28 - 12) / 4;
+      summaryItems.forEach((item, i) => {
+        const x = 14 + i * (boxW + 4);
+        doc.setFillColor(248, 250, 252);
+        doc.roundedRect(x, startY, boxW, 16, 2, 2, 'F');
+        doc.setFontSize(7);
+        doc.setTextColor(100, 116, 139);
+        doc.text(item.label.toUpperCase(), x + 4, startY + 6);
+        doc.setFontSize(11);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(15, 23, 42);
+        doc.text(item.value, x + 4, startY + 13);
+        doc.setFont('helvetica', 'normal');
+      });
+      startY += 22;
+    }
+
+    // Table
+    let head, body, footRow;
+    if (reportData.type === 'pos') {
+      head = [['Tanggal', 'Produk', 'Qty', 'HPP/Unit', 'Jual/Unit', 'Total Jual', 'Total HPP', 'Margin']];
+      body = reportData.rows.map(r => [r.date, r.product_name, fmtNum(r.quantity), fmt(r.cost_price), fmt(r.sell_price), fmt(r.total_sell), fmt(r.total_cost), fmt(r.margin)]);
+      footRow = [['', 'TOTAL', '', '', '', fmt(reportData.total_sales), fmt(reportData.total_cost), fmt(reportData.total_margin)]];
+    } else if (reportData.type === 'partner') {
+      head = [['Tanggal', 'Produk', 'Kios Mitra', 'Qty', 'HPP/Unit', 'Jual/Unit', 'Total Jual', 'Total HPP', 'Margin']];
+      body = reportData.rows.map(r => [r.date, r.product_name, r.partner_store_name, fmtNum(r.quantity_satuan), fmt(r.cost_price_per_unit), fmt(r.sell_price_per_unit), fmt(r.total_sell), fmt(r.total_cost), fmt(r.margin)]);
+      footRow = [['', 'TOTAL', '', '', '', '', fmt(reportData.total_sales), fmt(reportData.total_cost), fmt(reportData.total_margin)]];
+    } else {
+      head = [['#', 'Produk', 'Qty POS', 'Qty Mitra', 'Qty Total', 'Rev POS', 'Rev Mitra', 'Rev Total', 'HPP', 'Margin']];
+      body = reportData.rows.map((r, i) => [i + 1, r.product_name, fmtNum(r.qty_pos), fmtNum(r.qty_partner), fmtNum(r.qty_total), fmt(r.revenue_pos), fmt(r.revenue_partner), fmt(r.revenue_total), fmt(r.cost_total), fmt(r.margin)]);
+      footRow = null;
+    }
+
+    doc.autoTable({
+      head,
+      body,
+      foot: footRow || undefined,
+      startY,
+      theme: 'grid',
+      styles: { fontSize: 7.5, cellPadding: 2.5, lineColor: [226, 232, 240], lineWidth: 0.2 },
+      headStyles: { fillColor: [15, 23, 42], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 7.5 },
+      footStyles: { fillColor: [241, 245, 249], textColor: [15, 23, 42], fontStyle: 'bold', fontSize: 8 },
+      alternateRowStyles: { fillColor: [248, 250, 252] },
+      margin: { left: 14, right: 14 },
+      didDrawPage: (data) => {
+        const pageNum = doc.internal.getNumberOfPages();
+        doc.setFontSize(7);
+        doc.setTextColor(148, 163, 184);
+        doc.text(`UD. AQIN TANI - Laporan ${tabLabels[reportData.type]}`, 14, doc.internal.pageSize.getHeight() - 8);
+        doc.text(`Halaman ${data.pageNumber} dari ${pageNum}`, pageWidth - 14, doc.internal.pageSize.getHeight() - 8, { align: 'right' });
+      }
+    });
+
+    doc.save(`laporan-${reportData.type}-${dateFrom}-${dateTo}.pdf`);
+    toast.success('PDF berhasil diexport');
   };
 
   const marginPercent = reportData && reportData.total_sales > 0
@@ -182,9 +279,14 @@ export const Reports = () => {
           {/* Export */}
           <div className="flex justify-between items-center">
             <p className="text-sm text-muted-foreground">{fmtNum(reportData.rows.length)} item produk terjual</p>
-            <Button variant="outline" onClick={exportCSV} disabled={!reportData.rows.length} data-testid="export-csv-button">
-              <Download className="w-4 h-4 mr-2" />Export CSV
-            </Button>
+            <div className="flex gap-2">
+              <Button variant="outline" onClick={exportCSV} disabled={!reportData.rows.length} data-testid="export-csv-button">
+                <Download className="w-4 h-4 mr-2" />Export CSV
+              </Button>
+              <Button onClick={exportPDF} disabled={!reportData.rows.length} data-testid="export-pdf-button">
+                <FileDown className="w-4 h-4 mr-2" />Export PDF
+              </Button>
+            </div>
           </div>
 
           {/* POS Sales Table */}

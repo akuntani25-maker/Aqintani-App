@@ -1,4 +1,4 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Depends, status, UploadFile, File, Request
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, status, UploadFile, File, Request, Query
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
@@ -1596,10 +1596,10 @@ async def create_partner_order(data: PartnerOrderCreate, current_user: dict = De
     return order_doc
 
 @api_router.put("/partner-orders/{order_id}/status")
-async def update_order_status(order_id: str, status: str, current_user: dict = Depends(get_current_user)):
+async def update_order_status(order_id: str, order_status: str = Query(..., alias="status"), current_user: dict = Depends(get_current_user)):
     result = await db.partner_orders.find_one_and_update(
         {"id": order_id},
-        {"$set": {"status": status}},
+        {"$set": {"status": order_status}},
         return_document=True,
         projection={"_id": 0}
     )
@@ -1955,6 +1955,57 @@ async def update_warehouse_stock(
     # Recalculate total product stock
     await recalculate_product_stock(product_id)
     return {"message": "Stock updated"}
+
+class StockAdjustmentCreate(BaseModel):
+    product_id: str
+    warehouse_id: str
+    new_stock: int
+    reason: str = ""
+
+@api_router.post("/stock-adjustments")
+async def create_stock_adjustment(
+    data: StockAdjustmentCreate,
+    admin: dict = Depends(require_admin)
+):
+    product = await db.products.find_one({"id": data.product_id}, {"_id": 0})
+    if not product:
+        raise HTTPException(status_code=404, detail="Produk tidak ditemukan")
+    wh_entry = await db.warehouse_stock.find_one(
+        {"product_id": data.product_id, "warehouse_id": data.warehouse_id}
+    )
+    old_stock = wh_entry["stock"] if wh_entry else 0
+    diff = data.new_stock - old_stock
+    adjustment = {
+        "id": str(uuid.uuid4()),
+        "product_id": data.product_id,
+        "product_name": product.get("name", ""),
+        "warehouse_id": data.warehouse_id,
+        "old_stock": old_stock,
+        "new_stock": data.new_stock,
+        "difference": diff,
+        "reason": data.reason,
+        "adjusted_by": admin.get("name", admin.get("email", "")),
+        "date": datetime.now(timezone.utc).isoformat()
+    }
+    await db.stock_adjustments.insert_one(adjustment)
+    await db.warehouse_stock.update_one(
+        {"product_id": data.product_id, "warehouse_id": data.warehouse_id},
+        {"$set": {"stock": data.new_stock}},
+        upsert=True
+    )
+    await recalculate_product_stock(data.product_id)
+    return {"message": f"Stok disesuaikan: {old_stock} -> {data.new_stock} ({'+' if diff >= 0 else ''}{diff})", "adjustment": {k: v for k, v in adjustment.items() if k != '_id'}}
+
+@api_router.get("/stock-adjustments")
+async def get_stock_adjustments(
+    product_id: Optional[str] = None,
+    admin: dict = Depends(require_admin)
+):
+    query = {}
+    if product_id:
+        query["product_id"] = product_id
+    adjustments = await db.stock_adjustments.find(query, {"_id": 0}).sort("date", -1).to_list(200)
+    return adjustments
 
 async def recalculate_product_stock(product_id: str):
     """Recalculate total product stock in satuan equivalent"""

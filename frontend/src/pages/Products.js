@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { toast } from 'sonner';
-import { Plus, Search, Pencil, Trash2, Package, ArrowRightLeft, Filter, AlertTriangle } from 'lucide-react';
+import { Plus, Search, Pencil, Trash2, Package, ArrowRightLeft, Filter, AlertTriangle, ClipboardEdit } from 'lucide-react';
 import { CurrencyInput } from '../components/CurrencyInput';
 import { Pagination } from '../components/Pagination';
 
@@ -38,6 +38,13 @@ export const Products = () => {
   const [transferForm, setTransferForm] = useState({
     product_id: '', from_warehouse_id: '', to_warehouse_id: '', quantity: 1, notes: ''
   });
+
+  // Stock Adjustment
+  const [stockAdjDialogOpen, setStockAdjDialogOpen] = useState(false);
+  const [stockAdjProduct, setStockAdjProduct] = useState(null);
+  const [stockAdjValues, setStockAdjValues] = useState({});
+  const [stockAdjReason, setStockAdjReason] = useState('Koreksi fisik');
+  const [stockAdjSaving, setStockAdjSaving] = useState(false);
 
   const [formData, setFormData] = useState({
     name: '', barcode: '', category_id: '', supplier_id: '',
@@ -145,6 +152,39 @@ export const Products = () => {
   const getSupplierName = (id) => suppliers.find(s => s.id === id)?.name || '-';
   const fmt = (v) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(v);
   const fmtNum = (v) => new Intl.NumberFormat('id-ID').format(v);
+
+  const openStockAdj = (product) => {
+    setStockAdjProduct(product);
+    const vals = {};
+    warehouses.forEach(wh => { vals[wh.id] = getStock(product.id, wh.id); });
+    setStockAdjValues(vals);
+    setStockAdjReason('Koreksi fisik');
+    setStockAdjDialogOpen(true);
+  };
+
+  const handleStockAdj = async () => {
+    if (!stockAdjProduct) return;
+    setStockAdjSaving(true);
+    try {
+      for (const wh of warehouses) {
+        const oldVal = getStock(stockAdjProduct.id, wh.id);
+        const newVal = stockAdjValues[wh.id] ?? oldVal;
+        if (newVal !== oldVal) {
+          await api.post('/stock-adjustments', {
+            product_id: stockAdjProduct.id,
+            warehouse_id: wh.id,
+            new_stock: newVal,
+            reason: stockAdjReason
+          });
+        }
+      }
+      toast.success('Stok berhasil disesuaikan');
+      setStockAdjDialogOpen(false);
+      fetchData();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Gagal menyesuaikan stok');
+    } finally { setStockAdjSaving(false); }
+  };
 
   const filteredProducts = products.filter(p => {
     const matchSearch = !searchTerm || p.name.toLowerCase().includes(searchTerm.toLowerCase()) || p.barcode?.toLowerCase().includes(searchTerm.toLowerCase());
@@ -431,6 +471,9 @@ export const Products = () => {
                     <TableCell className="text-right text-muted-foreground">{fmt(product.cost_price / Math.max(1, product.items_per_box || 1))}</TableCell>
                     <TableCell>
                       <div className="flex items-center justify-center gap-1">
+                        <Button size="sm" variant="ghost" onClick={() => openStockAdj(product)} title="Koreksi Stok" data-testid={`adjust-stock-${product.id}`}>
+                          <ClipboardEdit className="w-4 h-4 text-blue-600" />
+                        </Button>
                         <Button size="sm" variant="ghost" onClick={() => openTransfer(product)} title="Transfer Stok" data-testid={`transfer-${product.id}`}>
                           <ArrowRightLeft className="w-4 h-4 text-primary" />
                         </Button>
@@ -512,6 +555,73 @@ export const Products = () => {
                 <Button variant="outline" onClick={() => setTransferDialogOpen(false)}>Batal</Button>
                 <Button onClick={handleTransfer} data-testid="confirm-transfer-btn">
                   <ArrowRightLeft className="w-4 h-4 mr-2" />Transfer
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Stock Adjustment Dialog */}
+      <Dialog open={stockAdjDialogOpen} onOpenChange={setStockAdjDialogOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <ClipboardEdit className="w-5 h-5 text-blue-600" />
+              Koreksi Stok
+            </DialogTitle>
+          </DialogHeader>
+          {stockAdjProduct && (
+            <div className="space-y-4">
+              <div className="p-3 bg-accent rounded-lg">
+                <p className="font-semibold">{stockAdjProduct.name}</p>
+                <p className="text-xs text-muted-foreground">{stockAdjProduct.items_per_box || 1} satuan/dus &middot; Stok saat ini: {fmtNum(stockAdjProduct.stock)} satuan</p>
+              </div>
+              <div className="space-y-3">
+                {warehouses.map(wh => {
+                  const oldVal = getStock(stockAdjProduct.id, wh.id);
+                  const newVal = stockAdjValues[wh.id] ?? oldVal;
+                  const diff = newVal - oldVal;
+                  return (
+                    <div key={wh.id} className="flex items-center gap-3 p-3 rounded-lg border">
+                      <div className="flex-1">
+                        <p className="text-sm font-medium">{wh.name} <span className="text-xs text-muted-foreground">({wh.unit})</span></p>
+                        <p className="text-xs text-muted-foreground">Saat ini: {fmtNum(oldVal)}</p>
+                      </div>
+                      <Input
+                        type="number"
+                        min="0"
+                        className="w-28 text-center"
+                        value={stockAdjValues[wh.id] ?? ''}
+                        onChange={(e) => setStockAdjValues({...stockAdjValues, [wh.id]: parseInt(e.target.value) || 0})}
+                        data-testid={`adj-stock-${wh.id}`}
+                      />
+                      {diff !== 0 && (
+                        <span className={`text-sm font-semibold min-w-[50px] text-right ${diff > 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                          {diff > 0 ? '+' : ''}{diff}
+                        </span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="space-y-2">
+                <Label>Alasan Penyesuaian</Label>
+                <Select value={stockAdjReason} onValueChange={setStockAdjReason}>
+                  <SelectTrigger data-testid="adj-reason-select"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Koreksi fisik">Koreksi fisik</SelectItem>
+                    <SelectItem value="Stok opname">Stok opname</SelectItem>
+                    <SelectItem value="Barang rusak">Barang rusak</SelectItem>
+                    <SelectItem value="Barang hilang">Barang hilang</SelectItem>
+                    <SelectItem value="Lainnya">Lainnya</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex gap-2 justify-end">
+                <Button variant="outline" onClick={() => setStockAdjDialogOpen(false)}>Batal</Button>
+                <Button onClick={handleStockAdj} disabled={stockAdjSaving} data-testid="confirm-adj-btn">
+                  <ClipboardEdit className="w-4 h-4 mr-2" />{stockAdjSaving ? 'Menyimpan...' : 'Simpan Koreksi'}
                 </Button>
               </div>
             </div>
