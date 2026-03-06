@@ -21,6 +21,7 @@ Build a responsive web application for a pharmacy and agriculture store named "U
 
 ## Credentials
 - Admin: admin@aqintani.com / admin123
+- Canvasser: sahidin@aqintani.com / 123456
 
 ## What's Been Implemented
 
@@ -126,6 +127,13 @@ Build a responsive web application for a pharmacy and agriculture store named "U
 
 ### Receipt Disclaimer (DONE - Mar 2026)
 - Struk POS via Bluetooth: ditambahkan garis putus-putus + "Barang yg sudah dibeli tidak bisa dikembalikan" sebelum "Terima kasih!".
+
+### Pagination (DONE - Mar 2026)
+- **Client-side Pagination**: Implemented across 7 pages using a shared `Pagination.js` component.
+- **Pages**: Products (15/page), Suppliers (15/page), SupplierDebt (15/page), PartnerStores (15/page), PartnerOrders (15/page), CanvasserDashboard (10/page), POS (12/page).
+- **Features**: Auto-hide when items ≤ perPage, page reset on filter/search change, "Menampilkan X-Y dari Z data" text.
+- **Search Added**: Search inputs added to Suppliers, PartnerStores, PartnerOrders pages for filtering.
+- **Backend**: `/api/products` endpoint response_model removed to support optional server-side pagination via `?page=&per_page=` params.
 
 ## Prioritized Backlog
 
