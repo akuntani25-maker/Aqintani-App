@@ -11,6 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
 import { toast } from 'sonner';
 import { Plus, Search, Package, Trash2, ShoppingCart, Warehouse, FileText, DollarSign, TrendingUp, RotateCcw, Pencil, Trash } from 'lucide-react';
 import { CurrencyInput } from '../components/CurrencyInput';
+import { Pagination } from '../components/Pagination';
 
 export const PartnerOrders = () => {
   const navigate = useNavigate();
@@ -34,6 +35,9 @@ export const PartnerOrders = () => {
   const [returnItems, setReturnItems] = useState([]);
   const [returnNotes, setReturnNotes] = useState('');
   const [returnWarehouse, setReturnWarehouse] = useState('gudang_toko');
+  const [searchOrder, setSearchOrder] = useState('');
+  const [page, setPage] = useState(1);
+  const perPage = 15;
 
   useEffect(() => { fetchData(); }, []);
 
@@ -232,6 +236,17 @@ export const PartnerOrders = () => {
 
   const fmt = (v) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(v);
   const fmtNum = (v) => new Intl.NumberFormat('id-ID').format(v);
+
+  const filteredOrders = orders.filter(o =>
+    !searchOrder || o.order_number?.toLowerCase().includes(searchOrder.toLowerCase()) ||
+    o.partner_store_name?.toLowerCase().includes(searchOrder.toLowerCase()) ||
+    o.canvasser_name?.toLowerCase().includes(searchOrder.toLowerCase())
+  );
+
+  useEffect(() => { setPage(1); }, [searchOrder]);
+
+  const totalPages = Math.ceil(filteredOrders.length / perPage);
+  const paginatedOrders = filteredOrders.slice((page - 1) * perPage, page * perPage);
 
   const filteredProducts = products.filter(p => p.name.toLowerCase().includes(searchProduct.toLowerCase()));
 
@@ -453,6 +468,14 @@ export const PartnerOrders = () => {
         </Card>
       )}
 
+      {/* Search Orders */}
+      <Card className="p-4">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <Input placeholder="Cari no. order, kios mitra, kanvaser..." value={searchOrder} onChange={(e) => setSearchOrder(e.target.value)} className="pl-10" data-testid="search-order-input" />
+        </div>
+      </Card>
+
       {/* Orders Table */}
       <Card className="p-6">
         <div className="rounded-lg border overflow-x-auto">
@@ -470,13 +493,13 @@ export const PartnerOrders = () => {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {orders.length === 0 ? (
+              {paginatedOrders.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
                     <Package className="w-12 h-12 mx-auto mb-2 opacity-50" /><p>Belum ada pesanan</p>
                   </TableCell>
                 </TableRow>
-              ) : orders.map(order => (
+              ) : paginatedOrders.map(order => (
                 <TableRow key={order.id} data-testid={`order-row-${order.id}`}>
                   <TableCell className="font-mono text-sm">
                     {order.order_number}
@@ -517,6 +540,7 @@ export const PartnerOrders = () => {
             </TableBody>
           </Table>
         </div>
+        <Pagination page={page} totalPages={totalPages} total={filteredOrders.length} perPage={perPage} onChange={setPage} />
       </Card>
 
       {/* Return Dialog */}

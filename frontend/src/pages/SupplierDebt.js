@@ -12,6 +12,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { CurrencyInput } from '../components/CurrencyInput';
+import { Pagination } from '../components/Pagination';
 
 const fmt = (v) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(v);
 
@@ -39,6 +40,8 @@ export const SupplierDebt = () => {
   const [returnSubmitting, setReturnSubmitting] = useState(false);
   const [warehouses, setWarehouses] = useState([]);
   const [returnWarehouse, setReturnWarehouse] = useState('gudang_utama');
+  const [page, setPage] = useState(1);
+  const perPage = 15;
 
   const fetchData = useCallback(async () => {
     try {
@@ -183,6 +186,11 @@ export const SupplierDebt = () => {
     return true;
   });
 
+  useEffect(() => { setPage(1); }, [search, filter]);
+
+  const totalPages = Math.ceil(filteredOverview.length / perPage);
+  const paginatedOverview = filteredOverview.slice((page - 1) * perPage, page * perPage);
+
   if (loading) {
     return <div className="flex items-center justify-center min-h-screen"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div></div>;
   }
@@ -269,14 +277,14 @@ export const SupplierDebt = () => {
 
       {/* Supplier List */}
       <div className="space-y-3" data-testid="supplier-list">
-        {filteredOverview.length === 0 && (
+        {paginatedOverview.length === 0 && (
           <Card className="p-12 text-center" data-testid="empty-state">
             <Users className="w-12 h-12 mx-auto mb-3 opacity-20" />
             <p className="text-muted-foreground">Tidak ada data supplier yang cocok dengan filter.</p>
           </Card>
         )}
 
-        {filteredOverview.map(s => {
+        {paginatedOverview.map(s => {
           const isExpanded = expandedSupplier === s.supplier_id;
           const isOverdue = s.outstanding > 0 && s.oldest_unpaid_date && s.oldest_unpaid_date <= thirtyDaysAgo;
           const daysSinceOldest = s.oldest_unpaid_date
@@ -508,6 +516,7 @@ export const SupplierDebt = () => {
             </Card>
           );
         })}
+        <Pagination page={page} totalPages={totalPages} total={filteredOverview.length} perPage={perPage} onChange={setPage} />
       </div>
 
       {/* Payment Dialog */}

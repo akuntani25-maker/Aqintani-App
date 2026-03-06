@@ -7,7 +7,8 @@ import { Card } from '../components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '../components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
 import { toast } from 'sonner';
-import { Plus, Pencil, Trash2, MapPin, DollarSign, Eye } from 'lucide-react';
+import { Plus, Pencil, Trash2, MapPin, DollarSign, Eye, Search } from 'lucide-react';
+import { Pagination } from '../components/Pagination';
 import { GoogleMap, LoadScript, Marker, InfoWindow } from '@react-google-maps/api';
 import { useNavigate } from 'react-router-dom';
 
@@ -21,6 +22,9 @@ export const PartnerStores = () => {
   const [editingStore, setEditingStore] = useState(null);
   const [selectedStore, setSelectedStore] = useState(null);
   const [showMap, setShowMap] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [page, setPage] = useState(1);
+  const perPage = 15;
   const [formData, setFormData] = useState({
     name: '',
     owner_name: '',
@@ -131,6 +135,18 @@ export const PartnerStores = () => {
   const viewStoreDetail = (storeId) => {
     navigate(`/admin/partner-stores/${storeId}`);
   };
+
+  const filteredStores = stores.filter(s =>
+    !searchTerm || s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    s.owner_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    s.phone?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    s.address?.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  useEffect(() => { setPage(1); }, [searchTerm]);
+
+  const totalPages = Math.ceil(filteredStores.length / perPage);
+  const paginatedStores = filteredStores.slice((page - 1) * perPage, page * perPage);
 
   if (loading) {
     return (
@@ -284,6 +300,14 @@ export const PartnerStores = () => {
         </div>
       </div>
 
+      {/* Search */}
+      <Card className="p-4">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <Input placeholder="Cari kios mitra, pemilik, telepon..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-10" data-testid="search-store-input" />
+        </div>
+      </Card>
+
       {/* Map View */}
       {showMap && GOOGLE_MAPS_API_KEY && (
         <Card className="p-6">
@@ -379,14 +403,14 @@ export const PartnerStores = () => {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {stores.length === 0 ? (
+              {paginatedStores.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
                     Belum ada kios mitra
                   </TableCell>
                 </TableRow>
               ) : (
-                stores.map((store) => (
+                paginatedStores.map((store) => (
                   <TableRow key={store.id}>
                     <TableCell className="font-medium">
                       <div className="flex items-center gap-2">
@@ -439,6 +463,7 @@ export const PartnerStores = () => {
             </TableBody>
           </Table>
         </div>
+        <Pagination page={page} totalPages={totalPages} total={filteredStores.length} perPage={perPage} onChange={setPage} />
       </Card>
     </div>
   );

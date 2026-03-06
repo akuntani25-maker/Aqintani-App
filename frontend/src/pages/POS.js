@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { toast } from 'sonner';
 import { Search, Plus, Minus, Trash2, ShoppingCart, LogOut, CreditCard, Banknote, Smartphone, Printer, Pencil } from 'lucide-react';
 import { CurrencyInput } from '../components/CurrencyInput';
+import { Pagination } from '../components/Pagination';
 import { useReactToPrint } from 'react-to-print';
 import ThermalPrinter from '../utils/ThermalPrinter';
 
@@ -96,6 +97,8 @@ export const POS = () => {
   const [lastTransaction, setLastTransaction] = useState(null);
   const receiptRef = useRef();
   const [thermalPrinter] = useState(() => new ThermalPrinter());
+  const [posPage, setPosPage] = useState(1);
+  const posPerPage = 12;
 
   const handlePrint = useReactToPrint({
     content: () => receiptRef.current,
@@ -256,6 +259,11 @@ export const POS = () => {
     product.name.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  useEffect(() => { setPosPage(1); }, [searchTerm]);
+
+  const posTotalPages = Math.ceil(filteredProducts.length / posPerPage);
+  const paginatedPosProducts = filteredProducts.slice((posPage - 1) * posPerPage, posPage * posPerPage);
+
   const { subtotal, tax, discount, total } = calculateTotal();
   const change = paymentAmount - total;
 
@@ -312,7 +320,7 @@ export const POS = () => {
         </div>
 
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-          {filteredProducts.map((product) => (
+          {paginatedPosProducts.map((product) => (
             <Card
               key={product.id}
               className="p-4 cursor-pointer hover:border-primary transition-colors"
@@ -327,6 +335,9 @@ export const POS = () => {
               <p className="text-xs text-muted-foreground">Stok Toko: {product.toko_stock || product.stock}</p>
             </Card>
           ))}
+        </div>
+        <div className="mt-4">
+          <Pagination page={posPage} totalPages={posTotalPages} total={filteredProducts.length} perPage={posPerPage} onChange={setPosPage} />
         </div>
       </div>
 

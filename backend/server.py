@@ -398,9 +398,22 @@ async def delete_category(category_id: str, admin: dict = Depends(require_admin)
         raise HTTPException(status_code=404, detail="Category not found")
     return {"message": "Category deleted"}
 
-@api_router.get("/suppliers", response_model=List[Supplier])
-async def get_suppliers(current_user: dict = Depends(get_current_user)):
-    suppliers = await db.suppliers.find({}, {"_id": 0}).sort("name", 1).to_list(1000)
+@api_router.get("/suppliers")
+async def get_suppliers(
+    search: Optional[str] = None,
+    page: Optional[int] = None,
+    per_page: int = 15,
+    current_user: dict = Depends(get_current_user)
+):
+    query = {}
+    if search:
+        query["name"] = {"$regex": search, "$options": "i"}
+    if page is not None:
+        total = await db.suppliers.count_documents(query)
+        skip = (page - 1) * per_page
+        suppliers = await db.suppliers.find(query, {"_id": 0}).sort("name", 1).skip(skip).limit(per_page).to_list(per_page)
+        return {"data": suppliers, "total": total, "page": page, "per_page": per_page, "total_pages": (total + per_page - 1) // per_page}
+    suppliers = await db.suppliers.find(query, {"_id": 0}).sort("name", 1).to_list(10000)
     return suppliers
 
 @api_router.post("/suppliers", response_model=Supplier)
@@ -436,10 +449,12 @@ async def delete_supplier(supplier_id: str, admin: dict = Depends(require_admin)
         raise HTTPException(status_code=404, detail="Supplier not found")
     return {"message": "Supplier deleted"}
 
-@api_router.get("/products", response_model=List[Product])
+@api_router.get("/products")
 async def get_products(
     search: Optional[str] = None,
     category_id: Optional[str] = None,
+    page: Optional[int] = None,
+    per_page: int = 15,
     current_user: dict = Depends(get_current_user)
 ):
     query = {}
@@ -451,7 +466,13 @@ async def get_products(
     if category_id:
         query["category_id"] = category_id
     
-    products = await db.products.find(query, {"_id": 0}).sort("name", 1).to_list(1000)
+    if page is not None:
+        total = await db.products.count_documents(query)
+        skip = (page - 1) * per_page
+        products = await db.products.find(query, {"_id": 0}).sort("name", 1).skip(skip).limit(per_page).to_list(per_page)
+        return {"data": products, "total": total, "page": page, "per_page": per_page, "total_pages": (total + per_page - 1) // per_page}
+    
+    products = await db.products.find(query, {"_id": 0}).sort("name", 1).to_list(100000)
     return products
 
 @api_router.get("/products/barcode/{barcode}", response_model=Product)

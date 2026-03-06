@@ -7,13 +7,17 @@ import { Card } from '../components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '../components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
 import { toast } from 'sonner';
-import { Plus, Pencil, Trash2, Users } from 'lucide-react';
+import { Plus, Pencil, Trash2, Users, Search } from 'lucide-react';
+import { Pagination } from '../components/Pagination';
 
 export const Suppliers = () => {
   const [suppliers, setSuppliers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingSupplier, setEditingSupplier] = useState(null);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [page, setPage] = useState(1);
+  const perPage = 15;
   const [formData, setFormData] = useState({
     name: '',
     contact_person: '',
@@ -82,6 +86,17 @@ export const Suppliers = () => {
     setEditingSupplier(null);
     setFormData({ name: '', contact_person: '', phone: '', email: '', address: '' });
   };
+
+  const filteredSuppliers = suppliers.filter(s =>
+    !searchTerm || s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    s.contact_person?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    s.phone?.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  useEffect(() => { setPage(1); }, [searchTerm]);
+
+  const totalPages = Math.ceil(filteredSuppliers.length / perPage);
+  const paginatedSuppliers = filteredSuppliers.slice((page - 1) * perPage, page * perPage);
 
   if (loading) {
     return (
@@ -173,6 +188,14 @@ export const Suppliers = () => {
         </Dialog>
       </div>
 
+      {/* Search */}
+      <Card className="p-4">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+          <Input placeholder="Cari nama supplier, kontak, atau telepon..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-10" data-testid="search-supplier-input" />
+        </div>
+      </Card>
+
       <Card className="p-6">
         <div className="rounded-lg border overflow-x-auto">
           <Table>
@@ -186,7 +209,7 @@ export const Suppliers = () => {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {suppliers.length === 0 ? (
+              {paginatedSuppliers.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={5} className="text-center py-8 text-muted-foreground">
                     <Users className="w-12 h-12 mx-auto mb-2 opacity-50" />
@@ -194,7 +217,7 @@ export const Suppliers = () => {
                   </TableCell>
                 </TableRow>
               ) : (
-                suppliers.map((supplier) => (
+                paginatedSuppliers.map((supplier) => (
                   <TableRow key={supplier.id}>
                     <TableCell className="font-medium">{supplier.name}</TableCell>
                     <TableCell>{supplier.contact_person || '-'}</TableCell>
@@ -226,6 +249,7 @@ export const Suppliers = () => {
             </TableBody>
           </Table>
         </div>
+        <Pagination page={page} totalPages={totalPages} total={filteredSuppliers.length} perPage={perPage} onChange={setPage} />
       </Card>
     </div>
   );

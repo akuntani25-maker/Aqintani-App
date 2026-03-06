@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { toast } from 'sonner';
 import { Plus, Search, Pencil, Trash2, Package, ArrowRightLeft, Filter, AlertTriangle } from 'lucide-react';
 import { CurrencyInput } from '../components/CurrencyInput';
+import { Pagination } from '../components/Pagination';
 
 export const Products = () => {
   const [products, setProducts] = useState([]);
@@ -21,6 +22,10 @@ export const Products = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState(null);
+
+  // Pagination
+  const [page, setPage] = useState(1);
+  const perPage = 15;
 
   // Filters
   const [filterCategory, setFilterCategory] = useState('all');
@@ -154,6 +159,12 @@ export const Products = () => {
   });
 
   const activeFilters = (filterCategory !== 'all' ? 1 : 0) + (filterSupplier !== 'all' ? 1 : 0) + (filterWarehouse !== 'all' ? 1 : 0) + (filterLowStock ? 1 : 0);
+
+  // Reset page when filters change
+  useEffect(() => { setPage(1); }, [searchTerm, filterCategory, filterSupplier, filterWarehouse, filterLowStock]);
+
+  const totalPages = Math.ceil(filteredProducts.length / perPage);
+  const paginatedProducts = filteredProducts.slice((page - 1) * perPage, page * perPage);
 
   const transferProduct = products.find(p => p.id === transferForm.product_id);
   const fromWh = warehouses.find(w => w.id === transferForm.from_warehouse_id);
@@ -381,14 +392,14 @@ export const Products = () => {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredProducts.length === 0 ? (
+              {paginatedProducts.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={10} className="text-center py-8 text-muted-foreground">
                     <Package className="w-12 h-12 mx-auto mb-2 opacity-50" />
                     <p>Tidak ada produk</p>
                   </TableCell>
                 </TableRow>
-              ) : filteredProducts.map(product => {
+              ) : paginatedProducts.map(product => {
                 const utama = getStock(product.id, 'gudang_utama');
                 const toko = getStock(product.id, 'gudang_toko');
                 const lainnya = getStock(product.id, 'gudang_lainnya');
@@ -437,6 +448,7 @@ export const Products = () => {
             </TableBody>
           </Table>
         </div>
+        <Pagination page={page} totalPages={totalPages} total={filteredProducts.length} perPage={perPage} onChange={setPage} />
       </Card>
 
       {/* Transfer Dialog */}

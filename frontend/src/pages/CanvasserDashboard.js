@@ -9,6 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../components/ui/dialog';
 import { toast } from 'sonner';
 import { Package, MapPin, DollarSign, CheckCircle, Truck, LogOut, Search, Bell, Filter, X, ShoppingBag, Warehouse } from 'lucide-react';
+import { Pagination } from '../components/Pagination';
 
 const fmtCurrency = (v) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(v);
 
@@ -31,6 +32,8 @@ export const CanvasserDashboard = () => {
   const [productQuery, setProductQuery] = useState('');
   const [productResults, setProductResults] = useState([]);
   const [productSearching, setProductSearching] = useState(false);
+  const [page, setPage] = useState(1);
+  const perPage = 10;
 
   useEffect(() => {
     fetchMyOrders();
@@ -126,6 +129,11 @@ export const CanvasserDashboard = () => {
     const matchStatus = statusFilter === 'all' || o.status === statusFilter;
     return matchSearch && matchStatus;
   });
+
+  useEffect(() => { setPage(1); }, [searchQuery, statusFilter]);
+
+  const totalPages = Math.ceil(filteredOrders.length / perPage);
+  const paginatedOrders = filteredOrders.slice((page - 1) * perPage, page * perPage);
 
   if (loading) {
     return (
@@ -314,7 +322,7 @@ export const CanvasserDashboard = () => {
             </div>
           ) : (
             <div className="space-y-4">
-              {filteredOrders.map((order) => (
+              {paginatedOrders.map((order) => (
                 <Card key={order.id} className="p-4 md:p-6 border-2 hover:border-primary/50 transition-colors" data-testid={`order-card-${order.id}`}>
                   <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
                     <div className="flex-1 space-y-3">
@@ -402,6 +410,7 @@ export const CanvasserDashboard = () => {
               ))}
             </div>
           )}
+          <Pagination page={page} totalPages={totalPages} total={filteredOrders.length} perPage={perPage} onChange={setPage} />
         </Card>
       </div>
 
