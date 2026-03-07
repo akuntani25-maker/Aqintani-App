@@ -1,215 +1,90 @@
 # UD. AQIN TANI - Product Requirements Document
 
 ## Original Problem Statement
-Build a responsive web application for a pharmacy and agriculture store named "UD. AQIN TANI" with Admin and Cashier roles, B2B features, multi-warehouse inventory, purchasing & debt management, partner kiosk management, and analytics.
+Aplikasi web responsif untuk toko farmasi dan pertanian bernama "UD. AQIN TANI" dengan sistem manajemen bisnis lengkap.
+
+## User Personas
+- **Admin**: Manajemen penuh (produk/barang, supplier, gudang, laporan, pengguna)
+- **Manager**: Seperti admin tanpa manajemen pengguna
+- **Karyawan Kantor (Office Staff)**: Akses dashboard, produk, supplier, laporan
+- **Kasir (Cashier)**: POS dan profil
+- **Kanvaser (Canvasser)**: Dashboard kanvaser dan profil
+
+## Core Requirements
+1. Multi-role authentication (Admin, Manager, Karyawan Kantor, Kasir, Kanvaser)
+2. Product/Barang management dengan kategori dan supplier
+3. Multi-warehouse inventory (Gudang Utama/Toko/Lainnya)
+4. POS system dengan daily summary, HPP display, stock transfer
+5. Partner store (Kios Mitra) management dengan pesanan dan hutang
+6. Supplier debt management dengan pembayaran bertahap
+7. AI-powered stock forecasting (OpenAI GPT-4o via Emergent LLM Key)
+8. Comprehensive reporting (PDF, CSV, daily, monthly, best sellers)
+9. Audit trail untuk semua operasi kritis
+10. Vehicle/Armada management (merged with Canvasser page)
+11. Data import (CSV/Excel) untuk semua entitas
+12. Thermal printer receipt support
 
 ## Tech Stack
-- **Backend**: FastAPI, Motor (async MongoDB), JWT, Pydantic
-- **Frontend**: React, Tailwind CSS, Shadcn/UI, lucide-react, recharts, sonner
+- **Backend**: FastAPI, Motor (MongoDB), Pydantic, JWT, emergentintegrations
+- **Frontend**: React, React Router, Tailwind CSS, Shadcn/UI, recharts, jspdf, papaparse
 - **Database**: MongoDB
+- **AI**: OpenAI GPT-4o via Emergent LLM Key
 
-## Architecture
+## Architecture (Post-Refactoring)
 ```
-/app/
-  backend/server.py       # Monolithic FastAPI (all models + endpoints)
-  frontend/src/
-    pages/Products.js     # Central product/inventory hub
-    pages/Purchases.js    # Supplier purchases
-    pages/CanvasserDashboard.js
-    components/AdminLayout.js
+/app/backend/
+├── server.py           # Slim entry point (~100 lines)
+├── database.py         # MongoDB connection
+├── auth.py             # Auth utilities, JWT, RBAC permissions
+├── models.py           # All Pydantic models
+├── services.py         # Shared business logic (audit, stock calc)
+├── routers/
+│   ├── auth_routes.py       # Auth, users, roles, settings
+│   ├── product_routes.py    # Products, categories
+│   ├── supplier_routes.py   # Suppliers, purchases, debts, payments
+│   ├── transaction_routes.py # Transactions, POS, returns
+│   ├── partner_routes.py    # Partner stores, orders, pricing
+│   ├── canvasser_routes.py  # Canvassers
+│   ├── warehouse_routes.py  # Warehouses, stock, adjustments, transfers
+│   ├── report_routes.py     # Dashboard, reports, analytics, forecast
+│   └── admin_routes.py      # Vehicles, audit log, data import
+└── .env
+
+/app/frontend/src/
+├── App.js
+├── components/AdminLayout.js
+├── pages/
+│   ├── AdminDashboard.js, Analytics.js, AuditLog.js
+│   ├── Canvassers.js, ImportData.js, Login.js
+│   ├── PartnerOrders.js, PartnerStores.js, POS.js
+│   ├── Products.js, Profile.js, Purchases.js
+│   ├── Reports.js, SupplierDebts.js, Users.js
+│   └── WarehouseManagement.js
+└── utils/ThermalPrinter.js
 ```
+
+## Key DB Collections
+- `users`, `categories`, `suppliers`, `products`
+- `warehouses`, `warehouse_stock`, `stock_adjustments`, `stock_transfers`
+- `transactions`, `purchases`, `payment_history`
+- `partner_stores`, `partner_orders`, `partner_prices`
+- `canvassers`, `vehicles`, `returns`
+- `audit_log`, `store_settings`
+
+## What's Been Implemented (Complete)
+- Full RBAC system (5 roles)
+- Dashboard with all metrics (Nilai Aset Bersih, stock in/out, warehouse chart)
+- POS with daily summary, HPP, stock transfer
+- AI stock forecasting (Prediksi tab in Analytics)
+- "Produk" → "Barang" terminology change across UI
+- Invoice number & due date on purchases
+- Dashboard metrics exclude import data
+- Vehicle management merged with Canvasser page
+- Audit trail system
+- PDF/CSV report export (fixed)
+- Data import system
+- **Major Refactoring**: server.py split from 2900+ lines to modular architecture
 
 ## Credentials
 - Admin: admin@aqintani.com / admin123
-- Canvasser: sahidin@aqintani.com / 123456
-
-## What's Been Implemented
-
-### Core Features (DONE)
-- Admin dashboard with sales chart
-- Product CRUD with categories, suppliers, barcode
-- Multi-warehouse inventory (Gudang Utama/Toko/Lainnya)
-- Stock transfers between warehouses with unit conversion
-- Transaction/POS system
-- Receipt printing (thermal printer compatible)
-- User management (Admin, Kasir, Canvasser roles)
-
-### B2B Features (DONE)
-- Canvasser portal (login, dashboard, order management, notifications)
-- Partner kiosk management (Kios Mitra)
-- Partner store orders (Pesanan Kios)
-
-### Purchasing & Debt (DONE - Feb 2026)
-- Auto-create purchase when adding new product with initial stock
-- **Bayar di Muka (Partial Payment)**: When creating product, admin can specify upfront payment amount. Remaining balance tracked as debt. Purchase status shows "Tempo" for outstanding debt.
-- Purchases page to view all supplier purchase records
-- **Filter-aware summary cards**: Total Pembelian, Sisa Hutang, Sudah Dibayar now dynamically update based on supplier filter selection
-
-### POS Enhancements (DONE - Mar 2026)
-- **Manual Price Override**: Kasir can edit sell price per item in cart before checkout
-
-### Partner Orders / Pesanan Kios (FIXED & ENHANCED - Mar 2026)
-- **Manual Price Override**: Admin can edit sell price per item in partner order cart
-- **Per-item warehouse selection**: Each order item can be sourced from different warehouses
-- **Correct pricing by warehouse unit**: Items from "dus" warehouses use box_price, "satuan" warehouses use unit price
-- **Real-time price adaptation**: Changing warehouse recalculates price; manual override also supported
-- **Stock validation per warehouse**: Shows available stock and warns when insufficient
-- **Today's Summary Cards**: Orders today, total products, total revenue, money received
-- **Per-Warehouse Breakdown**: Items distributed from each warehouse today
-- **Partner Order Receipt (Struk)**: Print-ready receipt with previous debt + accumulated total
-- **Return/Retur Feature**: Mark orders with returns — per-item return qty + reason, stock restored to chosen warehouse, partner debt reduced, RETUR badge on orders
-
-### Analytics & Reports (ENHANCED - Mar 2026)
-- Analytics page with basic charts
-- Laporan (Reports) page with two detailed report tabs:
-  - **Penjualan POS**: Rincian per produk — tanggal, produk, qty, HPP/unit, jual/unit, total jual, total HPP, margin
-  - **Penjualan Kios Mitra**: Rincian per produk — tanggal, produk, kios mitra, qty (satuan), HPP/unit, jual/unit, total jual, total HPP, margin
-  - **Produk Terlaris**: Ranking produk berdasarkan revenue — gabungan POS + Mitra, qty breakdown, revenue breakdown, HPP, margin, progress bar visual
-- Summary cards: Total Penjualan, Total HPP, Total Margin, Margin %
-- Date range filter and CSV export
-- Footer row with totals per table
-
-### Thermal Printer & Receipt Optimization (DONE - Mar 2026)
-- **Direct ESC/POS Bluetooth Printing**: New "Cetak via Bluetooth" button on both PartnerOrderReceipt.js and ReceiptPreview.js. Sends raw ESC/POS commands directly to the printer via Web Bluetooth API, bypassing browser rendering entirely. Uses the printer's built-in font for fast, crisp output.
-- **Printer Support**: Optimized for 58mm thermal printers (D58UBT-S / RPP02N). Supports 32 characters per line. Auto-discovers BLE print characteristics with 10+ known profiles.
-- **Singleton Printer Instance**: `thermalPrinter` singleton exported from ThermalPrinter.js — Bluetooth connection persists across page navigations within the SPA session.
-- **Two Print Methods**: `printReceipt(transaction, storeSettings)` for POS receipts, `printPartnerOrderReceipt(order, storeSettings)` for partner kiosk receipts. Both build complete ESC/POS command buffers with proper initialization, alignment, bold, double-size, and paper cut commands.
-- **Bluetooth Connectivity**: Added 10 BLE printer profiles (including common Chinese thermal printers like Xprinter, ZJ, Gprinter), GATT retry logic (3 attempts), 300ms stabilization delay, larger data chunk sizes (200/100 bytes) with automatic fallback to smaller chunks on failure.
-- **Legacy Browser Print**: "Print Struk" button retained as fallback for browser-based iframe printing.
-
-### Supplier Debt Management (DONE - Mar 2026)
-- **Halaman Hutang Supplier**: Menggantikan halaman Pembelian. Layout konsisten dengan halaman lain (Card, Table, Dialog shadcn)
-- **Summary Cards**: Total Hutang, Supplier Berhutang, Dibayar Bulan Ini, Jatuh Tempo (>30 hari)
-- **Detail per Supplier**: Panel expandable dengan tab Pembelian dan Riwayat Pembayaran
-- **Catat Pembayaran**: Dialog modal dengan auto-distribusi ke pembelian paling lama, quick-fill 25%/50%/Lunasi
-- **Filter & Search**: Cari supplier, filter Semua/Ada Hutang/Jatuh Tempo/Lunas
-- **Export CSV & Notifikasi Jatuh Tempo**: Download CSV, alert card hutang >30 hari
-- **Auto-purchase**: Produk baru otomatis membuat record pembelian ke supplier terkait
-- **Responsive**: Optimal di desktop, tablet, dan mobile
-
-### Dashboard Enhancement (DONE - Mar 2026)
-- **3 Card Finansial Baru**: Nilai Barang Gudang (stok × HPP/satuan), Total Bon Supplier Belum Bayar, Total Bon Kios Mitra Belum Bayar.
-- **Notifikasi Jatuh Tempo**: Daftar pembelian yang jatuh tempo di bulan berjalan ditampilkan di dashboard.
-- **Kalender Jatuh Tempo**: Kalender navigable (bisa ke bulan lain) yang menandai tanggal-tanggal jatuh tempo hutang. Klik tanggal untuk melihat detail.
-- **API**: `GET /api/dashboard/stats` (enhanced), `GET /api/dashboard/due-calendar?year=&month=`
-
-### Tempo Hutang Supplier per Pembelian (DONE - Mar 2026)
-- **Set Jatuh Tempo Manual**: Kolom "Jatuh Tempo" baru di tabel pembelian di halaman Hutang Supplier. Admin bisa set tanggal jatuh tempo per pembelian via date picker.
-- **API**: `PUT /api/purchases/{id}/due-date?due_date=YYYY-MM-DD`
-
-### HPP per Satuan di Produk (DONE - Mar 2026)
-- Kolom baru "HPP/Satuan" di tabel produk. Menghitung cost_price / items_per_box untuk menampilkan harga pokok per satuan.
-
-### Pencarian Produk untuk Canvasser (DONE - Mar 2026)
-- **Fitur Cari Produk**: Section baru di dashboard Canvasser. Cari produk dengan debounce, tampilkan nama, stok total, stok per gudang, harga jual, dan harga per dus.
-- **API**: `GET /api/canvassers/product-search?q=`
-
-### Bulk Data Import (DONE - Mar 2026)
-- **Halaman Import Data**: Admin page (`/admin/import-data`) for importing CSV/XLSX files directly into the database, **bypassing all business logic** (no auto-purchase, no stock deduction, no debt recalculation).
-- **9 Import Types**: Gudang, Kategori, Supplier, Produk, Stok per Gudang, Pembelian Supplier, Pembayaran Hutang, Kios Mitra, Pesanan Kios Mitra — displayed in correct dependency order.
-- **Smart Validation**: Name-based matching for foreign keys (e.g., category/supplier names mapped to IDs). Duplicate detection by name. Missing references reported as errors.
-- **Grouped Imports**: Purchases and Partner Orders support multi-row grouping by `no_pembelian`/`no_pesanan` for multi-item records.
-- **Template Download**: CSV templates with correct column headers for each type.
-- **Clear Collection**: "Hapus Semua" button to wipe and re-import any collection.
-- **API Endpoints**: `GET /api/import/types`, `GET /api/import/counts`, `GET /api/import/template/{type}`, `POST /api/import/{type}`, `DELETE /api/import/clear/{type}`
-
-### CurrencyInput & Digit Separator (DONE - Mar 2026)
-- **Shared CurrencyInput Component**: `/components/CurrencyInput.js` — menampilkan angka dengan pemisah ribuan (1.000.000) pada semua input nominal.
-- **Diterapkan di**: Products (harga beli, harga jual, harga dus, bayar di muka), POS (pembayaran), PartnerOrders (harga, diskon), SupplierDebt (jumlah bayar).
-
-### Fix Product Edit Stock Reset (DONE - Mar 2026)
-- **Bug**: Edit produk selalu reset stok ke 0. Penyebab: form `handleEdit` hardcode `stock: 0` dan backend tidak exclude `stock` dari update data.
-- **Fix**: Frontend menyembunyikan field stok/gudang di edit mode. Backend `update_product` menghapus `stock`, `warehouse_id`, `initial_paid` dari update data.
-
-### Retur Barang Supplier (DONE - Mar 2026)
-- **Fitur**: Tombol "Retur" di setiap pembelian yang belum lunas di halaman Hutang Supplier. Dialog memilih item dan jumlah retur. Otomatis mengurangi hutang supplier dan stok gudang.
-- **API**: `POST /api/purchases/{id}/return` — menerima items[], notes, warehouse_id. Membuat record retur di payment_history, mengurangi remaining, dan mengurangi warehouse_stock.
-
-### Receipt Disclaimer (DONE - Mar 2026)
-- Struk POS via Bluetooth: ditambahkan garis putus-putus + "Barang yg sudah dibeli tidak bisa dikembalikan" sebelum "Terima kasih!".
-
-### Pagination (DONE - Mar 2026)
-- **Client-side Pagination**: Implemented across 7 pages using a shared `Pagination.js` component.
-- **Pages**: Products (15/page), Suppliers (15/page), SupplierDebt (15/page), PartnerStores (15/page), PartnerOrders (15/page), CanvasserDashboard (10/page), POS (12/page).
-- **Features**: Auto-hide when items ≤ perPage, page reset on filter/search change, "Menampilkan X-Y dari Z data" text.
-- **Search Added**: Search inputs added to Suppliers, PartnerStores, PartnerOrders pages for filtering.
-- **Backend**: `/api/products` endpoint response_model removed to support optional server-side pagination via `?page=&per_page=` params.
-
-### Koreksi Stok / Stock Adjustment (DONE - Mar 2026)
-- **Fitur**: Tombol koreksi stok (ikon clipboard) di setiap baris produk. Dialog edit stok per gudang.
-- **Dialog**: Stok saat ini, input baru, indikator selisih (+/- hijau/merah), dropdown alasan.
-- **Backend**: `POST /api/stock-adjustments`, `GET /api/stock-adjustments`
-- **DB**: `stock_adjustments` collection.
-
-### POS Sticky Cart (DONE - Mar 2026)
-- Panel keranjang POS fixed/sticky, tidak ikut scroll. Produk grid scrollable.
-
-### Export PDF Kop Surat (DONE - Mar 2026)
-- Tombol "Export PDF" di halaman Laporan. PDF landscape A4 dengan kop surat UD. AQIN TANI.
-- Library: jsPDF + jspdf-autotable. Support semua 3 tipe laporan.
-
-### Armada Mobil Box (DONE - Mar 2026)
-- **CRUD Armada**: Halaman `/admin/vehicles` untuk kelola armada mobil box (nama, plat nomor, area/rute, driver).
-- **Assign ke Kios Mitra**: Setiap kios mitra bisa di-assign ke armada tertentu via dropdown di form create/edit.
-- **Filter**: Halaman kios mitra bisa difilter berdasarkan armada.
-- **Kolom Armada**: Tabel kios mitra menampilkan armada yang di-assign dengan badge biru.
-- **Backend**: `GET/POST/PUT/DELETE /api/vehicles`, vehicle_id ditambahkan ke PartnerStore model.
-- **DB**: `vehicles` collection - id, name, plate_number, area_route, driver_name, canvasser_id, created_at.
-
-### Role Management (DONE - Mar 2026)
-- **5 Roles**: admin (full), manager (semua kecuali kelola user), office_staff (terbatas), cashier (POS saja), canvasser (dashboard kanvaser).
-- **Permission-based Menu**: Sidebar AdminLayout dinamis berdasarkan permissions dari `/api/role-permissions`.
-- **Users Page**: Dropdown role diperluas: Admin, Manager, Karyawan Kantor, Kasir, Kanvaser.
-- **PrivateRoute**: Updated untuk support admin, manager, office_staff mengakses panel admin.
-
-### Audit Trail (DONE - Mar 2026)
-- **Log Aktivitas**: Halaman `/admin/audit-log` menampilkan riwayat semua perubahan penting.
-- **Tracked**: Create/update/delete produk, armada. Filter by entity type.
-- **Backend**: `log_audit()` helper function, `GET /api/audit-log` endpoint.
-- **DB**: `audit_log` collection - id, user_id, user_name, user_role, action, entity_type, entity_id, details, timestamp.
-
-### CSS Fix Import Data (DONE - Mar 2026)
-- Padding dan heading style disamakan dengan halaman lain (p-4 md:p-6 lg:p-8, text-2xl tracking-tight).
-
-### Dashboard Enhancement v2 (DONE - Mar 2026)
-- **Grafik Lingkaran**: Pie chart "Nilai Barang per Gudang" dengan legend per gudang menggunakan recharts.
-- **Barang Masuk/Keluar Hari Ini**: Card menampilkan total nilai barang masuk (pembelian) dan keluar (penjualan) hari ini.
-- **Nilai Aset Bersih**: Dark card = Total Gudang + Bon Mitra - Bon Supplier.
-- **Jatuh Tempo Per Invoice**: Notifikasi jatuh tempo hutang supplier ditampilkan per invoice/pembelian (bukan total per supplier).
-
-### Armada di Halaman Kanvaser (DONE - Mar 2026)
-- Halaman Armada terpisah dihapus dari sidebar. CRUD Armada sekarang menjadi tab di halaman Kanvaser & Armada.
-
-### POS Enhancement (DONE - Mar 2026)
-- **Ringkasan Harian**: 3 card di atas POS (Transaksi Hari Ini, Total Penjualan, Margin).
-- **HPP Display**: Badge HPP per unit di setiap card produk.
-- **Transfer Stok Kasir**: Kasir bisa transfer stok via dialog dengan catatan siapa yang melakukan.
-- **Backend**: `GET /api/pos/daily-summary` endpoint baru.
-
-### Fix PDF Export + CSV Improvement (DONE - Mar 2026)
-- **PDF Fix**: Import `autoTable` dari `jspdf-autotable` (bukan side-effect import).
-- **CSV Improvement**: BOM UTF-8 untuk Excel, headline UD. AQIN TANI + periode, baris total, nama file lebih deskriptif.
-
-## Prioritized Backlog
-
-### P1 - Next Up
-
-### P2 - Future
-- **Enhanced Analytics**: More detailed charts, filters, date ranges, export options
-- **Server.py Refactoring**: Split monolith into routers/models for maintainability
-
-## Key DB Schema
-- **products**: name, barcode, category_id, supplier_id, stock, price, cost_price, box_price, items_per_box, min_stock_alert
-- **purchases**: supplier_id, supplier_name, items[], total, paid, remaining, warehouse_id, notes, date
-- **warehouse_stock**: product_id, warehouse_id, stock (in respective units)
-- **stock_transfers**: product_id, from_warehouse_id, to_warehouse_id, quantity, notes
-- **stock_adjustments**: id, product_id, product_name, warehouse_id, old_stock, new_stock, difference, reason, adjusted_by, date
-
-## Key API Endpoints
-- POST /api/products - Create product (with initial_paid for auto-purchase)
-- POST /api/stock-transfers - Transfer stock between warehouses
-- GET /api/warehouse-stock - Aggregated stock data
-- GET /api/purchases - List all purchases
-- POST /api/purchases - Manual purchase creation
-- POST /api/stock-adjustments - Create stock adjustment
-- GET /api/stock-adjustments - Get adjustment history
+- Canvasser: canvasser@aqintani.com / 123456
