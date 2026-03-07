@@ -617,6 +617,22 @@ async def delete_product(product_id: str, admin: dict = Depends(require_admin)):
     await log_audit(admin, "delete", "product", product_id, {"name": product.get("name", "") if product else ""})
     return {"message": "Product deleted"}
 
+@api_router.get("/pos/daily-summary")
+async def get_pos_daily_summary(current_user: dict = Depends(get_current_user)):
+    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    transactions = await db.transactions.find({"date": today}, {"_id": 0}).to_list(10000)
+    total_sales = sum(t.get("total", 0) for t in transactions)
+    total_cost = 0
+    for t in transactions:
+        for item in t.get("items", []):
+            total_cost += item.get("cost_price", 0) * item.get("quantity", 0)
+    return {
+        "count": len(transactions),
+        "total_sales": total_sales,
+        "total_cost": total_cost,
+        "total_margin": total_sales - total_cost
+    }
+
 @api_router.post("/transactions", response_model=Transaction)
 async def create_transaction(data: TransactionCreate, current_user: dict = Depends(get_current_user)):
     now = datetime.now(timezone.utc)
@@ -964,11 +980,44 @@ async def get_dashboard_stats(admin: dict = Depends(require_admin)):
         daily_total = sum(t["total"] for t in trans)
         last_7_days.append({"date": date, "sales": daily_total})
     
-    # Inventory value (stock x HPP per satuan)
+    # Inventory value per warehouse
     products = await db.products.find({}, {"_id": 0}).to_list(100000)
-    inventory_value = sum(
-        p.get("stock", 0) * (p.get("cost_price", 0) / max(1, p.get("items_per_box", 1)))
-        for p in products
+    products_map = {p["id"]: p for p in products}
+    warehouses = await db.warehouses.find({}, {"_id": 0}).to_list(100)
+    warehouse_stocks = await db.warehouse_stock.find({}, {"_id": 0}).to_list(100000)
+    
+    warehouse_values = {}
+    for ws in warehouse_stocks:
+        pid = ws.get("product_id")
+        wid = ws.get("warehouse_id")
+        stock = ws.get("stock", 0)
+        product = products_map.get(pid)
+        if product and stock > 0:
+            hpp_per_unit = product.get("cost_price", 0) / max(1, product.get("items_per_box", 1))
+            wh = next((w for w in warehouses if w.get("id") == wid), None)
+            if wh and wh.get("unit") == "dus":
+                value = stock * product.get("cost_price", 0)
+            else:
+                value = stock * hpp_per_unit
+            warehouse_values[wid] = warehouse_values.get(wid, 0) + value
+    
+    warehouse_chart = []
+    total_inventory = 0
+    for w in warehouses:
+        val = warehouse_values.get(w["id"], 0)
+        total_inventory += val
+        if val > 0:
+            warehouse_chart.append({"name": w.get("name", w["id"]), "value": round(val)})
+    
+    # Stock movement today (purchases = in, transactions = out)
+    today_purchases = await db.purchases.find({"date": today}, {"_id": 0}).to_list(1000)
+    stock_in_today = sum(
+        sum(item.get("subtotal", 0) for item in p.get("items", []))
+        for p in today_purchases
+    )
+    stock_out_today = sum(
+        sum(item.get("cost_price", 0) * item.get("quantity", 0) for item in t.get("items", []))
+        for t in today_transactions
     )
     
     # Supplier debt
@@ -979,7 +1028,10 @@ async def get_dashboard_stats(admin: dict = Depends(require_admin)):
     partner_stores = await db.partner_stores.find({}, {"_id": 0, "current_debt": 1}).to_list(10000)
     total_partner_debt = sum(ps.get("current_debt", 0) for ps in partner_stores)
     
-    # Due this month
+    # Total assets = inventory + partner debt - supplier debt
+    total_assets = total_inventory + total_partner_debt - total_supplier_debt
+    
+    # Due this month (per invoice)
     now = datetime.now(timezone.utc)
     month_start = now.strftime("%Y-%m-01")
     month_end = f"{now.strftime('%Y-%m')}-31"
@@ -994,9 +1046,13 @@ async def get_dashboard_stats(admin: dict = Depends(require_admin)):
         "total_products": total_products,
         "low_stock_count": low_stock_count,
         "last_7_days": last_7_days,
-        "inventory_value": inventory_value,
+        "inventory_value": total_inventory,
+        "warehouse_chart": warehouse_chart,
+        "stock_in_today": stock_in_today,
+        "stock_out_today": stock_out_today,
         "total_supplier_debt": total_supplier_debt,
         "total_partner_debt": total_partner_debt,
+        "total_assets": total_assets,
         "due_this_month": [{k: v for k, v in d.items() if k != "_id"} for d in due_this_month]
     }
 

@@ -8,7 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
 import { toast } from 'sonner';
 import { FileText, Download, TrendingUp, TrendingDown, DollarSign, ShoppingCart, Store, Award, FileDown } from 'lucide-react';
 import jsPDF from 'jspdf';
-import 'jspdf-autotable';
+import autoTable from 'jspdf-autotable';
 
 export const Reports = () => {
   const [activeTab, setActiveTab] = useState('pos');
@@ -38,29 +38,58 @@ export const Reports = () => {
 
   const exportCSV = () => {
     if (!reportData || !reportData.rows.length) return;
-    let csv = "data:text/csv;charset=utf-8,";
+    const tabLabels = { pos: 'Penjualan POS', partner: 'Penjualan Kios Mitra', bestseller: 'Produk Terlaris' };
+    let csv = "\uFEFF"; // BOM for Excel UTF-8
+
+    // Header / Headline
+    csv += "UD. AQIN TANI\n";
+    csv += `Laporan ${tabLabels[reportData.type]}\n`;
+    csv += `Periode: ${dateFrom} s/d ${dateTo}\n`;
+    csv += `Dicetak: ${new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}\n`;
+    csv += "\n";
+
     if (reportData.type === 'pos') {
+      if (reportData.total_sales !== undefined) {
+        csv += `Total Penjualan:,${reportData.total_sales}\n`;
+        csv += `Total HPP:,${reportData.total_cost}\n`;
+        csv += `Total Margin:,${reportData.total_margin}\n`;
+        csv += `Margin %:,${marginPercent}%\n`;
+        csv += "\n";
+      }
       csv += "Tanggal,No Transaksi,Produk,Qty,Harga Pokok,Harga Jual,Total Jual,Total HPP,Margin\n";
       reportData.rows.forEach(r => {
-        csv += `${r.date},${r.transaction_number},${r.product_name},${r.quantity},${r.cost_price},${r.sell_price},${r.total_sell},${r.total_cost},${r.margin}\n`;
+        csv += `${r.date},${r.transaction_number},"${r.product_name}",${r.quantity},${r.cost_price},${r.sell_price},${r.total_sell},${r.total_cost},${r.margin}\n`;
       });
+      csv += `\n,,TOTAL,,,,${reportData.total_sales},${reportData.total_cost},${reportData.total_margin}\n`;
     } else if (reportData.type === 'partner') {
+      if (reportData.total_sales !== undefined) {
+        csv += `Total Penjualan:,${reportData.total_sales}\n`;
+        csv += `Total HPP:,${reportData.total_cost}\n`;
+        csv += `Total Margin:,${reportData.total_margin}\n`;
+        csv += `Margin %:,${marginPercent}%\n`;
+        csv += "\n";
+      }
       csv += "Tanggal,No Order,Kios Mitra,Produk,Qty (satuan),HPP/satuan,Jual/satuan,Total Jual,Total HPP,Margin\n";
       reportData.rows.forEach(r => {
-        csv += `${r.date},${r.order_number},${r.partner_store_name},${r.product_name},${r.quantity_satuan},${r.cost_price_per_unit},${r.sell_price_per_unit},${r.total_sell},${r.total_cost},${r.margin}\n`;
+        csv += `${r.date},${r.order_number},"${r.partner_store_name}","${r.product_name}",${r.quantity_satuan},${r.cost_price_per_unit},${r.sell_price_per_unit},${r.total_sell},${r.total_cost},${r.margin}\n`;
       });
+      csv += `\n,,,TOTAL,,,,,${reportData.total_sales},${reportData.total_cost},${reportData.total_margin}\n`;
     } else {
       csv += "Rank,Produk,Qty POS,Qty Mitra,Qty Total,Revenue POS,Revenue Mitra,Revenue Total,Total HPP,Margin\n";
       reportData.rows.forEach((r, i) => {
-        csv += `${i + 1},${r.product_name},${r.qty_pos},${r.qty_partner},${r.qty_total},${r.revenue_pos},${r.revenue_partner},${r.revenue_total},${r.cost_total},${r.margin}\n`;
+        csv += `${i + 1},"${r.product_name}",${r.qty_pos},${r.qty_partner},${r.qty_total},${r.revenue_pos},${r.revenue_partner},${r.revenue_total},${r.cost_total},${r.margin}\n`;
       });
     }
+
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
-    link.setAttribute("href", encodeURI(csv));
-    link.setAttribute("download", `laporan-${reportData.type}-${dateFrom}-${dateTo}.csv`);
+    link.setAttribute("href", url);
+    link.setAttribute("download", `UD_AQIN_TANI-${tabLabels[reportData.type].replace(/\s/g, '_')}-${dateFrom}_${dateTo}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    URL.revokeObjectURL(url);
     toast.success('CSV berhasil diexport');
   };
 
@@ -135,7 +164,7 @@ export const Reports = () => {
       footRow = null;
     }
 
-    doc.autoTable({
+    autoTable(doc, {
       head,
       body,
       foot: footRow || undefined,

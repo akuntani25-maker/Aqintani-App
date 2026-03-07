@@ -6,9 +6,11 @@ import { Input } from '../components/ui/input';
 import { Card } from '../components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { toast } from 'sonner';
-import { Search, Plus, Minus, Trash2, ShoppingCart, LogOut, CreditCard, Banknote, Smartphone, Printer, Pencil } from 'lucide-react';
+import { Search, Plus, Minus, Trash2, ShoppingCart, LogOut, CreditCard, Banknote, Smartphone, Printer, Pencil, ArrowRightLeft, BarChart3 } from 'lucide-react';
 import { CurrencyInput } from '../components/CurrencyInput';
 import { Pagination } from '../components/Pagination';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../components/ui/dialog';
+import { Label } from '../components/ui/label';
 import { useReactToPrint } from 'react-to-print';
 import ThermalPrinter from '../utils/ThermalPrinter';
 
@@ -99,6 +101,10 @@ export const POS = () => {
   const [thermalPrinter] = useState(() => new ThermalPrinter());
   const [posPage, setPosPage] = useState(1);
   const posPerPage = 12;
+  const [dailySummary, setDailySummary] = useState(null);
+  const [showTransfer, setShowTransfer] = useState(false);
+  const [transferForm, setTransferForm] = useState({ product_id: '', from_warehouse_id: 'gudang_utama', to_warehouse_id: 'gudang_toko', quantity: 1, notes: '' });
+  const [warehouses, setWarehouses] = useState([]);
 
   const handlePrint = useReactToPrint({
     content: () => receiptRef.current,
@@ -106,6 +112,8 @@ export const POS = () => {
 
   useEffect(() => {
     fetchProducts();
+    fetchDailySummary();
+    fetchWarehouses();
   }, []);
 
   const fetchProducts = async () => {
@@ -122,6 +130,37 @@ export const POS = () => {
       setProducts(prods.filter(p => p.toko_stock > 0));
     } catch (error) {
       toast.error('Gagal memuat produk');
+    }
+  };
+
+  const fetchDailySummary = async () => {
+    try {
+      const res = await api.get('/pos/daily-summary');
+      setDailySummary(res.data);
+    } catch {}
+  };
+
+  const fetchWarehouses = async () => {
+    try {
+      const res = await api.get('/warehouses');
+      setWarehouses(res.data);
+    } catch {}
+  };
+
+  const handleTransfer = async () => {
+    if (!transferForm.product_id || transferForm.quantity < 1) {
+      toast.error('Lengkapi data transfer');
+      return;
+    }
+    try {
+      const notes = `${transferForm.notes}${transferForm.notes ? ' - ' : ''}Oleh: ${user?.name || 'Kasir'}`;
+      await api.post('/stock-transfers', { ...transferForm, notes });
+      toast.success('Transfer stok berhasil');
+      setShowTransfer(false);
+      setTransferForm({ product_id: '', from_warehouse_id: 'gudang_utama', to_warehouse_id: 'gudang_toko', quantity: 1, notes: '' });
+      fetchProducts();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Gagal transfer stok');
     }
   };
 
@@ -290,11 +329,33 @@ export const POS = () => {
               <h1 className="text-3xl font-bold tracking-tight">Point of Sale</h1>
               <p className="text-sm text-muted-foreground">Kasir: {user?.name}</p>
             </div>
-            <Button variant="outline" onClick={handleLogout} data-testid="pos-logout-button">
-              <LogOut className="w-4 h-4 mr-2" />
-              Keluar
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" onClick={() => setShowTransfer(true)} data-testid="pos-transfer-button">
+                <ArrowRightLeft className="w-4 h-4 mr-2" />Transfer Stok
+              </Button>
+              <Button variant="outline" onClick={handleLogout} data-testid="pos-logout-button">
+                <LogOut className="w-4 h-4 mr-2" />Keluar
+              </Button>
+            </div>
           </div>
+
+          {/* Daily Summary */}
+          {dailySummary && (
+            <div className="grid grid-cols-3 gap-3 mb-4" data-testid="daily-summary">
+              <Card className="p-3 bg-emerald-50 border-emerald-200">
+                <p className="text-[10px] font-bold uppercase text-emerald-700 tracking-wider">Transaksi Hari Ini</p>
+                <p className="text-lg font-bold text-emerald-800">{dailySummary.count || 0}</p>
+              </Card>
+              <Card className="p-3 bg-blue-50 border-blue-200">
+                <p className="text-[10px] font-bold uppercase text-blue-700 tracking-wider">Total Penjualan</p>
+                <p className="text-lg font-bold text-blue-800">{formatCurrency(dailySummary.total_sales || 0)}</p>
+              </Card>
+              <Card className="p-3 bg-violet-50 border-violet-200">
+                <p className="text-[10px] font-bold uppercase text-violet-700 tracking-wider">Margin</p>
+                <p className="text-lg font-bold text-violet-800">{formatCurrency(dailySummary.total_margin || 0)}</p>
+              </Card>
+            </div>
+          )}
 
           <form onSubmit={handleBarcodeSearch} className="flex gap-2 mb-4">
             <Input
@@ -332,7 +393,10 @@ export const POS = () => {
               </div>
               <h3 className="font-semibold text-sm mb-1 line-clamp-2">{product.name}</h3>
               <p className="text-lg font-bold text-primary">{formatCurrency(product.price)}</p>
-              <p className="text-xs text-muted-foreground">Stok Toko: {product.toko_stock || product.stock}</p>
+              <div className="flex justify-between items-center">
+                <p className="text-xs text-muted-foreground">Stok: {product.toko_stock || product.stock}</p>
+                <p className="text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded">HPP: {formatCurrency(Math.round((product.cost_price || 0) / Math.max(1, product.items_per_box || 1)))}</p>
+              </div>
             </Card>
           ))}
         </div>
@@ -504,6 +568,59 @@ export const POS = () => {
       <div style={{ display: 'none' }}>
         <Receipt ref={receiptRef} transaction={lastTransaction} />
       </div>
+
+      {/* Stock Transfer Dialog */}
+      <Dialog open={showTransfer} onOpenChange={setShowTransfer}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><ArrowRightLeft className="w-5 h-5 text-primary" />Transfer Stok</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label>Produk</Label>
+              <Select value={transferForm.product_id} onValueChange={(v) => setTransferForm({...transferForm, product_id: v})}>
+                <SelectTrigger data-testid="transfer-product-select"><SelectValue placeholder="Pilih produk" /></SelectTrigger>
+                <SelectContent>
+                  {products.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-2">
+                <Label>Dari Gudang</Label>
+                <Select value={transferForm.from_warehouse_id} onValueChange={(v) => setTransferForm({...transferForm, from_warehouse_id: v})}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {warehouses.map(w => <SelectItem key={w.id} value={w.id}>{w.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Ke Gudang</Label>
+                <Select value={transferForm.to_warehouse_id} onValueChange={(v) => setTransferForm({...transferForm, to_warehouse_id: v})}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {warehouses.map(w => <SelectItem key={w.id} value={w.id}>{w.name}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label>Jumlah</Label>
+              <Input type="number" min="1" value={transferForm.quantity} onChange={(e) => setTransferForm({...transferForm, quantity: parseInt(e.target.value) || 1})} data-testid="transfer-qty-input" />
+            </div>
+            <div className="space-y-2">
+              <Label>Keterangan</Label>
+              <Input value={transferForm.notes} onChange={(e) => setTransferForm({...transferForm, notes: e.target.value})} placeholder="Alasan transfer..." data-testid="transfer-notes-input" />
+            </div>
+            <p className="text-xs text-muted-foreground">Dilakukan oleh: {user?.name}</p>
+            <div className="flex gap-2 justify-end">
+              <Button variant="outline" onClick={() => setShowTransfer(false)}>Batal</Button>
+              <Button onClick={handleTransfer} data-testid="confirm-transfer-btn">Transfer</Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
