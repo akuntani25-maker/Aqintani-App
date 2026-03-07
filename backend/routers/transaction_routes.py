@@ -29,6 +29,25 @@ async def get_pos_daily_summary(current_user: dict = Depends(get_current_user)):
     }
 
 
+@router.get("/pos/daily-transactions")
+async def get_pos_daily_transactions(date: Optional[str] = None, current_user: dict = Depends(get_current_user)):
+    target_date = date or datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    transactions = await db.transactions.find({"date": target_date}, {"_id": 0}).sort("created_at", -1).to_list(10000)
+    farmer_txns = await db.farmer_transactions.find({"date": target_date}, {"_id": 0}).sort("created_at", -1).to_list(10000)
+    total_sales = sum(t.get("total", 0) for t in transactions)
+    total_farmer = sum(t.get("total", 0) for t in farmer_txns)
+    return {
+        "date": target_date,
+        "transactions": transactions,
+        "farmer_transactions": farmer_txns,
+        "total_sales": total_sales,
+        "total_farmer_sales": total_farmer,
+        "grand_total": total_sales + total_farmer,
+        "count": len(transactions),
+        "farmer_count": len(farmer_txns)
+    }
+
+
 @router.post("/transactions", response_model=Transaction)
 async def create_transaction(data: TransactionCreate, current_user: dict = Depends(get_current_user)):
     now = datetime.now(timezone.utc)

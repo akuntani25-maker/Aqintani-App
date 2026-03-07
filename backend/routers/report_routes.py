@@ -66,7 +66,14 @@ async def get_dashboard_stats(admin: dict = Depends(require_admin)):
     total_supplier_debt = sum(p.get("remaining", 0) for p in unpaid_purchases)
     partner_stores = await db.partner_stores.find({}, {"_id": 0, "current_debt": 1}).to_list(10000)
     total_partner_debt = sum(ps.get("current_debt", 0) for ps in partner_stores)
-    total_assets = total_inventory + total_partner_debt - total_supplier_debt
+
+    # Personal loans (piutang pribadi) & farmer debts (hutang petani)
+    personal_loans = await db.personal_loans.find({"remaining": {"$gt": 0}}, {"_id": 0, "remaining": 1}).to_list(10000)
+    total_personal_loans = sum(l.get("remaining", 0) for l in personal_loans)
+    farmers = await db.farmers.find({}, {"_id": 0, "current_debt": 1}).to_list(10000)
+    total_farmer_debt = sum(f.get("current_debt", 0) for f in farmers)
+
+    total_assets = total_inventory + total_partner_debt + total_personal_loans + total_farmer_debt - total_supplier_debt
 
     # Due this month
     now = datetime.now(timezone.utc)
@@ -82,7 +89,8 @@ async def get_dashboard_stats(admin: dict = Depends(require_admin)):
         "last_7_days": last_7_days, "inventory_value": total_inventory,
         "warehouse_chart": warehouse_chart, "stock_in_today": stock_in_today,
         "stock_out_today": stock_out_today, "total_supplier_debt": total_supplier_debt,
-        "total_partner_debt": total_partner_debt, "total_assets": total_assets,
+        "total_partner_debt": total_partner_debt, "total_personal_loans": total_personal_loans,
+        "total_farmer_debt": total_farmer_debt, "total_assets": total_assets,
         "due_this_month": [{k: v for k, v in d.items() if k != "_id"} for d in due_this_month]
     }
 

@@ -26,6 +26,9 @@ import { Analytics } from './pages/Analytics';
 import ImportData from './pages/ImportData';
 import { Vehicles } from './pages/Vehicles';
 import { AuditLog } from './pages/AuditLog';
+import { PersonalLoans } from './pages/PersonalLoans';
+import { FarmerDebts } from './pages/FarmerDebts';
+import { DailyTransactions } from './pages/DailyTransactions';
 import { Toaster } from './components/ui/sonner';
 import './App.css';
 
@@ -59,12 +62,25 @@ function App() {
             <Route path="import-data" element={<ImportData />} />
             <Route path="vehicles" element={<Vehicles />} />
             <Route path="audit-log" element={<AuditLog />} />
+            <Route path="personal-loans" element={<PersonalLoans />} />
             <Route path="profile" element={<Profile />} />
           </Route>
 
           <Route path="/pos" element={
             <PrivateRoute>
               <POS />
+            </PrivateRoute>
+          } />
+
+          <Route path="/pos/farmer-debts" element={
+            <PrivateRoute>
+              <FarmerDebts />
+            </PrivateRoute>
+          } />
+
+          <Route path="/pos/daily-transactions" element={
+            <PrivateRoute>
+              <DailyTransactions />
             </PrivateRoute>
           } />
 

@@ -6,7 +6,7 @@ import { Input } from '../components/ui/input';
 import { Card } from '../components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { toast } from 'sonner';
-import { Search, Plus, Minus, Trash2, ShoppingCart, LogOut, CreditCard, Banknote, Smartphone, Printer, Pencil, ArrowRightLeft, BarChart3 } from 'lucide-react';
+import { Search, Plus, Minus, Trash2, ShoppingCart, LogOut, CreditCard, Banknote, Smartphone, Printer, Pencil, ArrowRightLeft, BarChart3, FileText, Users } from 'lucide-react';
 import { CurrencyInput } from '../components/CurrencyInput';
 import { Pagination } from '../components/Pagination';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../components/ui/dialog';
@@ -106,6 +106,18 @@ export const POS = () => {
   const [transferForm, setTransferForm] = useState({ product_id: '', from_warehouse_id: 'gudang_utama', to_warehouse_id: 'gudang_toko', quantity: 1, notes: '' });
   const [warehouses, setWarehouses] = useState([]);
 
+  const [transferSearch, setTransferSearch] = useState('');
+  const [transferResults, setTransferResults] = useState([]);
+
+  const searchTransferProducts = async (q) => {
+    setTransferSearch(q);
+    if (q.length < 2) { setTransferResults([]); return; }
+    try {
+      const res = await api.get(`/canvassers/product-search?q=${encodeURIComponent(q)}`);
+      setTransferResults(res.data);
+    } catch { setTransferResults([]); }
+  };
+
   const handlePrint = useReactToPrint({
     content: () => receiptRef.current,
   });
@@ -158,6 +170,8 @@ export const POS = () => {
       toast.success('Transfer stok berhasil');
       setShowTransfer(false);
       setTransferForm({ product_id: '', from_warehouse_id: 'gudang_utama', to_warehouse_id: 'gudang_toko', quantity: 1, notes: '' });
+      setTransferSearch('');
+      setTransferResults([]);
       fetchProducts();
     } catch (error) {
       toast.error(error.response?.data?.detail || 'Gagal transfer stok');
@@ -330,6 +344,12 @@ export const POS = () => {
               <p className="text-sm text-muted-foreground">Kasir: {user?.name}</p>
             </div>
             <div className="flex items-center gap-2">
+              <Button variant="outline" onClick={() => navigate('/pos/daily-transactions')} data-testid="pos-daily-txn-button">
+                <FileText className="w-4 h-4 mr-2" />Rincian
+              </Button>
+              <Button variant="outline" onClick={() => navigate('/pos/farmer-debts')} data-testid="pos-farmer-debts-button">
+                <Users className="w-4 h-4 mr-2" />Hutang Petani
+              </Button>
               <Button variant="outline" onClick={() => setShowTransfer(true)} data-testid="pos-transfer-button">
                 <ArrowRightLeft className="w-4 h-4 mr-2" />Transfer Stok
               </Button>
@@ -577,13 +597,33 @@ export const POS = () => {
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label>Barang</Label>
-              <Select value={transferForm.product_id} onValueChange={(v) => setTransferForm({...transferForm, product_id: v})}>
-                <SelectTrigger data-testid="transfer-product-select"><SelectValue placeholder="Pilih produk" /></SelectTrigger>
-                <SelectContent>
-                  {products.map(p => <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>)}
-                </SelectContent>
-              </Select>
+              <Label>Cari Barang</Label>
+              <div className="relative">
+                <Input
+                  value={transferSearch}
+                  onChange={e => searchTransferProducts(e.target.value)}
+                  placeholder="Ketik nama barang..."
+                  data-testid="transfer-product-search"
+                />
+                {transferResults.length > 0 && (
+                  <div className="absolute z-10 w-full bg-white border rounded-md shadow-lg mt-1 max-h-48 overflow-auto">
+                    {transferResults.map(p => (
+                      <div key={p.id} className="p-2 hover:bg-muted cursor-pointer flex justify-between text-sm"
+                        onClick={() => {
+                          setTransferForm({...transferForm, product_id: p.id});
+                          setTransferSearch(p.name);
+                          setTransferResults([]);
+                        }}>
+                        <span>{p.name}</span>
+                        <span className="text-muted-foreground">stok: {p.stock}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {transferForm.product_id && transferSearch && (
+                  <p className="text-xs text-emerald-600 mt-1">Terpilih: {transferSearch}</p>
+                )}
+              </div>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-2">

@@ -114,7 +114,7 @@ export const Dashboard = () => {
           <div>
             <p className="text-[10px] md:text-xs font-bold uppercase tracking-wider text-slate-300 mb-1">Nilai Aset Bersih</p>
             <p className="text-xl md:text-2xl lg:text-3xl font-bold">{fmt(stats?.total_assets || 0)}</p>
-            <p className="text-xs text-slate-400 mt-1">Total Gudang ({fmt(stats?.inventory_value || 0)}) + Bon Mitra ({fmt(stats?.total_partner_debt || 0)}) - Bon Supplier ({fmt(stats?.total_supplier_debt || 0)})</p>
+            <p className="text-xs text-slate-400 mt-1">Gudang ({fmt(stats?.inventory_value || 0)}) + Bon Mitra ({fmt(stats?.total_partner_debt || 0)}) + Piutang ({fmt(stats?.total_personal_loans || 0)}) + Hutang Petani ({fmt(stats?.total_farmer_debt || 0)}) - Bon Supplier ({fmt(stats?.total_supplier_debt || 0)})</p>
           </div>
           <div className="bg-white/10 p-3 rounded-lg">
             <Landmark className="w-6 h-6" />

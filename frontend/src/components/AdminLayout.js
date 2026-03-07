@@ -6,7 +6,7 @@ import { Button } from './ui/button';
 import { 
   LayoutDashboard, Package, Users, Layers, FileText, Settings, LogOut,
   Sprout, UserCog, Printer, Store, ShoppingCart, Truck, TrendingUp,
-  Menu, X, Banknote, PanelLeftClose, PanelLeft, Database, ClipboardList, Car
+  Menu, X, Banknote, PanelLeftClose, PanelLeft, Database, ClipboardList, Car, HandCoins
 } from 'lucide-react';
 
 const ROLE_MENU_MAP = {
@@ -26,6 +26,7 @@ const ROLE_MENU_MAP = {
   import_data: '/admin/import-data',
   printer: '/admin/settings',
   audit_log: '/admin/audit-log',
+  personal_loans: '/admin/personal-loans',
   profile: '/admin/profile',
 };
 
@@ -61,6 +62,7 @@ export const AdminLayout = () => {
     { to: '/admin/analytics', icon: TrendingUp, label: 'Analytics', perm: 'analytics' },
     { to: '/admin/reports', icon: FileText, label: 'Laporan', perm: 'reports' },
     { to: '/admin/audit-log', icon: ClipboardList, label: 'Log Aktivitas', perm: 'audit_log' },
+    { to: '/admin/personal-loans', icon: HandCoins, label: 'Piutang Pribadi', perm: 'personal_loans' },
     { to: '/admin/users', icon: UserCog, label: 'Pengguna', perm: 'users' },
     { to: '/admin/store-settings', icon: Settings, label: 'Toko', perm: 'store_settings' },
     { to: '/admin/import-data', icon: Database, label: 'Import Data', perm: 'import_data' },
