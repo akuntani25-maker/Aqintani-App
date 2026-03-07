@@ -135,7 +135,7 @@ export const WarehouseManagement = () => {
               </div>
               <div className="mt-4 flex justify-between">
                 <div><p className="text-2xl font-bold">{fmt(totalItems)}</p><p className="text-xs text-muted-foreground">Total {wh.unit}</p></div>
-                <div className="text-right"><p className="text-2xl font-bold">{productCount}</p><p className="text-xs text-muted-foreground">Produk</p></div>
+                <div className="text-right"><p className="text-2xl font-bold">{productCount}</p><p className="text-xs text-muted-foreground">Barang</p></div>
               </div>
             </Card>
           );
@@ -166,7 +166,7 @@ export const WarehouseManagement = () => {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Produk</TableHead>
+                  <TableHead>Barang</TableHead>
                   <TableHead className="text-center">Isi/Dus</TableHead>
                   {warehouses.map(wh => (
                     <TableHead key={wh.id} className="text-center">{wh.name}<br/><span className="text-xs font-normal">({wh.unit})</span></TableHead>
@@ -207,7 +207,7 @@ export const WarehouseManagement = () => {
               <TableHeader>
                 <TableRow>
                   <TableHead>Tanggal</TableHead>
-                  <TableHead>Produk</TableHead>
+                  <TableHead>Barang</TableHead>
                   <TableHead>Dari</TableHead>
                   <TableHead>Ke</TableHead>
                   <TableHead className="text-center">Jumlah</TableHead>
@@ -243,7 +243,7 @@ export const WarehouseManagement = () => {
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label>Produk *</Label>
+              <Label>Barang *</Label>
               <Select value={transferForm.product_id} onValueChange={(v) => setTransferForm({ ...transferForm, product_id: v })}>
                 <SelectTrigger data-testid="transfer-product-select"><SelectValue placeholder="Pilih produk" /></SelectTrigger>
                 <SelectContent>

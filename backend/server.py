@@ -147,6 +147,8 @@ class ProductCreate(BaseModel):
     description: Optional[str] = ""
     image: Optional[str] = ""
     min_stock_alert: int = 10
+    invoice_number: Optional[str] = ""
+    due_date: Optional[str] = ""
 
 class Product(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -563,6 +565,7 @@ async def create_product(data: ProductCreate, admin: dict = Depends(require_admi
             
             purchase_doc = {
                 "id": str(uuid.uuid4()),
+                "purchase_number": data.invoice_number or "",
                 "supplier_id": data.supplier_id,
                 "supplier_name": supplier_name,
                 "items": [{
@@ -577,6 +580,8 @@ async def create_product(data: ProductCreate, admin: dict = Depends(require_admi
                 "remaining": remaining,
                 "warehouse_id": warehouse_id,
                 "notes": f"Pembelian awal - {data.name}" + (" (Tempo)" if remaining > 0 else ""),
+                "due_date": data.due_date or "",
+                "source": "product_entry",
                 "created_at": now.isoformat(),
                 "date": now.strftime("%Y-%m-%d")
             }
@@ -1009,8 +1014,8 @@ async def get_dashboard_stats(admin: dict = Depends(require_admin)):
         if val > 0:
             warehouse_chart.append({"name": w.get("name", w["id"]), "value": round(val)})
     
-    # Stock movement today (purchases = in, transactions = out)
-    today_purchases = await db.purchases.find({"date": today}, {"_id": 0}).to_list(1000)
+    # Stock movement today (purchases = in, transactions = out) - exclude import data
+    today_purchases = await db.purchases.find({"date": today, "source": {"$ne": "import"}}, {"_id": 0}).to_list(1000)
     stock_in_today = sum(
         sum(item.get("subtotal", 0) for item in p.get("items", []))
         for p in today_purchases
@@ -2715,6 +2720,121 @@ async def clear_collection(collection_type: str, admin: dict = Depends(require_a
     count = await db[collection_type].count_documents({})
     await db[collection_type].delete_many({})
     return {"message": f"{count} data dihapus dari {collection_type}"}
+
+# ============= AI STOCK FORECAST =============
+@api_router.post("/forecast/stock")
+async def forecast_stock(admin: dict = Depends(require_admin)):
+    from emergentintegrations.llm.openai import LlmChat, UserMessage
+
+    now = datetime.now(timezone.utc)
+    date_30_ago = (now - timedelta(days=30)).strftime("%Y-%m-%d")
+    today = now.strftime("%Y-%m-%d")
+
+    transactions = await db.transactions.find({"date": {"$gte": date_30_ago}}, {"_id": 0, "date": 1, "items": 1}).to_list(100000)
+    partner_orders = await db.partner_orders.find({"date": {"$gte": date_30_ago}}, {"_id": 0, "date": 1, "items": 1}).to_list(100000)
+    products = await db.products.find({}, {"_id": 0, "id": 1, "name": 1, "stock": 1, "cost_price": 1, "items_per_box": 1, "min_stock_alert": 1}).to_list(1000)
+
+    sales_data = {}
+    for t in transactions:
+        for item in t.get("items", []):
+            pid = item.get("product_id", "")
+            qty = item.get("quantity", 0)
+            if pid not in sales_data:
+                sales_data[pid] = {"pos_qty": 0, "partner_qty": 0, "days": set()}
+            sales_data[pid]["pos_qty"] += qty
+            sales_data[pid]["days"].add(t.get("date", ""))
+
+    for o in partner_orders:
+        for item in o.get("items", []):
+            pid = item.get("product_id", "")
+            qty = item.get("quantity_satuan", item.get("quantity", 0))
+            if pid not in sales_data:
+                sales_data[pid] = {"pos_qty": 0, "partner_qty": 0, "days": set()}
+            sales_data[pid]["partner_qty"] += qty
+            sales_data[pid]["days"].add(o.get("date", ""))
+
+    product_summaries = []
+    for p in products:
+        sd = sales_data.get(p["id"], {"pos_qty": 0, "partner_qty": 0, "days": set()})
+        total_sold = sd["pos_qty"] + sd["partner_qty"]
+        active_days = len(sd["days"]) or 1
+        avg_daily = total_sold / active_days if active_days > 0 else 0
+        days_until_empty = round(p["stock"] / avg_daily) if avg_daily > 0 else 999
+        product_summaries.append({
+            "name": p["name"], "current_stock": p["stock"],
+            "min_stock_alert": p.get("min_stock_alert", 10),
+            "cost_per_box": p.get("cost_price", 0),
+            "items_per_box": p.get("items_per_box", 1),
+            "pos_sold_30d": sd["pos_qty"], "partner_sold_30d": sd["partner_qty"],
+            "total_sold_30d": total_sold, "active_sell_days": active_days,
+            "avg_daily_sales": round(avg_daily, 2), "est_days_until_empty": days_until_empty
+        })
+
+    prompt = f"""Kamu adalah analis inventori UD. AQIN TANI, toko pertanian dan farmasi.
+Berikut data penjualan 30 hari terakhir ({date_30_ago} s/d {today}):
+
+{str(product_summaries)}
+
+Berdasarkan data di atas, buatkan analisis dan rekomendasi dalam format JSON (tanpa markdown code block) dengan struktur:
+{{
+  "summary": "Ringkasan singkat kondisi stok keseluruhan (2-3 kalimat dalam bahasa Indonesia)",
+  "forecasts": [
+    {{
+      "product_name": "nama barang",
+      "current_stock": angka,
+      "avg_daily_sales": angka,
+      "days_until_empty": angka,
+      "risk_level": "critical/warning/safe",
+      "recommendation": "rekomendasi spesifik dalam bahasa Indonesia",
+      "suggested_restock_qty": angka (dalam satuan),
+      "suggested_restock_boxes": angka (dalam dus)
+    }}
+  ],
+  "insights": ["insight 1", "insight 2", "insight 3"]
+}}
+
+Prioritaskan barang yang risiko kehabisan stok tinggi. Berikan rekomendasi restock untuk 14 hari ke depan.
+Jika barang tidak pernah terjual, tandai sebagai "safe" dengan catatan tidak ada penjualan."""
+
+    try:
+        llm_key = os.environ.get("EMERGENT_LLM_KEY", "")
+        chat = LlmChat(
+            api_key=llm_key,
+            session_id=str(uuid.uuid4()),
+            system_message="Kamu adalah analis inventori profesional. Selalu balas dalam format JSON valid tanpa markdown code block."
+        )
+        chat = chat.with_model("openai", "gpt-4o")
+        chat = chat.with_params(temperature=0.3)
+        result_text = await chat.send_message(UserMessage(text=prompt))
+        import json as json_module
+        try:
+            result = json_module.loads(result_text)
+        except json_module.JSONDecodeError:
+            if "```" in result_text:
+                json_str = result_text.split("```")[1]
+                if json_str.startswith("json"):
+                    json_str = json_str[4:]
+                result = json_module.loads(json_str.strip())
+            else:
+                result = {"summary": result_text, "forecasts": [], "insights": []}
+        return {"status": "success", "data": result, "raw_stats": product_summaries, "period": f"{date_30_ago} s/d {today}"}
+    except Exception as e:
+        return {
+            "status": "fallback",
+            "data": {
+                "summary": "AI tidak tersedia. Menampilkan data statistik dasar.",
+                "forecasts": sorted([{
+                    "product_name": p["name"], "current_stock": p["current_stock"],
+                    "avg_daily_sales": p["avg_daily_sales"], "days_until_empty": p["est_days_until_empty"],
+                    "risk_level": "critical" if p["est_days_until_empty"] < 7 else ("warning" if p["est_days_until_empty"] < 14 else "safe"),
+                    "recommendation": f"Stok akan habis dalam {p['est_days_until_empty']} hari" if p["avg_daily_sales"] > 0 else "Tidak ada penjualan 30 hari terakhir",
+                    "suggested_restock_qty": round(p["avg_daily_sales"] * 14),
+                    "suggested_restock_boxes": round(p["avg_daily_sales"] * 14 / max(1, p["items_per_box"]))
+                } for p in product_summaries], key=lambda x: x["days_until_empty"]),
+                "insights": [f"Error AI: {str(e)}"]
+            },
+            "raw_stats": product_summaries, "period": f"{date_30_ago} s/d {today}"
+        }
 
 app.include_router(api_router)
 

@@ -300,7 +300,7 @@ export const PartnerOrders = () => {
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label>Cari Produk</Label>
+                  <Label>Cari Barang</Label>
                   <div className="relative">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                     <Input placeholder="Cari produk..." value={searchProduct} onChange={(e) => setSearchProduct(e.target.value)} className="pl-10" data-testid="order-search-product" />
@@ -415,7 +415,7 @@ export const PartnerOrders = () => {
               <ShoppingCart className="w-4 h-4 md:w-5 md:h-5 text-blue-600" />
             </div>
             <div className="min-w-0">
-              <p className="text-[10px] md:text-xs text-muted-foreground uppercase tracking-wider">Total Produk Dipesan</p>
+              <p className="text-[10px] md:text-xs text-muted-foreground uppercase tracking-wider">Total Barang Dipesan</p>
               <p className="text-lg md:text-2xl font-bold text-blue-600 truncate" data-testid="today-items-count">{fmtNum(todaySummary.totalItems)}</p>
             </div>
           </div>

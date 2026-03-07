@@ -51,7 +51,7 @@ export const AdminLayout = () => {
 
   const allMenuItems = [
     { to: '/admin/dashboard', icon: LayoutDashboard, label: 'Dashboard', perm: 'dashboard' },
-    { to: '/admin/products', icon: Package, label: 'Produk', perm: 'products' },
+    { to: '/admin/products', icon: Package, label: 'Barang', perm: 'products' },
     { to: '/admin/categories', icon: Layers, label: 'Kategori', perm: 'categories' },
     { to: '/admin/suppliers', icon: Users, label: 'Supplier', perm: 'suppliers' },
     { to: '/admin/supplier-debts', icon: Banknote, label: 'Hutang Supplier', perm: 'supplier_debts' },

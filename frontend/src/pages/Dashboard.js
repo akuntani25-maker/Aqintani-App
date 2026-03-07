@@ -70,7 +70,7 @@ export const Dashboard = () => {
   const statCards = [
     { title: 'Penjualan Hari Ini', value: fmt(stats?.today_sales || 0), icon: DollarSign, color: 'bg-primary', testId: 'today-sales-card' },
     { title: 'Transaksi Hari Ini', value: stats?.today_transactions || 0, icon: ShoppingCart, color: 'bg-secondary', testId: 'today-transactions-card' },
-    { title: 'Total Produk', value: stats?.total_products || 0, icon: Package, color: 'bg-blue-500', testId: 'total-products-card' },
+    { title: 'Total Barang', value: stats?.total_products || 0, icon: Package, color: 'bg-blue-500', testId: 'total-products-card' },
     { title: 'Stok Menipis', value: stats?.low_stock_count || 0, icon: AlertTriangle, color: 'bg-orange-500', testId: 'low-stock-card' },
   ];
 

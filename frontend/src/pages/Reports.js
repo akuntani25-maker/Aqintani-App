@@ -38,7 +38,7 @@ export const Reports = () => {
 
   const exportCSV = () => {
     if (!reportData || !reportData.rows.length) return;
-    const tabLabels = { pos: 'Penjualan POS', partner: 'Penjualan Kios Mitra', bestseller: 'Produk Terlaris' };
+    const tabLabels = { pos: 'Penjualan POS', partner: 'Penjualan Kios Mitra', bestseller: 'Barang Terlaris' };
     let csv = "\uFEFF"; // BOM for Excel UTF-8
 
     // Header / Headline
@@ -56,7 +56,7 @@ export const Reports = () => {
         csv += `Margin %:,${marginPercent}%\n`;
         csv += "\n";
       }
-      csv += "Tanggal,No Transaksi,Produk,Qty,Harga Pokok,Harga Jual,Total Jual,Total HPP,Margin\n";
+      csv += "Tanggal,No Transaksi,Barang,Qty,Harga Pokok,Harga Jual,Total Jual,Total HPP,Margin\n";
       reportData.rows.forEach(r => {
         csv += `${r.date},${r.transaction_number},"${r.product_name}",${r.quantity},${r.cost_price},${r.sell_price},${r.total_sell},${r.total_cost},${r.margin}\n`;
       });
@@ -69,13 +69,13 @@ export const Reports = () => {
         csv += `Margin %:,${marginPercent}%\n`;
         csv += "\n";
       }
-      csv += "Tanggal,No Order,Kios Mitra,Produk,Qty (satuan),HPP/satuan,Jual/satuan,Total Jual,Total HPP,Margin\n";
+      csv += "Tanggal,No Order,Kios Mitra,Barang,Qty (satuan),HPP/satuan,Jual/satuan,Total Jual,Total HPP,Margin\n";
       reportData.rows.forEach(r => {
         csv += `${r.date},${r.order_number},"${r.partner_store_name}","${r.product_name}",${r.quantity_satuan},${r.cost_price_per_unit},${r.sell_price_per_unit},${r.total_sell},${r.total_cost},${r.margin}\n`;
       });
       csv += `\n,,,TOTAL,,,,,${reportData.total_sales},${reportData.total_cost},${reportData.total_margin}\n`;
     } else {
-      csv += "Rank,Produk,Qty POS,Qty Mitra,Qty Total,Revenue POS,Revenue Mitra,Revenue Total,Total HPP,Margin\n";
+      csv += "Rank,Barang,Qty POS,Qty Mitra,Qty Total,Revenue POS,Revenue Mitra,Revenue Total,Total HPP,Margin\n";
       reportData.rows.forEach((r, i) => {
         csv += `${i + 1},"${r.product_name}",${r.qty_pos},${r.qty_partner},${r.qty_total},${r.revenue_pos},${r.revenue_partner},${r.revenue_total},${r.cost_total},${r.margin}\n`;
       });
@@ -114,7 +114,7 @@ export const Reports = () => {
     doc.text('Toko Pertanian & Farmasi', 14, 20);
     doc.text('Jl. Raya No. 1  |  Telp: (021) 000-0000', 14, 26);
 
-    const tabLabels = { pos: 'Penjualan POS', partner: 'Penjualan Kios Mitra', bestseller: 'Produk Terlaris' };
+    const tabLabels = { pos: 'Penjualan POS', partner: 'Penjualan Kios Mitra', bestseller: 'Barang Terlaris' };
     doc.setFontSize(9);
     doc.setTextColor(255, 255, 255);
     doc.text(`Laporan ${tabLabels[reportData.type]} | Periode: ${dateFrom} s/d ${dateTo}`, pageWidth - 14, 14, { align: 'right' });
@@ -151,15 +151,15 @@ export const Reports = () => {
     // Table
     let head, body, footRow;
     if (reportData.type === 'pos') {
-      head = [['Tanggal', 'Produk', 'Qty', 'HPP/Unit', 'Jual/Unit', 'Total Jual', 'Total HPP', 'Margin']];
+      head = [['Tanggal', 'Barang', 'Qty', 'HPP/Unit', 'Jual/Unit', 'Total Jual', 'Total HPP', 'Margin']];
       body = reportData.rows.map(r => [r.date, r.product_name, fmtNum(r.quantity), fmt(r.cost_price), fmt(r.sell_price), fmt(r.total_sell), fmt(r.total_cost), fmt(r.margin)]);
       footRow = [['', 'TOTAL', '', '', '', fmt(reportData.total_sales), fmt(reportData.total_cost), fmt(reportData.total_margin)]];
     } else if (reportData.type === 'partner') {
-      head = [['Tanggal', 'Produk', 'Kios Mitra', 'Qty', 'HPP/Unit', 'Jual/Unit', 'Total Jual', 'Total HPP', 'Margin']];
+      head = [['Tanggal', 'Barang', 'Kios Mitra', 'Qty', 'HPP/Unit', 'Jual/Unit', 'Total Jual', 'Total HPP', 'Margin']];
       body = reportData.rows.map(r => [r.date, r.product_name, r.partner_store_name, fmtNum(r.quantity_satuan), fmt(r.cost_price_per_unit), fmt(r.sell_price_per_unit), fmt(r.total_sell), fmt(r.total_cost), fmt(r.margin)]);
       footRow = [['', 'TOTAL', '', '', '', '', fmt(reportData.total_sales), fmt(reportData.total_cost), fmt(reportData.total_margin)]];
     } else {
-      head = [['#', 'Produk', 'Qty POS', 'Qty Mitra', 'Qty Total', 'Rev POS', 'Rev Mitra', 'Rev Total', 'HPP', 'Margin']];
+      head = [['#', 'Barang', 'Qty POS', 'Qty Mitra', 'Qty Total', 'Rev POS', 'Rev Mitra', 'Rev Total', 'HPP', 'Margin']];
       body = reportData.rows.map((r, i) => [i + 1, r.product_name, fmtNum(r.qty_pos), fmtNum(r.qty_partner), fmtNum(r.qty_total), fmt(r.revenue_pos), fmt(r.revenue_partner), fmt(r.revenue_total), fmt(r.cost_total), fmt(r.margin)]);
       footRow = null;
     }
@@ -196,7 +196,7 @@ export const Reports = () => {
     <div className="p-4 md:p-6 lg:p-8 space-y-6" data-testid="reports-page">
       <div>
         <h1 className="text-2xl md:text-3xl lg:text-4xl font-bold tracking-tight">Laporan</h1>
-        <p className="text-sm text-muted-foreground mt-1">Laporan penjualan rinci per produk</p>
+        <p className="text-sm text-muted-foreground mt-1">Laporan penjualan rinci per barang</p>
       </div>
 
       {/* Tab & Filter */}
@@ -279,7 +279,7 @@ export const Reports = () => {
                 <div className="flex items-center gap-3">
                   <div className="w-11 h-11 bg-amber-100 rounded-xl flex items-center justify-center"><Award className="w-5 h-5 text-amber-600" /></div>
                   <div>
-                    <p className="text-xs text-muted-foreground uppercase tracking-wider">Total Produk Terjual</p>
+                    <p className="text-xs text-muted-foreground uppercase tracking-wider">Total Barang Terjual</p>
                     <p className="text-base md:text-lg lg:text-xl font-bold truncate" data-testid="total-products">{fmtNum(reportData.total_products)} produk</p>
                   </div>
                 </div>
@@ -327,7 +327,7 @@ export const Reports = () => {
                   <TableHeader>
                     <TableRow className="bg-muted/50">
                       <TableHead>Tanggal</TableHead>
-                      <TableHead>Produk</TableHead>
+                      <TableHead>Barang</TableHead>
                       <TableHead className="text-center">Qty</TableHead>
                       <TableHead className="text-right">HPP/Unit</TableHead>
                       <TableHead className="text-right">Jual/Unit</TableHead>
@@ -381,7 +381,7 @@ export const Reports = () => {
                   <TableHeader>
                     <TableRow className="bg-muted/50">
                       <TableHead>Tanggal</TableHead>
-                      <TableHead>Produk</TableHead>
+                      <TableHead>Barang</TableHead>
                       <TableHead>Kios Mitra</TableHead>
                       <TableHead className="text-center">Qty (satuan)</TableHead>
                       <TableHead className="text-right">HPP/Unit</TableHead>
@@ -435,13 +435,13 @@ export const Reports = () => {
           {/* Bestseller Table */}
           {reportData.type === 'bestseller' && (
             <Card className="p-6">
-              <h3 className="font-semibold mb-4">Peringkat Produk Terlaris</h3>
+              <h3 className="font-semibold mb-4">Peringkat Barang Terlaris</h3>
               <div className="rounded-lg border overflow-x-auto">
                 <Table>
                   <TableHeader>
                     <TableRow className="bg-muted/50">
                       <TableHead className="w-14 text-center">#</TableHead>
-                      <TableHead>Produk</TableHead>
+                      <TableHead>Barang</TableHead>
                       <TableHead className="text-center">Qty POS</TableHead>
                       <TableHead className="text-center">Qty Mitra</TableHead>
                       <TableHead className="text-center">Qty Total</TableHead>

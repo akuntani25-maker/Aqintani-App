@@ -226,7 +226,7 @@ export const CanvasserDashboard = () => {
         <Card className="p-4 md:p-6" data-testid="product-search-section">
           <div className="flex items-center gap-2 mb-4">
             <ShoppingBag className="w-5 h-5 text-primary" />
-            <h2 className="text-lg font-bold">Cari Produk</h2>
+            <h2 className="text-lg font-bold">Cari Barang</h2>
           </div>
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -273,7 +273,7 @@ export const CanvasserDashboard = () => {
             </div>
           )}
           {!productSearching && productQuery.length >= 2 && productResults.length === 0 && (
-            <p className="text-sm text-muted-foreground mt-3 text-center" data-testid="no-product-results">Produk tidak ditemukan</p>
+            <p className="text-sm text-muted-foreground mt-3 text-center" data-testid="no-product-results">Barang tidak ditemukan</p>
           )}
         </Card>
 
@@ -362,7 +362,7 @@ export const CanvasserDashboard = () => {
 
                       <details className="mt-3">
                         <summary className="cursor-pointer text-sm font-medium text-primary hover:underline">
-                          Lihat Detail Produk ({order.items.length} item)
+                          Lihat Detail Barang ({order.items.length} item)
                         </summary>
                         <div className="mt-3 space-y-2 pl-4 border-l-2 border-primary/20">
                           {order.items.map((item, idx) => (

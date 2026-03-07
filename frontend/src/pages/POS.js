@@ -176,10 +176,10 @@ export const POS = () => {
         addToCart({...product, toko_stock: maxStock});
         setBarcodeInput('');
       } else {
-        toast.error('Produk stok habis');
+        toast.error('Barang stok habis');
       }
     } catch (error) {
-      toast.error('Produk tidak ditemukan');
+      toast.error('Barang tidak ditemukan');
     }
   };
 
@@ -577,7 +577,7 @@ export const POS = () => {
           </DialogHeader>
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label>Produk</Label>
+              <Label>Barang</Label>
               <Select value={transferForm.product_id} onValueChange={(v) => setTransferForm({...transferForm, product_id: v})}>
                 <SelectTrigger data-testid="transfer-product-select"><SelectValue placeholder="Pilih produk" /></SelectTrigger>
                 <SelectContent>

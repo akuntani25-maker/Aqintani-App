@@ -50,7 +50,7 @@ export const Products = () => {
     name: '', barcode: '', category_id: '', supplier_id: '',
     stock: 0, warehouse_id: 'gudang_utama', price: 0, cost_price: 0,
     box_price: 0, items_per_box: 1, initial_paid: 0, expiry_date: '', batch_number: '',
-    description: '', min_stock_alert: 10
+    description: '', min_stock_alert: 10, invoice_number: '', due_date: ''
   });
 
   useEffect(() => { fetchData(); }, []);
@@ -81,10 +81,10 @@ export const Products = () => {
     try {
       if (editingProduct) {
         await api.put(`/products/${editingProduct.id}`, formData);
-        toast.success('Produk berhasil diperbarui');
+        toast.success('Barang berhasil diperbarui');
       } else {
         await api.post('/products', formData);
-        toast.success('Produk berhasil ditambahkan');
+        toast.success('Barang berhasil ditambahkan');
       }
       setIsDialogOpen(false);
       resetForm();
@@ -98,7 +98,7 @@ export const Products = () => {
     if (!window.confirm('Yakin ingin menghapus produk ini?')) return;
     try {
       await api.delete(`/products/${id}`);
-      toast.success('Produk berhasil dihapus');
+      toast.success('Barang berhasil dihapus');
       fetchData();
     } catch (error) {
       toast.error('Gagal menghapus produk');
@@ -124,7 +124,7 @@ export const Products = () => {
       name: '', barcode: '', category_id: '', supplier_id: '',
       stock: 0, warehouse_id: 'gudang_utama', price: 0, cost_price: 0,
       box_price: 0, items_per_box: 1, initial_paid: 0, expiry_date: '', batch_number: '',
-      description: '', min_stock_alert: 10
+      description: '', min_stock_alert: 10, invoice_number: '', due_date: ''
     });
   };
 
@@ -225,24 +225,24 @@ export const Products = () => {
       <div className="flex flex-col gap-4">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div>
-            <h1 className="text-2xl md:text-3xl lg:text-4xl font-bold tracking-tight">Produk</h1>
+            <h1 className="text-2xl md:text-3xl lg:text-4xl font-bold tracking-tight">Barang</h1>
             <p className="text-sm text-muted-foreground mt-1">Kelola produk, stok gudang & transfer</p>
           </div>
           <Dialog open={isDialogOpen} onOpenChange={(open) => { setIsDialogOpen(open); if (!open) resetForm(); }}>
             <DialogTrigger asChild>
               <Button className="w-auto self-start" data-testid="add-product-button">
                 <Plus className="w-4 h-4 mr-2" />
-                Tambah Produk
+                Tambah Barang
               </Button>
             </DialogTrigger>
           <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle>{editingProduct ? 'Edit Produk' : 'Tambah Produk Baru'}</DialogTitle>
+              <DialogTitle>{editingProduct ? 'Edit Barang' : 'Tambah Barang Baru'}</DialogTitle>
             </DialogHeader>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="name">Nama Produk *</Label>
+                  <Label htmlFor="name">Nama Barang *</Label>
                   <Input id="name" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} required data-testid="product-name-input" />
                 </div>
                 <div className="space-y-2">
@@ -310,6 +310,16 @@ export const Products = () => {
                         onChange={(v) => setFormData({ ...formData, initial_paid: v })}
                         data-testid="product-initial-paid-input"
                       />
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-2">
+                        <Label className="text-amber-900">No. Invoice</Label>
+                        <Input value={formData.invoice_number} onChange={(e) => setFormData({...formData, invoice_number: e.target.value})} placeholder="INV-001" data-testid="product-invoice-input" />
+                      </div>
+                      <div className="space-y-2">
+                        <Label className="text-amber-900">Jatuh Tempo</Label>
+                        <Input type="date" value={formData.due_date} onChange={(e) => setFormData({...formData, due_date: e.target.value})} data-testid="product-duedate-input" />
+                      </div>
                     </div>
                     {debt > 0 ? (
                       <p className="text-sm font-medium text-red-700">Sisa hutang: {fmt(debt)}</p>
@@ -419,7 +429,7 @@ export const Products = () => {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Produk</TableHead>
+                <TableHead>Barang</TableHead>
                 <TableHead>Supplier</TableHead>
                 <TableHead className="text-center">Isi/Dus</TableHead>
                 <TableHead className="text-center">G. Utama<br/><span className="text-xs font-normal">(dus)</span></TableHead>
@@ -436,7 +446,7 @@ export const Products = () => {
                 <TableRow>
                   <TableCell colSpan={10} className="text-center py-8 text-muted-foreground">
                     <Package className="w-12 h-12 mx-auto mb-2 opacity-50" />
-                    <p>Tidak ada produk</p>
+                    <p>Tidak ada barang</p>
                   </TableCell>
                 </TableRow>
               ) : paginatedProducts.map(product => {

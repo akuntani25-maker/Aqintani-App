@@ -9,7 +9,7 @@ import { Pagination } from '../components/Pagination';
 
 const ACTION_LABELS = { create: 'Tambah', update: 'Edit', delete: 'Hapus' };
 const ACTION_COLORS = { create: 'bg-emerald-100 text-emerald-700', update: 'bg-blue-100 text-blue-700', delete: 'bg-red-100 text-red-700' };
-const ENTITY_LABELS = { product: 'Produk', vehicle: 'Armada', partner_store: 'Kios Mitra', partner_order: 'Pesanan Kios', stock_adjustment: 'Koreksi Stok', purchase: 'Pembelian', payment: 'Pembayaran' };
+const ENTITY_LABELS = { product: 'Barang', vehicle: 'Armada', partner_store: 'Kios Mitra', partner_order: 'Pesanan Kios', stock_adjustment: 'Koreksi Stok', purchase: 'Pembelian', payment: 'Pembayaran' };
 
 export const AuditLog = () => {
   const [logs, setLogs] = useState([]);

@@ -210,7 +210,7 @@ export const Purchases = () => {
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label>Cari Produk</Label>
+                  <Label>Cari Barang</Label>
                   <div className="relative">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                     <Input placeholder="Cari produk..." value={searchProduct} onChange={(e) => setSearchProduct(e.target.value)} className="pl-10" />

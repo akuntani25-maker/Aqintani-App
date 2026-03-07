@@ -103,7 +103,7 @@ export default function ImportData() {
               <p className="font-semibold">Penting:</p>
               <ul className="list-disc ml-4 mt-1 space-y-0.5">
                 <li>Import <b>mengabaikan logika bisnis</b> (tidak auto-create purchase, tidak kurangi stok)</li>
-                <li>Ikuti urutan: Gudang &rarr; Kategori &rarr; Supplier &rarr; Produk &rarr; Stok &rarr; dst</li>
+                <li>Ikuti urutan: Gudang &rarr; Kategori &rarr; Supplier &rarr; Barang &rarr; Stok &rarr; dst</li>
                 <li>Data duplikat (nama sama) akan dilewati otomatis</li>
                 <li>Header kolom harus sesuai template (case-insensitive)</li>
               </ul>
