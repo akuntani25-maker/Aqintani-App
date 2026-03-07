@@ -148,6 +148,29 @@ Build a responsive web application for a pharmacy and agriculture store named "U
 - Tombol "Export PDF" di halaman Laporan. PDF landscape A4 dengan kop surat UD. AQIN TANI.
 - Library: jsPDF + jspdf-autotable. Support semua 3 tipe laporan.
 
+### Armada Mobil Box (DONE - Mar 2026)
+- **CRUD Armada**: Halaman `/admin/vehicles` untuk kelola armada mobil box (nama, plat nomor, area/rute, driver).
+- **Assign ke Kios Mitra**: Setiap kios mitra bisa di-assign ke armada tertentu via dropdown di form create/edit.
+- **Filter**: Halaman kios mitra bisa difilter berdasarkan armada.
+- **Kolom Armada**: Tabel kios mitra menampilkan armada yang di-assign dengan badge biru.
+- **Backend**: `GET/POST/PUT/DELETE /api/vehicles`, vehicle_id ditambahkan ke PartnerStore model.
+- **DB**: `vehicles` collection - id, name, plate_number, area_route, driver_name, canvasser_id, created_at.
+
+### Role Management (DONE - Mar 2026)
+- **5 Roles**: admin (full), manager (semua kecuali kelola user), office_staff (terbatas), cashier (POS saja), canvasser (dashboard kanvaser).
+- **Permission-based Menu**: Sidebar AdminLayout dinamis berdasarkan permissions dari `/api/role-permissions`.
+- **Users Page**: Dropdown role diperluas: Admin, Manager, Karyawan Kantor, Kasir, Kanvaser.
+- **PrivateRoute**: Updated untuk support admin, manager, office_staff mengakses panel admin.
+
+### Audit Trail (DONE - Mar 2026)
+- **Log Aktivitas**: Halaman `/admin/audit-log` menampilkan riwayat semua perubahan penting.
+- **Tracked**: Create/update/delete produk, armada. Filter by entity type.
+- **Backend**: `log_audit()` helper function, `GET /api/audit-log` endpoint.
+- **DB**: `audit_log` collection - id, user_id, user_name, user_role, action, entity_type, entity_id, details, timestamp.
+
+### CSS Fix Import Data (DONE - Mar 2026)
+- Padding dan heading style disamakan dengan halaman lain (p-4 md:p-6 lg:p-8, text-2xl tracking-tight).
+
 ## Prioritized Backlog
 
 ### P1 - Next Up
