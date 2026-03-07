@@ -171,6 +171,25 @@ Build a responsive web application for a pharmacy and agriculture store named "U
 ### CSS Fix Import Data (DONE - Mar 2026)
 - Padding dan heading style disamakan dengan halaman lain (p-4 md:p-6 lg:p-8, text-2xl tracking-tight).
 
+### Dashboard Enhancement v2 (DONE - Mar 2026)
+- **Grafik Lingkaran**: Pie chart "Nilai Barang per Gudang" dengan legend per gudang menggunakan recharts.
+- **Barang Masuk/Keluar Hari Ini**: Card menampilkan total nilai barang masuk (pembelian) dan keluar (penjualan) hari ini.
+- **Nilai Aset Bersih**: Dark card = Total Gudang + Bon Mitra - Bon Supplier.
+- **Jatuh Tempo Per Invoice**: Notifikasi jatuh tempo hutang supplier ditampilkan per invoice/pembelian (bukan total per supplier).
+
+### Armada di Halaman Kanvaser (DONE - Mar 2026)
+- Halaman Armada terpisah dihapus dari sidebar. CRUD Armada sekarang menjadi tab di halaman Kanvaser & Armada.
+
+### POS Enhancement (DONE - Mar 2026)
+- **Ringkasan Harian**: 3 card di atas POS (Transaksi Hari Ini, Total Penjualan, Margin).
+- **HPP Display**: Badge HPP per unit di setiap card produk.
+- **Transfer Stok Kasir**: Kasir bisa transfer stok via dialog dengan catatan siapa yang melakukan.
+- **Backend**: `GET /api/pos/daily-summary` endpoint baru.
+
+### Fix PDF Export + CSV Improvement (DONE - Mar 2026)
+- **PDF Fix**: Import `autoTable` dari `jspdf-autotable` (bukan side-effect import).
+- **CSV Improvement**: BOM UTF-8 untuk Excel, headline UD. AQIN TANI + periode, baris total, nama file lebih deskriptif.
+
 ## Prioritized Backlog
 
 ### P1 - Next Up
