@@ -64,6 +64,20 @@ async def require_admin(current_user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=403, detail="Admin access required")
     return current_user
 
+async def require_admin_or_manager(current_user: dict = Depends(get_current_user)):
+    if current_user.get("role") not in ("admin", "manager"):
+        raise HTTPException(status_code=403, detail="Admin or Manager access required")
+    return current_user
+
+# Role permissions
+ROLE_PERMISSIONS = {
+    "admin": ["dashboard", "products", "categories", "suppliers", "supplier_debts", "partner_stores", "partner_orders", "canvassers", "analytics", "reports", "users", "store_settings", "import_data", "printer", "profile", "vehicles", "audit_log", "pos"],
+    "manager": ["dashboard", "products", "categories", "suppliers", "supplier_debts", "partner_stores", "partner_orders", "canvassers", "analytics", "reports", "store_settings", "import_data", "printer", "profile", "vehicles", "audit_log", "pos"],
+    "office_staff": ["dashboard", "products", "categories", "suppliers", "supplier_debts", "partner_stores", "partner_orders", "analytics", "reports", "profile", "vehicles", "pos"],
+    "cashier": ["pos", "profile"],
+    "canvasser": ["canvasser_dashboard", "profile"],
+}
+
 class UserCreate(BaseModel):
     email: EmailStr
     password: str
@@ -267,6 +281,7 @@ class PartnerStoreCreate(BaseModel):
     latitude: Optional[float] = None
     longitude: Optional[float] = None
     credit_limit: float = 0
+    vehicle_id: Optional[str] = ""
 
 class PartnerStore(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -279,6 +294,7 @@ class PartnerStore(BaseModel):
     longitude: Optional[float] = None
     credit_limit: float
     current_debt: float
+    vehicle_id: Optional[str] = ""
     created_at: str
 
 class PartnerOrderCreate(BaseModel):
@@ -587,16 +603,18 @@ async def update_product(product_id: str, data: ProductCreate, admin: dict = Dep
     
     await ensure_warehouse_stock(product_id)
     await recalculate_product_stock(product_id)
+    await log_audit(admin, "update", "product", product_id, {"name": data.name})
     
-    # Re-fetch with updated stock
     result = await db.products.find_one({"id": product_id}, {"_id": 0})
     return result
 
 @api_router.delete("/products/{product_id}")
 async def delete_product(product_id: str, admin: dict = Depends(require_admin)):
+    product = await db.products.find_one({"id": product_id}, {"_id": 0})
     result = await db.products.delete_one({"id": product_id})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Product not found")
+    await log_audit(admin, "delete", "product", product_id, {"name": product.get("name", "") if product else ""})
     return {"message": "Product deleted"}
 
 @api_router.post("/transactions", response_model=Transaction)
@@ -2189,6 +2207,87 @@ async def get_product_price_comparison(product_id: str, admin: dict = Depends(re
                 price_data[sid]["last_price"] = item.get("cost_price", 0)
                 price_data[sid]["total_qty"] += item.get("quantity", 0)
     return list(price_data.values())
+
+# ============= VEHICLES (ARMADA MOBIL BOX) =============
+class VehicleCreate(BaseModel):
+    name: str
+    plate_number: str
+    area_route: Optional[str] = ""
+    driver_name: Optional[str] = ""
+    canvasser_id: Optional[str] = ""
+
+class Vehicle(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str
+    name: str
+    plate_number: str
+    area_route: Optional[str] = ""
+    driver_name: Optional[str] = ""
+    canvasser_id: Optional[str] = ""
+    created_at: str
+
+@api_router.get("/vehicles")
+async def get_vehicles(current_user: dict = Depends(get_current_user)):
+    vehicles = await db.vehicles.find({}, {"_id": 0}).sort("name", 1).to_list(100)
+    return vehicles
+
+@api_router.post("/vehicles")
+async def create_vehicle(data: VehicleCreate, admin: dict = Depends(require_admin_or_manager)):
+    doc = {"id": str(uuid.uuid4()), **data.model_dump(), "created_at": datetime.now(timezone.utc).isoformat()}
+    await db.vehicles.insert_one(doc)
+    await log_audit(admin, "create", "vehicle", doc["id"], {"name": data.name, "plate": data.plate_number})
+    return {k: v for k, v in doc.items() if k != '_id'}
+
+@api_router.put("/vehicles/{vehicle_id}")
+async def update_vehicle(vehicle_id: str, data: VehicleCreate, admin: dict = Depends(require_admin_or_manager)):
+    result = await db.vehicles.find_one_and_update(
+        {"id": vehicle_id}, {"$set": data.model_dump()}, return_document=True, projection={"_id": 0}
+    )
+    if not result:
+        raise HTTPException(status_code=404, detail="Armada tidak ditemukan")
+    await log_audit(admin, "update", "vehicle", vehicle_id, data.model_dump())
+    return result
+
+@api_router.delete("/vehicles/{vehicle_id}")
+async def delete_vehicle(vehicle_id: str, admin: dict = Depends(require_admin_or_manager)):
+    result = await db.vehicles.delete_one({"id": vehicle_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Armada tidak ditemukan")
+    await db.partner_stores.update_many({"vehicle_id": vehicle_id}, {"$set": {"vehicle_id": ""}})
+    await log_audit(admin, "delete", "vehicle", vehicle_id, {})
+    return {"message": "Armada berhasil dihapus"}
+
+# ============= ROLE PERMISSIONS =============
+@api_router.get("/role-permissions")
+async def get_role_permissions(current_user: dict = Depends(get_current_user)):
+    return {"permissions": ROLE_PERMISSIONS, "current_role": current_user.get("role", ""), "current_permissions": ROLE_PERMISSIONS.get(current_user.get("role", ""), [])}
+
+# ============= AUDIT TRAIL =============
+async def log_audit(user: dict, action: str, entity_type: str, entity_id: str, details: dict):
+    entry = {
+        "id": str(uuid.uuid4()),
+        "user_id": user.get("id", ""),
+        "user_name": user.get("name", user.get("email", "")),
+        "user_role": user.get("role", ""),
+        "action": action,
+        "entity_type": entity_type,
+        "entity_id": entity_id,
+        "details": details,
+        "timestamp": datetime.now(timezone.utc).isoformat()
+    }
+    await db.audit_log.insert_one(entry)
+
+@api_router.get("/audit-log")
+async def get_audit_log(
+    entity_type: Optional[str] = None,
+    limit: int = 100,
+    admin: dict = Depends(require_admin_or_manager)
+):
+    query = {}
+    if entity_type:
+        query["entity_type"] = entity_type
+    logs = await db.audit_log.find(query, {"_id": 0}).sort("timestamp", -1).to_list(limit)
+    return logs
 
 # ============= DATA IMPORT (Bypass Business Logic) =============
 IMPORT_TYPES_INFO = [

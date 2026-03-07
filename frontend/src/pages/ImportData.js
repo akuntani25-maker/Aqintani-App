@@ -89,10 +89,10 @@ export default function ImportData() {
   };
 
   return (
-    <div className="space-y-6" data-testid="import-data-page">
+    <div className="p-4 md:p-6 lg:p-8 space-y-6" data-testid="import-data-page">
       <div>
-        <h1 className="text-2xl font-bold">Import Data</h1>
-        <p className="text-muted-foreground mt-1">Import data dari file CSV atau Excel (.xlsx). Ikuti urutan agar relasi data benar.</p>
+        <h1 className="text-2xl md:text-3xl lg:text-4xl font-bold tracking-tight">Import Data</h1>
+        <p className="text-sm text-muted-foreground mt-2">Import data dari file CSV atau Excel (.xlsx). Ikuti urutan agar relasi data benar.</p>
       </div>
 
       <Card className="border-amber-200 bg-amber-50">

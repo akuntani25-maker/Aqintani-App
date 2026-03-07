@@ -1,37 +1,75 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { api } from '../context/AuthContext';
 import { Button } from './ui/button';
 import { 
   LayoutDashboard, Package, Users, Layers, FileText, Settings, LogOut,
   Sprout, UserCog, Printer, Store, ShoppingCart, Truck, TrendingUp,
-  Menu, X, Banknote, PanelLeftClose, PanelLeft, Database
+  Menu, X, Banknote, PanelLeftClose, PanelLeft, Database, ClipboardList, Car
 } from 'lucide-react';
+
+const ROLE_MENU_MAP = {
+  dashboard: '/admin/dashboard',
+  products: '/admin/products',
+  categories: '/admin/categories',
+  suppliers: '/admin/suppliers',
+  supplier_debts: '/admin/supplier-debts',
+  partner_stores: '/admin/partner-stores',
+  partner_orders: '/admin/partner-orders',
+  canvassers: '/admin/canvassers',
+  vehicles: '/admin/vehicles',
+  analytics: '/admin/analytics',
+  reports: '/admin/reports',
+  users: '/admin/users',
+  store_settings: '/admin/store-settings',
+  import_data: '/admin/import-data',
+  printer: '/admin/settings',
+  audit_log: '/admin/audit-log',
+  profile: '/admin/profile',
+};
 
 export const AdminLayout = () => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [permissions, setPermissions] = useState([]);
+
+  useEffect(() => {
+    const fetchPerms = async () => {
+      try {
+        const res = await api.get('/role-permissions');
+        setPermissions(res.data.current_permissions || []);
+      } catch {
+        setPermissions(['dashboard', 'profile']);
+      }
+    };
+    fetchPerms();
+  }, []);
 
   const handleLogout = () => { logout(); navigate('/login'); };
 
-  const menuItems = [
-    { to: '/admin/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
-    { to: '/admin/products', icon: Package, label: 'Produk' },
-    { to: '/admin/categories', icon: Layers, label: 'Kategori' },
-    { to: '/admin/suppliers', icon: Users, label: 'Supplier' },
-    { to: '/admin/supplier-debts', icon: Banknote, label: 'Hutang Supplier' },
-    { to: '/admin/partner-stores', icon: Store, label: 'Kios Mitra' },
-    { to: '/admin/partner-orders', icon: ShoppingCart, label: 'Pesanan Kios' },
-    { to: '/admin/canvassers', icon: Truck, label: 'Kanvaser' },
-    { to: '/admin/analytics', icon: TrendingUp, label: 'Analytics' },
-    { to: '/admin/reports', icon: FileText, label: 'Laporan' },
-    { to: '/admin/users', icon: UserCog, label: 'Pengguna' },
-    { to: '/admin/store-settings', icon: Settings, label: 'Toko' },
-    { to: '/admin/import-data', icon: Database, label: 'Import Data' },
-    { to: '/admin/settings', icon: Printer, label: 'Printer' },
-    { to: '/admin/profile', icon: Settings, label: 'Profil' },
+  const allMenuItems = [
+    { to: '/admin/dashboard', icon: LayoutDashboard, label: 'Dashboard', perm: 'dashboard' },
+    { to: '/admin/products', icon: Package, label: 'Produk', perm: 'products' },
+    { to: '/admin/categories', icon: Layers, label: 'Kategori', perm: 'categories' },
+    { to: '/admin/suppliers', icon: Users, label: 'Supplier', perm: 'suppliers' },
+    { to: '/admin/supplier-debts', icon: Banknote, label: 'Hutang Supplier', perm: 'supplier_debts' },
+    { to: '/admin/partner-stores', icon: Store, label: 'Kios Mitra', perm: 'partner_stores' },
+    { to: '/admin/partner-orders', icon: ShoppingCart, label: 'Pesanan Kios', perm: 'partner_orders' },
+    { to: '/admin/vehicles', icon: Car, label: 'Armada', perm: 'vehicles' },
+    { to: '/admin/canvassers', icon: Truck, label: 'Kanvaser', perm: 'canvassers' },
+    { to: '/admin/analytics', icon: TrendingUp, label: 'Analytics', perm: 'analytics' },
+    { to: '/admin/reports', icon: FileText, label: 'Laporan', perm: 'reports' },
+    { to: '/admin/audit-log', icon: ClipboardList, label: 'Log Aktivitas', perm: 'audit_log' },
+    { to: '/admin/users', icon: UserCog, label: 'Pengguna', perm: 'users' },
+    { to: '/admin/store-settings', icon: Settings, label: 'Toko', perm: 'store_settings' },
+    { to: '/admin/import-data', icon: Database, label: 'Import Data', perm: 'import_data' },
+    { to: '/admin/settings', icon: Printer, label: 'Printer', perm: 'printer' },
+    { to: '/admin/profile', icon: Settings, label: 'Profil', perm: 'profile' },
   ];
+
+  const menuItems = allMenuItems.filter(item => permissions.includes(item.perm));
 
   const closeSidebar = () => setSidebarOpen(false);
 

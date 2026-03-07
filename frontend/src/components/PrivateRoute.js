@@ -2,6 +2,8 @@ import React from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 
+const ADMIN_PANEL_ROLES = ['admin', 'manager', 'office_staff'];
+
 export const PrivateRoute = ({ children, requireAdmin = false, requireCanvasser = false }) => {
   const { user, loading } = useAuth();
 
@@ -17,12 +19,12 @@ export const PrivateRoute = ({ children, requireAdmin = false, requireCanvasser 
     return <Navigate to="/login" replace />;
   }
 
-  if (requireAdmin && user.role !== 'admin') {
+  if (requireAdmin && !ADMIN_PANEL_ROLES.includes(user.role)) {
     return <Navigate to={user.role === 'canvasser' ? '/canvasser' : '/pos'} replace />;
   }
 
   if (requireCanvasser && user.role !== 'canvasser') {
-    return <Navigate to={user.role === 'admin' ? '/admin/dashboard' : '/pos'} replace />;
+    return <Navigate to={ADMIN_PANEL_ROLES.includes(user.role) ? '/admin/dashboard' : '/pos'} replace />;
   }
 
   return children;

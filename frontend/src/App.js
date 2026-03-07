@@ -24,6 +24,8 @@ import { CanvasserDashboard } from './pages/CanvasserDashboard';
 import { SupplierDebt } from './pages/SupplierDebt';
 import { Analytics } from './pages/Analytics';
 import ImportData from './pages/ImportData';
+import { Vehicles } from './pages/Vehicles';
+import { AuditLog } from './pages/AuditLog';
 import { Toaster } from './components/ui/sonner';
 import './App.css';
 
@@ -55,6 +57,8 @@ function App() {
             <Route path="store-settings" element={<StoreSettings />} />
             <Route path="settings" element={<Settings />} />
             <Route path="import-data" element={<ImportData />} />
+            <Route path="vehicles" element={<Vehicles />} />
+            <Route path="audit-log" element={<AuditLog />} />
             <Route path="profile" element={<Profile />} />
           </Route>
 

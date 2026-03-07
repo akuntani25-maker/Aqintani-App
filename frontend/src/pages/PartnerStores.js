@@ -7,8 +7,9 @@ import { Card } from '../components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '../components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
 import { toast } from 'sonner';
-import { Plus, Pencil, Trash2, MapPin, DollarSign, Eye, Search } from 'lucide-react';
+import { Plus, Pencil, Trash2, MapPin, DollarSign, Eye, Search, Truck } from 'lucide-react';
 import { Pagination } from '../components/Pagination';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { GoogleMap, LoadScript, Marker, InfoWindow } from '@react-google-maps/api';
 import { useNavigate } from 'react-router-dom';
 
@@ -23,6 +24,8 @@ export const PartnerStores = () => {
   const [selectedStore, setSelectedStore] = useState(null);
   const [showMap, setShowMap] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [filterVehicle, setFilterVehicle] = useState('all');
+  const [vehicles, setVehicles] = useState([]);
   const [page, setPage] = useState(1);
   const perPage = 15;
   const [formData, setFormData] = useState({
@@ -32,7 +35,8 @@ export const PartnerStores = () => {
     address: '',
     latitude: null,
     longitude: null,
-    credit_limit: 0
+    credit_limit: 0,
+    vehicle_id: ''
   });
 
   const mapContainerStyle = {
@@ -51,8 +55,12 @@ export const PartnerStores = () => {
 
   const fetchStores = async () => {
     try {
-      const response = await api.get('/partner-stores');
-      setStores(response.data);
+      const [storesRes, vehiclesRes] = await Promise.all([
+        api.get('/partner-stores'),
+        api.get('/vehicles')
+      ]);
+      setStores(storesRes.data);
+      setVehicles(vehiclesRes.data);
     } catch (error) {
       toast.error('Gagal memuat kios mitra');
     } finally {
@@ -98,7 +106,8 @@ export const PartnerStores = () => {
       address: store.address,
       latitude: store.latitude,
       longitude: store.longitude,
-      credit_limit: store.credit_limit
+      credit_limit: store.credit_limit,
+      vehicle_id: store.vehicle_id || ''
     });
     setIsDialogOpen(true);
   };
@@ -112,7 +121,8 @@ export const PartnerStores = () => {
       address: '',
       latitude: null,
       longitude: null,
-      credit_limit: 0
+      credit_limit: 0,
+      vehicle_id: ''
     });
   };
 
@@ -137,13 +147,16 @@ export const PartnerStores = () => {
   };
 
   const filteredStores = stores.filter(s =>
-    !searchTerm || s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (!searchTerm || s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     s.owner_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     s.phone?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    s.address?.toLowerCase().includes(searchTerm.toLowerCase())
+    s.address?.toLowerCase().includes(searchTerm.toLowerCase())) &&
+    (filterVehicle === 'all' || (filterVehicle === 'unassigned' ? !s.vehicle_id : s.vehicle_id === filterVehicle))
   );
 
-  useEffect(() => { setPage(1); }, [searchTerm]);
+  const getVehicleName = (vid) => vehicles.find(v => v.id === vid)?.name || '';
+
+  useEffect(() => { setPage(1); }, [searchTerm, filterVehicle]);
 
   const totalPages = Math.ceil(filteredStores.length / perPage);
   const paginatedStores = filteredStores.slice((page - 1) * perPage, page * perPage);
@@ -249,6 +262,17 @@ export const PartnerStores = () => {
                 </div>
 
                 <div className="space-y-2">
+                  <Label>Armada Mobil Box</Label>
+                  <Select value={formData.vehicle_id || 'none'} onValueChange={(v) => setFormData({...formData, vehicle_id: v === 'none' ? '' : v})}>
+                    <SelectTrigger data-testid="store-vehicle-select"><SelectValue placeholder="Pilih armada" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">Belum di-assign</SelectItem>
+                      {vehicles.map(v => <SelectItem key={v.id} value={v.id}><Truck className="w-3 h-3 inline mr-1" />{v.name} ({v.plate_number})</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
                   <Label>Lokasi pada Peta (Optional)</Label>
                   <p className="text-xs text-muted-foreground mb-2">
                     Klik pada peta untuk menandai lokasi kios mitra
@@ -300,11 +324,24 @@ export const PartnerStores = () => {
         </div>
       </div>
 
-      {/* Search */}
+      {/* Search & Filter */}
       <Card className="p-4">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <Input placeholder="Cari kios mitra, pemilik, telepon..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-10" data-testid="search-store-input" />
+        <div className="flex flex-col sm:flex-row gap-3">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <Input placeholder="Cari kios mitra, pemilik, telepon..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} className="pl-10" data-testid="search-store-input" />
+          </div>
+          <Select value={filterVehicle} onValueChange={setFilterVehicle}>
+            <SelectTrigger className="w-48" data-testid="filter-vehicle-select">
+              <Truck className="w-4 h-4 mr-2 text-muted-foreground" />
+              <SelectValue placeholder="Semua Armada" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Semua Armada</SelectItem>
+              <SelectItem value="unassigned">Belum di-assign</SelectItem>
+              {vehicles.map(v => <SelectItem key={v.id} value={v.id}>{v.name}</SelectItem>)}
+            </SelectContent>
+          </Select>
         </div>
       </Card>
 
@@ -396,7 +433,7 @@ export const PartnerStores = () => {
                 <TableHead>Nama Kios</TableHead>
                 <TableHead>Pemilik</TableHead>
                 <TableHead>Telepon</TableHead>
-                <TableHead>Alamat</TableHead>
+                <TableHead>Armada</TableHead>
                 <TableHead className="text-right">Limit Kredit</TableHead>
                 <TableHead className="text-right">Piutang</TableHead>
                 <TableHead className="text-center">Aksi</TableHead>
@@ -405,7 +442,7 @@ export const PartnerStores = () => {
             <TableBody>
               {paginatedStores.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                  <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">
                     Belum ada kios mitra
                   </TableCell>
                 </TableRow>
@@ -422,7 +459,15 @@ export const PartnerStores = () => {
                     </TableCell>
                     <TableCell>{store.owner_name}</TableCell>
                     <TableCell>{store.phone}</TableCell>
-                    <TableCell className="max-w-xs truncate">{store.address}</TableCell>
+                    <TableCell>
+                      {store.vehicle_id && getVehicleName(store.vehicle_id) ? (
+                        <span className="inline-flex items-center gap-1 text-xs bg-blue-50 text-blue-700 px-2 py-1 rounded-full">
+                          <Truck className="w-3 h-3" />{getVehicleName(store.vehicle_id)}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">-</span>
+                      )}
+                    </TableCell>
                     <TableCell className="text-right">{formatCurrency(store.credit_limit)}</TableCell>
                     <TableCell className="text-right">
                       <span className={store.current_debt > 0 ? 'text-orange-600 font-semibold' : ''}>

@@ -137,7 +137,10 @@ export const Users = () => {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="admin">Admin</SelectItem>
+                    <SelectItem value="manager">Manager</SelectItem>
+                    <SelectItem value="office_staff">Karyawan Kantor</SelectItem>
                     <SelectItem value="cashier">Kasir</SelectItem>
+                    <SelectItem value="canvasser">Kanvaser</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -183,10 +186,12 @@ export const Users = () => {
                       <div className="flex items-center gap-2">
                         {user.role === 'admin' ? (
                           <Shield className="w-4 h-4 text-primary" />
+                        ) : user.role === 'manager' ? (
+                          <Shield className="w-4 h-4 text-amber-500" />
                         ) : (
                           <User className="w-4 h-4 text-secondary" />
                         )}
-                        <span className="capitalize">{user.role}</span>
+                        <span className="capitalize">{user.role === 'office_staff' ? 'Karyawan Kantor' : user.role}</span>
                       </div>
                     </TableCell>
                     <TableCell>{new Date(user.created_at).toLocaleDateString('id-ID')}</TableCell>
