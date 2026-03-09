@@ -226,7 +226,8 @@ b{font-weight:900}
           <div className="border-t border-gray-800 my-2"></div>
           <div className="text-center text-xs text-gray-600">
             <p className="font-semibold">Terima kasih!</p>
-            <p>Barang yg sudah dibeli tidak dapat ditukar</p>
+            <p>Penukaran atau retur barang hanya berlaku</p>
+            <p>2 hari setelah pembelian barang</p>
           </div>
         </div>
 

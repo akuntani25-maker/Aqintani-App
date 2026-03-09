@@ -111,8 +111,8 @@ export const Reports = () => {
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(9);
     doc.setTextColor(148, 163, 184);
-    doc.text('Toko Pertanian & Farmasi', 14, 20);
-    doc.text('Jl. Raya No. 1  |  Telp: (021) 000-0000', 14, 26);
+    doc.text('Menjual Pupuk, Obat Pertanian, dan Alat Pertanian', 14, 20);
+    doc.text('Telp: 0812-3456-7890  |  Jl. Raya Utama No. 1, Kec. Contoh, Kota Anda', 14, 26);
 
     const tabLabels = { pos: 'Penjualan POS', partner: 'Penjualan Kios Mitra', bestseller: 'Barang Terlaris' };
     doc.setFontSize(9);

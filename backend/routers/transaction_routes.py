@@ -1,7 +1,7 @@
-from fastapi import APIRouter, HTTPException, Depends, Query
+from fastapi import APIRouter, HTTPException, Depends, Query, Request as FastAPIRequest
 from typing import List, Optional
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 from database import db
 from auth import get_current_user, require_admin
@@ -78,6 +78,18 @@ async def create_transaction(data: TransactionCreate, current_user: dict = Depen
     return transaction_doc
 
 
+@router.get("/transactions/search")
+async def search_transaction(q: str = "", current_user: dict = Depends(get_current_user)):
+    if not q:
+        return []
+    query = {"$or": [
+        {"transaction_number": {"$regex": q, "$options": "i"}},
+        {"id": q}
+    ]}
+    txns = await db.transactions.find(query, {"_id": 0}).sort("created_at", -1).to_list(20)
+    return txns
+
+
 @router.get("/transactions", response_model=List[Transaction])
 async def get_transactions(
     start_date: Optional[str] = None, end_date: Optional[str] = None,
@@ -139,3 +151,146 @@ async def get_returns(source_id: str = None, admin: dict = Depends(require_admin
         query["source_id"] = source_id
     returns = await db.returns.find(query, {"_id": 0}).sort("created_at", -1).to_list(1000)
     return returns
+
+
+@router.post("/pos/return-exchange")
+async def pos_return_exchange(req: FastAPIRequest, current_user: dict = Depends(get_current_user)):
+    body = await req.json()
+    transaction_id = body.get("transaction_id")
+    return_items = body.get("return_items", [])
+    exchange_items = body.get("exchange_items", [])
+    action_type = body.get("action_type", "return")
+
+    txn = await db.transactions.find_one({"id": transaction_id}, {"_id": 0})
+    if not txn:
+        raise HTTPException(status_code=404, detail="Transaksi tidak ditemukan")
+
+    txn_date = datetime.fromisoformat(txn["created_at"].replace("Z", "+00:00")) if "T" in txn.get("created_at", "") else datetime.now(timezone.utc)
+    days_diff = (datetime.now(timezone.utc) - txn_date).days
+    if days_diff > 2:
+        raise HTTPException(status_code=400, detail=f"Retur/tukar hanya berlaku 2 hari setelah pembelian (transaksi sudah {days_diff} hari)")
+
+    now = datetime.now(timezone.utc)
+    total_return_value = 0
+    return_details = []
+
+    for ri in return_items:
+        product_id = ri.get("product_id")
+        qty = int(ri.get("quantity", 0))
+        if qty <= 0:
+            continue
+        original_item = next((it for it in txn.get("items", []) if it["product_id"] == product_id), None)
+        if not original_item:
+            raise HTTPException(status_code=400, detail=f"Barang tidak ditemukan dalam transaksi")
+        if qty > original_item["quantity"]:
+            raise HTTPException(status_code=400, detail=f"Jumlah retur ({qty}) melebihi jumlah beli ({original_item['quantity']}) untuk {original_item['product_name']}")
+        return_value = original_item["price"] * qty
+        total_return_value += return_value
+        return_details.append({
+            "product_id": product_id, "product_name": original_item["product_name"],
+            "quantity": qty, "price": original_item["price"], "return_value": return_value
+        })
+        await db.warehouse_stock.update_one(
+            {"product_id": product_id, "warehouse_id": "gudang_toko"},
+            {"$inc": {"stock": qty}}, upsert=True
+        )
+        await recalculate_product_stock(product_id)
+
+    total_exchange_value = 0
+    exchange_details = []
+
+    for ei in exchange_items:
+        product_id = ei.get("product_id")
+        qty = int(ei.get("quantity", 0))
+        price = float(ei.get("price", 0))
+        product_name = ei.get("product_name", "")
+        if qty <= 0:
+            continue
+        product = await db.products.find_one({"id": product_id}, {"_id": 0})
+        if not product:
+            raise HTTPException(status_code=404, detail=f"Barang pengganti tidak ditemukan")
+        toko_stock = await db.warehouse_stock.find_one({"product_id": product_id, "warehouse_id": "gudang_toko"})
+        toko_qty = toko_stock["stock"] if toko_stock else 0
+        if toko_qty < qty:
+            raise HTTPException(status_code=400, detail=f"Stok tidak cukup untuk {product['name']} (tersedia: {toko_qty})")
+        exchange_value = price * qty
+        total_exchange_value += exchange_value
+        exchange_details.append({
+            "product_id": product_id, "product_name": product["name"],
+            "quantity": qty, "price": price, "exchange_value": exchange_value
+        })
+        await db.warehouse_stock.update_one(
+            {"product_id": product_id, "warehouse_id": "gudang_toko"},
+            {"$inc": {"stock": -qty}}
+        )
+        await recalculate_product_stock(product_id)
+
+    price_diff = total_exchange_value - total_return_value
+    label = "RETUR" if action_type == "return" else "TUKAR"
+
+    updated_items = list(txn.get("items", []))
+    for ri in return_details:
+        for i, item in enumerate(updated_items):
+            if item["product_id"] == ri["product_id"]:
+                new_qty = item["quantity"] - ri["quantity"]
+                if new_qty > 0:
+                    updated_items[i] = {**item, "quantity": new_qty, "subtotal": new_qty * item["price"]}
+                else:
+                    updated_items[i] = {**item, "quantity": 0, "subtotal": 0, "product_name": item["product_name"] + f" [{label}]"}
+                break
+
+    for ei in exchange_details:
+        existing_idx = next((i for i, it in enumerate(updated_items) if it["product_id"] == ei["product_id"]), None)
+        if existing_idx is not None:
+            item = updated_items[existing_idx]
+            new_qty = item["quantity"] + ei["quantity"]
+            updated_items[existing_idx] = {**item, "quantity": new_qty, "subtotal": new_qty * ei["price"]}
+        else:
+            updated_items.append({
+                "product_id": ei["product_id"], "product_name": ei["product_name"] + f" [{label}]",
+                "quantity": ei["quantity"], "price": ei["price"],
+                "subtotal": ei["exchange_value"], "warehouse_id": "", "sell_unit": ""
+            })
+
+    updated_items = [it for it in updated_items if it.get("quantity", 0) > 0 or "[" in it.get("product_name", "")]
+    new_subtotal = sum(it.get("subtotal", 0) for it in updated_items)
+    new_total = new_subtotal - txn.get("discount", 0) + txn.get("tax", 0)
+
+    return_note = f"[{label} {now.strftime('%d/%m/%Y %H:%M')} oleh {current_user.get('name','')}]"
+    existing_notes = txn.get("return_notes", [])
+    existing_notes.append(return_note)
+
+    await db.transactions.update_one(
+        {"id": transaction_id},
+        {"$set": {
+            "items": updated_items,
+            "subtotal": new_subtotal,
+            "total": new_total,
+            "return_notes": existing_notes,
+            "has_return": True
+        }}
+    )
+
+    return_log = {
+        "id": str(uuid.uuid4()),
+        "transaction_id": transaction_id,
+        "transaction_number": txn.get("transaction_number", ""),
+        "action_type": action_type,
+        "return_items": return_details,
+        "exchange_items": exchange_details,
+        "total_return_value": total_return_value,
+        "total_exchange_value": total_exchange_value,
+        "price_difference": price_diff,
+        "processed_by": current_user.get("name", ""),
+        "created_at": now.isoformat(),
+        "date": now.strftime("%Y-%m-%d")
+    }
+    await db.pos_returns.insert_one(return_log)
+
+    return {
+        "message": f"{label} berhasil diproses",
+        "total_return_value": total_return_value,
+        "total_exchange_value": total_exchange_value,
+        "price_difference": price_diff,
+        "return_log_id": return_log["id"]
+    }

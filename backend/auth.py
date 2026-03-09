@@ -64,3 +64,10 @@ async def require_admin_or_manager(current_user: dict = Depends(get_current_user
     if current_user.get("role") not in ("admin", "manager"):
         raise HTTPException(status_code=403, detail="Admin or Manager access required")
     return current_user
+
+
+async def require_admin_panel_access(current_user: dict = Depends(get_current_user)):
+    """Allow admin, manager, and office_staff to access admin panel"""
+    if current_user.get("role") not in ("admin", "manager", "office_staff"):
+        raise HTTPException(status_code=403, detail="Admin panel access required")
+    return current_user

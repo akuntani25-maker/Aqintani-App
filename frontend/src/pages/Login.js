@@ -22,7 +22,7 @@ export const Login = () => {
       const user = await login(email, password);
       toast.success('Login berhasil!');
       
-      if (user.role === 'admin') {
+      if (['admin', 'manager', 'office_staff'].includes(user.role)) {
         navigate('/admin/dashboard');
       } else if (user.role === 'canvasser') {
         navigate('/canvasser');

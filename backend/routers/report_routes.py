@@ -5,13 +5,13 @@ import uuid
 import os
 
 from database import db
-from auth import get_current_user, require_admin
+from auth import get_current_user, require_admin, require_admin_panel_access
 
 router = APIRouter()
 
 
 @router.get("/dashboard/stats")
-async def get_dashboard_stats(admin: dict = Depends(require_admin)):
+async def get_dashboard_stats(admin: dict = Depends(require_admin_panel_access)):
     today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     today_transactions = await db.transactions.find({"date": today}, {"_id": 0}).to_list(10000)
     today_sales = sum(t.get("total", 0) for t in today_transactions)
@@ -96,7 +96,7 @@ async def get_dashboard_stats(admin: dict = Depends(require_admin)):
 
 
 @router.get("/dashboard/due-calendar")
-async def get_due_calendar(year: int, month: int, admin: dict = Depends(require_admin)):
+async def get_due_calendar(year: int, month: int, admin: dict = Depends(require_admin_panel_access)):
     month_start = f"{year:04d}-{month:02d}-01"
     month_end = f"{year:04d}-{month:02d}-31"
     purchases = await db.purchases.find(

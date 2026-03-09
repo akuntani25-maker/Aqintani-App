@@ -6,7 +6,7 @@ import { Input } from '../components/ui/input';
 import { Card } from '../components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { toast } from 'sonner';
-import { Search, Plus, Minus, Trash2, ShoppingCart, LogOut, CreditCard, Banknote, Smartphone, Printer, Pencil, ArrowRightLeft, BarChart3, FileText, Users } from 'lucide-react';
+import { Search, Plus, Minus, Trash2, ShoppingCart, LogOut, CreditCard, Banknote, Smartphone, Printer, Pencil, ArrowRightLeft, BarChart3, FileText, Users, RotateCcw } from 'lucide-react';
 import { CurrencyInput } from '../components/CurrencyInput';
 import { Pagination } from '../components/Pagination';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../components/ui/dialog';
@@ -108,6 +108,82 @@ export const POS = () => {
 
   const [transferSearch, setTransferSearch] = useState('');
   const [transferResults, setTransferResults] = useState([]);
+
+  // Return/Exchange state
+  const [showReturn, setShowReturn] = useState(false);
+  const [returnTxnSearch, setReturnTxnSearch] = useState('');
+  const [returnTxnResults, setReturnTxnResults] = useState([]);
+  const [returnTxn, setReturnTxn] = useState(null);
+  const [returnType, setReturnType] = useState('return');
+  const [returnItems, setReturnItems] = useState([]);
+  const [exchangeCart, setExchangeCart] = useState([]);
+  const [exchangeSearch, setExchangeSearch] = useState('');
+  const [exchangeResults, setExchangeResults] = useState([]);
+
+  const searchReturnTxn = async (q) => {
+    setReturnTxnSearch(q);
+    if (q.length < 3) { setReturnTxnResults([]); return; }
+    try {
+      const res = await api.get(`/transactions/search?q=${encodeURIComponent(q)}`);
+      setReturnTxnResults(res.data);
+    } catch { setReturnTxnResults([]); }
+  };
+
+  const selectReturnTxn = (txn) => {
+    setReturnTxn(txn);
+    setReturnTxnResults([]);
+    setReturnTxnSearch(txn.transaction_number);
+    setReturnItems(txn.items.map(i => ({ ...i, return_qty: 0, selected: false })));
+  };
+
+  const searchExchangeProducts = async (q) => {
+    setExchangeSearch(q);
+    if (q.length < 2) { setExchangeResults([]); return; }
+    try {
+      const res = await api.get(`/canvassers/product-search?q=${encodeURIComponent(q)}`);
+      setExchangeResults(res.data);
+    } catch { setExchangeResults([]); }
+  };
+
+  const addToExchangeCart = (product) => {
+    const existing = exchangeCart.find(i => i.product_id === product.id);
+    if (existing) {
+      setExchangeCart(exchangeCart.map(i => i.product_id === product.id ? { ...i, quantity: i.quantity + 1, subtotal: (i.quantity + 1) * i.price } : i));
+    } else {
+      setExchangeCart([...exchangeCart, { product_id: product.id, product_name: product.name, quantity: 1, price: product.price, subtotal: product.price }]);
+    }
+    setExchangeSearch('');
+    setExchangeResults([]);
+  };
+
+  const handleReturnExchange = async () => {
+    const returnItemsPayload = returnItems.filter(i => i.return_qty > 0).map(i => ({ product_id: i.product_id, quantity: i.return_qty }));
+    if (returnItemsPayload.length === 0) { toast.error('Pilih barang yang akan diretur/ditukar'); return; }
+    if (returnType === 'exchange' && exchangeCart.length === 0) { toast.error('Pilih barang pengganti untuk tukar'); return; }
+    try {
+      const res = await api.post('/pos/return-exchange', {
+        transaction_id: returnTxn.id,
+        return_items: returnItemsPayload,
+        exchange_items: returnType === 'exchange' ? exchangeCart : [],
+        action_type: returnType
+      });
+      toast.success(res.data.message);
+      if (res.data.price_difference > 0) {
+        toast.info(`Selisih harga: Rp ${res.data.price_difference.toLocaleString('id-ID')} (pelanggan perlu membayar)`);
+      } else if (res.data.price_difference < 0) {
+        toast.info(`Kembalian: Rp ${Math.abs(res.data.price_difference).toLocaleString('id-ID')}`);
+      }
+      setShowReturn(false);
+      resetReturn();
+      fetchProducts();
+    } catch (e) { toast.error(e.response?.data?.detail || 'Gagal memproses retur/tukar'); }
+  };
+
+  const resetReturn = () => {
+    setReturnTxn(null); setReturnTxnSearch(''); setReturnTxnResults([]);
+    setReturnItems([]); setReturnType('return'); setExchangeCart([]);
+    setExchangeSearch(''); setExchangeResults([]);
+  };
 
   const searchTransferProducts = async (q) => {
     setTransferSearch(q);
@@ -327,6 +403,8 @@ export const POS = () => {
       minimumFractionDigits: 0
     }).format(value);
   };
+  
+  const fmt = formatCurrency; // Shorthand alias
 
   const paymentMethods = [
     { value: 'cash', label: 'Tunai', icon: Banknote },
@@ -349,6 +427,9 @@ export const POS = () => {
               </Button>
               <Button variant="outline" onClick={() => navigate('/pos/farmer-debts')} data-testid="pos-farmer-debts-button">
                 <Users className="w-4 h-4 mr-2" />Hutang Petani
+              </Button>
+              <Button variant="outline" onClick={() => { resetReturn(); setShowReturn(true); }} data-testid="pos-return-button">
+                <RotateCcw className="w-4 h-4 mr-2" />Retur/Tukar
               </Button>
               <Button variant="outline" onClick={() => setShowTransfer(true)} data-testid="pos-transfer-button">
                 <ArrowRightLeft className="w-4 h-4 mr-2" />Transfer Stok
@@ -658,6 +739,126 @@ export const POS = () => {
               <Button variant="outline" onClick={() => setShowTransfer(false)}>Batal</Button>
               <Button onClick={handleTransfer} data-testid="confirm-transfer-btn">Transfer</Button>
             </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Return/Exchange Dialog */}
+      <Dialog open={showReturn} onOpenChange={(o) => { if (!o) resetReturn(); setShowReturn(o); }}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader><DialogTitle>Retur / Tukar Barang</DialogTitle></DialogHeader>
+          <div className="space-y-4">
+            {/* Search Transaction */}
+            <div className="relative">
+              <Label>Cari No. Transaksi</Label>
+              <Input value={returnTxnSearch} onChange={e => searchReturnTxn(e.target.value)} placeholder="Ketik nomor transaksi (min 3 huruf)..." data-testid="return-txn-search" />
+              {returnTxnResults.length > 0 && (
+                <div className="absolute z-10 w-full bg-white border rounded-md shadow-lg mt-1 max-h-48 overflow-auto">
+                  {returnTxnResults.map(t => (
+                    <div key={t.id} className="p-2 hover:bg-muted cursor-pointer flex justify-between text-sm" onClick={() => selectReturnTxn(t)}>
+                      <span className="font-mono">{t.transaction_number}</span>
+                      <span>{t.date} - {fmt(t.total)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {returnTxn && (
+              <>
+                <div className="bg-muted/50 p-3 rounded-lg text-sm">
+                  <div className="flex justify-between"><span>No: <strong>{returnTxn.transaction_number}</strong></span><span>Tanggal: {returnTxn.date}</span></div>
+                  <div className="flex justify-between"><span>Kasir: {returnTxn.cashier_name}</span><span>Total: <strong>{fmt(returnTxn.total)}</strong></span></div>
+                </div>
+
+                {/* Action Type */}
+                <div className="flex gap-2">
+                  <Button size="sm" variant={returnType === 'return' ? 'default' : 'outline'} onClick={() => setReturnType('return')} data-testid="btn-return-type">Retur (Kembalikan)</Button>
+                  <Button size="sm" variant={returnType === 'exchange' ? 'default' : 'outline'} onClick={() => setReturnType('exchange')} data-testid="btn-exchange-type">Tukar Barang</Button>
+                </div>
+
+                {/* Items to return */}
+                <div>
+                  <Label>Pilih Barang yang Diretur/Ditukar</Label>
+                  <div className="space-y-2 mt-2">
+                    {returnItems.map((item, idx) => (
+                      <div key={idx} className="flex items-center gap-3 bg-muted/30 p-2 rounded">
+                        <div className="flex-1">
+                          <p className="text-sm font-medium">{item.product_name}</p>
+                          <p className="text-xs text-muted-foreground">Dibeli: {item.quantity} x {fmt(item.price)}</p>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <Label className="text-xs mr-1">Qty retur:</Label>
+                          <Button size="sm" variant="outline" className="h-6 w-6 p-0" onClick={() => {
+                            const ni = [...returnItems]; ni[idx] = { ...ni[idx], return_qty: Math.max(0, ni[idx].return_qty - 1) }; setReturnItems(ni);
+                          }}><Minus className="w-3 h-3" /></Button>
+                          <span className="w-8 text-center text-sm font-medium">{item.return_qty}</span>
+                          <Button size="sm" variant="outline" className="h-6 w-6 p-0" onClick={() => {
+                            const ni = [...returnItems]; ni[idx] = { ...ni[idx], return_qty: Math.min(ni[idx].quantity, ni[idx].return_qty + 1) }; setReturnItems(ni);
+                          }}><Plus className="w-3 h-3" /></Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Exchange items */}
+                {returnType === 'exchange' && (
+                  <div>
+                    <Label>Barang Pengganti</Label>
+                    <div className="relative mt-2">
+                      <Input value={exchangeSearch} onChange={e => searchExchangeProducts(e.target.value)} placeholder="Cari barang pengganti..." data-testid="exchange-product-search" />
+                      {exchangeResults.length > 0 && (
+                        <div className="absolute z-10 w-full bg-white border rounded-md shadow-lg mt-1 max-h-40 overflow-auto">
+                          {exchangeResults.map(p => (
+                            <div key={p.id} className="p-2 hover:bg-muted cursor-pointer flex justify-between text-sm" onClick={() => addToExchangeCart(p)}>
+                              <span>{p.name}</span>
+                              <span>{fmt(p.price)} (stok: {p.stock})</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    {exchangeCart.length > 0 && (
+                      <div className="space-y-2 mt-2">
+                        {exchangeCart.map(item => (
+                          <div key={item.product_id} className="flex items-center justify-between bg-blue-50 p-2 rounded">
+                            <span className="text-sm flex-1">{item.product_name}</span>
+                            <div className="flex items-center gap-1">
+                              <Button size="sm" variant="outline" className="h-6 w-6 p-0" onClick={() => setExchangeCart(exchangeCart.map(i => i.product_id === item.product_id ? { ...i, quantity: Math.max(1, i.quantity - 1), subtotal: Math.max(1, i.quantity - 1) * i.price } : i))}><Minus className="w-3 h-3" /></Button>
+                              <span className="w-8 text-center text-sm">{item.quantity}</span>
+                              <Button size="sm" variant="outline" className="h-6 w-6 p-0" onClick={() => setExchangeCart(exchangeCart.map(i => i.product_id === item.product_id ? { ...i, quantity: i.quantity + 1, subtotal: (i.quantity + 1) * i.price } : i))}><Plus className="w-3 h-3" /></Button>
+                              <span className="text-sm font-medium w-24 text-right">{fmt(item.subtotal)}</span>
+                              <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={() => setExchangeCart(exchangeCart.filter(i => i.product_id !== item.product_id))}><Trash2 className="w-3 h-3 text-destructive" /></Button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* Summary */}
+                {returnItems.some(i => i.return_qty > 0) && (
+                  <div className="bg-yellow-50 border border-yellow-200 p-3 rounded-lg text-sm space-y-1">
+                    <p>Nilai retur: <strong>{fmt(returnItems.reduce((s, i) => s + (i.return_qty * i.price), 0))}</strong></p>
+                    {returnType === 'exchange' && exchangeCart.length > 0 && (
+                      <>
+                        <p>Nilai barang baru: <strong>{fmt(exchangeCart.reduce((s, i) => s + i.subtotal, 0))}</strong></p>
+                        <p className="font-bold">Selisih: {fmt(exchangeCart.reduce((s, i) => s + i.subtotal, 0) - returnItems.reduce((s, i) => s + (i.return_qty * i.price), 0))}</p>
+                      </>
+                    )}
+                  </div>
+                )}
+
+                <div className="flex gap-2 justify-end">
+                  <Button variant="outline" onClick={() => { resetReturn(); setShowReturn(false); }}>Batal</Button>
+                  <Button onClick={handleReturnExchange} data-testid="confirm-return-btn">
+                    {returnType === 'return' ? 'Proses Retur' : 'Proses Tukar'}
+                  </Button>
+                </div>
+              </>
+            )}
           </div>
         </DialogContent>
       </Dialog>
