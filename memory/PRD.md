@@ -8,7 +8,7 @@ Aplikasi web responsif untuk toko farmasi dan pertanian bernama "UD. AQIN TANI" 
 - **Manager**: Seperti admin tanpa manajemen pengguna
 - **Karyawan Kantor (Office Staff)**: Akses dashboard, barang, supplier, laporan
 - **Kasir (Cashier)**: POS, hutang petani, retur/tukar barang, profil
-- **Kanvaser (Canvasser)**: Dashboard kanvaser dan profil
+- **Kanvaser (Canvasser)**: Dashboard kanvaser, cetak struk pesanan, profil
 
 ## Core Requirements
 1. Multi-role authentication (Admin, Manager, Karyawan Kantor, Kasir, Kanvaser)
@@ -22,11 +22,12 @@ Aplikasi web responsif untuk toko farmasi dan pertanian bernama "UD. AQIN TANI" 
 9. Audit trail
 10. Vehicle/Armada management
 11. Data import (CSV/Excel)
-12. Thermal printer receipt support
+12. Thermal printer receipt support (USB ESC/POS + Bluetooth)
 13. Piutang Pribadi (personal loans)
 14. Hutang Petani (farmer debts with limits)
 15. Rincian Transaksi Harian
 16. Retur/Tukar Barang di POS (2-day limit)
+17. Cetak struk pada halaman Kanvaser
 
 ## Architecture
 ```
@@ -35,14 +36,21 @@ Aplikasi web responsif untuk toko farmasi dan pertanian bernama "UD. AQIN TANI" 
 ├── routers/ (auth, product, supplier, transaction, partner, canvasser,
 │             warehouse, report, admin, loan_farmer)
 
-/app/frontend/src/pages/
-├── POS.js (retur/tukar, transfer search, farmer/rincian buttons)
-├── PersonalLoans.js, FarmerDebts.js, DailyTransactions.js
-├── ReceiptPreview.js (2-day return policy note)
-├── Reports.js (PDF header: store name + description + contact)
-├── Dashboard.js (asset = inventory + partner + piutang + farmer - supplier)
-├── Login.js (admin/manager/office_staff → /admin/dashboard)
-└── ... (existing pages)
+/app/frontend/src/
+├── pages/
+│   ├── POS.js (retur/tukar, transfer search, farmer/rincian buttons)
+│   ├── PersonalLoans.js, FarmerDebts.js, DailyTransactions.js
+│   ├── ReceiptPreview.js (USB ESC/POS + Bluetooth printing)
+│   ├── PartnerOrderReceipt.js (USB ESC/POS + Bluetooth, dynamic back nav)
+│   ├── CanvasserDashboard.js (Cetak Struk button on orders)
+│   ├── Reports.js (PDF header: store name + description + contact)
+│   ├── Dashboard.js (asset = inventory + partner + piutang + farmer - supplier)
+│   ├── Login.js (admin/manager/office_staff → /admin/dashboard)
+│   └── ... (existing pages)
+├── utils/
+│   └── ThermalPrinter.js (ESC/POS commands for USB & Bluetooth)
+└── components/
+    └── ui/ (shadcn components)
 ```
 
 ## Key DB Collections
@@ -63,9 +71,17 @@ farmer_transactions, farmer_payments, pos_returns
 - Receipt with return policy note
 - PDF header with store info
 - Refactored backend (modular router architecture)
-- All testing passed (iterations 18-21)
+- **USB Thermal Printing Fix**: Replaced window.print() with WebUSB ESC/POS commands
+- **Canvasser Cetak Struk**: Added print receipt button on canvasser dashboard orders
+- All testing passed (iterations 6-8, 22)
 
 ## Credentials
 - Admin: admin@aqintani.com / admin123
 - Office Staff: kantor@aqintani.com / kantor123
-- Canvasser: canvasser@aqintani.com / 123456
+- Canvasser: sahidin@aqintani.com / 123456
+
+## Printing Architecture
+- **USB Printing**: Uses WebUSB API + ESC/POS raw commands via ThermalPrinter.js
+- **Bluetooth Printing**: Uses Web Bluetooth API + ESC/POS raw commands via ThermalPrinter.js
+- Both methods produce identical output, optimized for 58mm thermal printers
+- Paper size configurable: 58mm (32 chars) or 48mm (24 chars)
