@@ -8,7 +8,7 @@ import { Label } from '../components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../components/ui/dialog';
 import { toast } from 'sonner';
-import { Package, MapPin, DollarSign, CheckCircle, Truck, LogOut, Search, Bell, Filter, X, ShoppingBag, Warehouse } from 'lucide-react';
+import { Package, MapPin, DollarSign, CheckCircle, Truck, LogOut, Search, Bell, Filter, X, ShoppingBag, Warehouse, Printer } from 'lucide-react';
 import { Pagination } from '../components/Pagination';
 
 const fmtCurrency = (v) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(v);
@@ -97,9 +97,11 @@ export const CanvasserDashboard = () => {
       toast.success(`Pembayaran ${paymentType === 'cash' ? 'tunai' : 'bon'} berhasil dicatat`);
       setPaymentDialogOpen(false);
       setPaymentAmount(0);
-      setSelectedOrder(null);
       fetchMyOrders();
       fetchNotifications();
+      // Navigate to receipt page for printing
+      navigate(`/partner-receipt?id=${selectedOrder.id}&from=canvasser`);
+      setSelectedOrder(null);
     } catch (error) {
       toast.error('Gagal mencatat pembayaran');
     }
@@ -404,6 +406,16 @@ export const CanvasserDashboard = () => {
                           Catat Bayar
                         </Button>
                       )}
+
+                      <Button
+                        variant="outline"
+                        onClick={() => navigate(`/partner-receipt?id=${order.id}&from=canvasser`)}
+                        className="w-full"
+                        data-testid={`print-btn-${order.id}`}
+                      >
+                        <Printer className="w-4 h-4 mr-2" />
+                        Cetak Struk
+                      </Button>
                     </div>
                   </div>
                 </Card>

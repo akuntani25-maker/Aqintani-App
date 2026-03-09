@@ -1,75 +1,79 @@
 <analysis>**original_problem_statement**: The user wants to build a responsive web application for a pharmacy and agriculture store named UD. AQIN TANI.
 
 **PRODUCT REQUIREMENTS:**
-1.  **Core App:** A full-stack application (FastAPI, React, MongoDB) with multiple user roles (Admin, Manager, Karyawan Kantor, Cashier, Canvasser).
-2.  **Admin Features:** A comprehensive dashboard to manage products (now barang), suppliers, categories, inventory, purchases, and view detailed sales reports. Includes role and user management.
-3.  **B2B / Advanced Features:**
-    *   **Canvasser & Vehicle Portal:** A unified dashboard for delivery drivers () and vehicle () management.
-    *   **Partner Kiosk Portal:** A system for managing orders from partner stores, now grouped by the delivery vehicle.
-    *   **Multi-Warehouse Inventory:** Manage stock across multiple locations, including stock adjustments with history and inter-warehouse transfers from the POS.
-    *   **Purchasing & Debt Management:** Record purchases from suppliers, including partial payments. Invoice numbers and due dates are now captured at the time of purchase. Due dates are tracked per-invoice.
-    *   **POS Features:** A Point of Sale interface for the cashier with a daily transaction summary, HPP display per item, and a fixed (sticky) cart panel.
-    *   **Returns Management:** Systems for both supplier and customer returns.
+1.  **Core App:** A full-stack application (FastAPI, React, MongoDB) with multiple user roles (Admin, Manager, Karyawan Kantor, Cashier, Canvasser). The entire backend has been refactored from a single  file into a modular structure with routers, models, and services.
+2.  **Admin Features:** A comprehensive dashboard to manage barang (goods), suppliers, categories, inventory, and view detailed sales reports. Includes role and user management. An audit trail logs all critical actions.
+3.  **Advanced Features:**
+    *   **Sales & Debt Management:**
+        *   A unified dashboard for delivery drivers () and vehicle () management.
+        *   A system for managing partner store orders.
+        *   A Point of Sale (POS) interface for cashiers.
+        *   **New:** A page to manage personal loans ().
+        *   **New:** A page, accessible from the POS, to manage farmer debts ().
+    *   **Inventory & Purchasing:**
+        *   Multi-warehouse inventory management with stock adjustments and transfers.
+        *   A purchasing system that tracks supplier debt via invoice numbers and due dates.
+        *   **New:** A full-featured return and exchange system integrated into the POS, which updates original transaction records and stock levels.
     *   **Analytics & Reporting:**
-        *   Provide detailed insights into sales, margin, and key metrics on the admin dashboard, including new metrics like Net Asset Value and warehouse-specific value pie charts.
-        *   Fixes for PDF export and enhanced CSV export with headers and totals.
-        *   An AI-powered stock forecasting feature in the Analytics section.
-    *   **Data Import:** A feature to bulk-import data. Dashboard metrics for stock movement now correctly exclude data from these imports.
-4.  **UI/UX:** A modern, elegant, and fully responsive user interface. All instances of Produk (Product) have been changed to Barang (Goods). The UI for the Import Data page has been standardized.
-5.  **Hardware Integration:** A print-preview screen for generating transaction receipts compatible with thermal printers.
-6.  **Security & Auditing:** Role-based access control to limit what each user type can see and do. A comprehensive audit trail to log all critical user actions.
-7.  **Custom Reporting:** Generation of sales reports in PDF format with a custom, modern letterhead.
+        *   An admin dashboard with key metrics, including Net Asset Value (now calculated as ), stock movement, and inventory value charts.
+        *   An AI-powered stock forecasting feature.
+        *   **New:** A dedicated page for viewing detailed daily transactions.
+        *   Customizable PDF report headers with store information and CSV exports.
+4.  **UI/UX:** A modern, elegant, and fully responsive user interface. All instances of Produk (Product) have been changed to Barang (Goods). Several UI elements, like product selection, have been upgraded to use search inputs for better usability.
+5.  **Hardware Integration:**
+    *   A print-preview screen for generating transaction receipts.
+    *   **New Requirement**: The standard USB printing format for thermal receipts needs to be fixed to match the quality and layout of Bluetooth printing.
 
 **User's preferred language**: The user's primary language is Indonesian. The next agent MUST respond in Indonesian.
 
 **what currently exists?**
-A comprehensive, full-stack business management application. Recent major additions include a sophisticated role-based access control system (Admin, Manager, Karyawan Kantor), a full audit trail for key operations, and vehicle management which has been merged into the canvasser page. The dashboard has been significantly enhanced with new metrics (Net Assets, daily stock movement) and a pie chart for warehouse inventory value. The POS system now includes a daily summary and stock transfer capabilities. The PDF export feature was fixed and CSV exports were improved. The agent was in the final stages of implementing an AI-powered stock forecasting feature and renaming Produk to Barang throughout the app when it encountered a bug with a new backend endpoint.
+A feature-rich, full-stack business management application. The backend has been successfully refactored from a monolithic  into a clean, modular structure (, , etc.), improving maintainability. The application includes comprehensive role-based access control, a full audit trail, advanced POS features (returns, debt management, daily summaries, stock transfers), an AI stock forecasting module, and enhanced reporting. All previously requested features and bug fixes, including a critical login-redirect bug for the Karyawan Kantor role, have been implemented and successfully tested.
 
 **Last working item**:
--   **Last item agent was working**: Fixing a  error for the new AI-powered stock forecast endpoint (). The agent correctly identified that the endpoint's definition in  was placed *after* the main API router was included (), which meant the route was never registered with the application. The agent's last action was to remove the endpoint code from the end of the file with the intent of moving it to the correct location.
+-   **Last item agent was working**: Investigating a user-reported issue where printing receipts to a 58mm thermal printer via USB results in a poorly formatted, messy printout. The user confirmed the Bluetooth printing function works correctly, but the standard Cetak Struk (Print Receipt) button, which uses the browser's  function, produces an unusable result.
 -   **Status**: IN PROGRESS
 -   **Agent Testing Done**: N
--   **Which testing method agent to use?**: backend testing agent. First, use  to verify that the  endpoint returns a  status after the fix. Once the backend is confirmed, use the  to test the entire feature flow on the new Prediksi tab in the Analytics page.
+-   **Which testing method agent to use?**: This is a frontend/hardware interaction issue.
+    1.  The agent should first attempt to fix this by creating a highly simplified, print-specific CSS stylesheet () in  to force a plain, single-column layout.
+    2.  If that fails, the agent must research and implement a client-side JavaScript library (like ) to generate raw ESC/POS commands directly, bypassing the browser's print dialog entirely. This is the more robust but complex solution.
+    3.  Final verification will require a screenshot of the print preview dialog, but the user will need to confirm the physical printout.
 -   **User Testing Done**: N
 
 **All Pending/In progress Issue list**:
--   **Issue 1: AI Forecast Endpoint Not Registered (P0)**
-    -   **Attempted fixes**: Restarting the server, checking the  file for the LLM key.
+-   **Issue 1: Fix USB Thermal Printer Formatting (P0)**
+    -   **Attempted fixes**: The agent has only begun investigating by reviewing .
     -   **Next debug checklist**:
-        1.  Open .
-        2.  The code for the forecast endpoint (previously from lines ~2795-2936) has already been cut.
-        3.  Paste this code block *before* the line  (around line 2724).
-        4.  Save the file. The server should hot-reload.
-        5.  Test the endpoint with the previous  command: .
-    -   **Why fix this issue and what will be achieved with the fix?**: This is a critical blocker for the new AI stock forecast feature. Fixing it will make the core prediction engine accessible to the frontend.
+        1.  Analyze the  function in . It currently uses , which is the root of the problem.
+        2.  **Approach A (Simple Fix):** Create an aggressive  stylesheet within the component to hide all non-essential elements and force a very basic, single-column, text-only layout. Test if this improves the output on the thermal printer.
+        3.  **Approach B (Robust Fix):** If Approach A fails, search for a client-side JavaScript library to generate raw ESC/POS printer commands.
+        4.  Integrate the chosen library into a new print function, replacing the  call. This function will construct the receipt text and convert it into a command buffer to be sent to the printer.
+    -   **Why fix this issue and what will be achieved with the fix?**: This is critical for business operations, as it will allow cashiers to print clean, professional receipts for customers using standard USB thermal printers.
     -   **Status**: IN PROGRESS
     -   **Is recurring issue?**: N
-    -   **Should Test frontend/backend/both after fix?**: Backend
+    -   **Should Test frontend/backend/both after fix?**: Frontend
     -   **Blocked on other issue**: None
 
 **In progress Task List**:
--   **Task 1: Finalize and Test the Feature Batch (P0)**
-    -   **Where to resume**: Resume after fixing the forecast endpoint (Issue 1). The next step is a full end-to-end test of all recently implemented features.
-    -   **What will be achieved with this?**: This will complete and verify the following user requests:
-        1.  **AI Stock Forecast**: A new Prediksi tab in Analytics will show demand forecasts.
-        2.  **Terminology Change**: All UI references to Produk will be consistently changed to Barang.
-        3.  **Purchase Flow Update**: Adding a new barang will require an  and .
-        4.  **Dashboard Metric Fix**: Barang Masuk/Keluar metrics will exclude data from imports.
-    -   **Status**: IN PROGRESS
-    -   **Should Test frontend/backend/both after fix?**: Both
-    -   **Blocked on something**: Blocked on Issue 1: AI Forecast Endpoint Not Registered.
+-   None.
 
 **Upcoming and Future Tasks**
--   None. The current task list is extensive and should be completed and verified first.
+-   None have been specified by the user. The agent should focus on resolving the printing issue and then ask the user for the next set of priorities.
 
 **Completed work in this session**
--   **Role-Based Access Control (DONE)**: Implemented Manager and Karyawan Kantor roles with backend permission checks and a role-filtered sidebar.
--   **Audit Trail Feature (DONE)**: Created a new page and backend endpoints to log and display all critical user actions ().
--   **Dashboard Overhaul (DONE)**: Added a Nilai Aset Bersih card, stock in/out metrics (logic updated), and a  pie chart showing inventory value per warehouse.
--   **POS Enhancements (DONE)**: Added a daily sales summary modal, display of HPP on product cards, and a stock transfer feature for cashiers.
--   **Page & UI Consolidation (DONE)**: Merged the Armada (Vehicles) management page into a tab within the Kanvaser page, and removed the old standalone route.
--   **Report Generation Fixes (DONE)**: Fixed a critical bug preventing PDF export in  by correcting the  import and usage. Improved CSV export format.
--   **CSS Standardization (DONE)**: Fixed the layout and styling of the  page to match the rest of the application.
+-   **AI Feature Fixed**: Resolved a  on the  endpoint caused by an incorrect  import.
+-   **Major Backend Refactoring**: Successfully decomposed the monolithic  into a modular structure with directories for , , and . Verified with full regression testing.
+-   **Bug Fix**: Corrected a login redirection bug where Karyawan Kantor users were incorrectly sent to the POS page instead of the admin dashboard.
+-   **Feature Batch 1 Implemented & Tested**:
+    -   **POS Returns/Exchanges**: Added a complete workflow for returning or exchanging items, which updates inventory and the original transaction record.
+    -   **Custom PDF Headers**: Implemented a custom header with store details for all exported PDF reports.
+    -   **Receipt Note**: Added a return policy notice to the printed receipt.
+-   **Feature Batch 2 Implemented & Tested**:
+    -   **Personal Loans & Farmer Debts**: Created new pages and backend logic to track personal loans and farmer debts.
+    -   **Dashboard Metric Update**: The Nilai Aset Bersih (Net Asset Value) now correctly includes loan and debt totals.
+    -   **Detailed Transactions Page**: Created a new page for viewing detailed transaction histories for the day.
+    -   **POS UI Enhancements**: Upgraded the stock transfer product selector to a search input for improved usability.
+-   **Code Cleanup**: Completed the renaming of all Produk instances to Barang across the entire frontend.
+-   **Testing Agent Fixes**: The testing agent identified and automatically fixed two bugs: a permissions error for  on a dashboard endpoint and an undefined variable in .
 
 **Earlier issues found/mentioned but not fixed**
 -   None.
@@ -81,115 +85,67 @@ A comprehensive, full-stack business management application. Recent major additi
 
 
 **Key Technical Concepts**
--   **Backend**: FastAPI, Motor (MongoDB), Pydantic, JWT.
--   **Frontend**: React, React Router, Tailwind CSS, Shadcn/UI,  (for charts).
--   **AI Integration**: OpenAI (via ) for stock forecasting.
--   **Data Handling**: Server-side pagination,  &  for PDF exports,  for CSV generation.
+-   **Backend**: FastAPI, Motor (Async MongoDB), Pydantic, JWT, Modular Router Architecture.
+-   **Frontend**: React, React Router, Tailwind CSS, Shadcn/UI, .
+-   **Printing**: Currently uses . Needs to be migrated to a raw command approach (e.g., using **ESC/POS** commands) for thermal printer compatibility.
+-   **AI Integration**: OpenAI via  for stock forecasting.
 
 **key DB schema**
--   : **(New Collection)** 
--   : **(New Collection)** 
--   : Added  to link a partner store to a delivery vehicle.
--   : The  field now supports manager and karyawan_kantor.
--   : Purchases within a supplier now store  and .
+-   : Modified to include  (e.g., 'completed', 'returned'), , and updated  and  upon return/exchange.
+-   : **(New Collection)** .
+-   : **(New Collection)** .
 
 **changes in tech stack**
--   **Backend**: Added usage: openai [-h] [-v] [-b API_BASE] [-k API_KEY] [-p PROXY [PROXY ...]]
-              [-o ORGANIZATION] [-t {openai,azure}]
-              [--api-version API_VERSION] [--azure-endpoint AZURE_ENDPOINT]
-              [--azure-ad-token AZURE_AD_TOKEN] [-V]
-              {api,tools,migrate,grit} ...
-
-positional arguments:
-  {api,tools,migrate,grit}
-    api                 Direct API calls
-    tools               Client side tools for convenience
-
-options:
-  -h, --help            show this help message and exit
-  -v, --verbose         Set verbosity.
-  -b API_BASE, --api-base API_BASE
-                        What API base url to use.
-  -k API_KEY, --api-key API_KEY
-                        What API key to use.
-  -p PROXY [PROXY ...], --proxy PROXY [PROXY ...]
-                        What proxy to use.
-  -o ORGANIZATION, --organization ORGANIZATION
-                        Which organization to run as (will use your default
-                        organization if not specified)
-  -t {openai,azure}, --api-type {openai,azure}
-                        The backend API to call, must be `openai` or `azure`
-  --api-version API_VERSION
-                        The Azure API version, e.g.
-                        'https://learn.microsoft.com/en-us/azure/ai-
-                        services/openai/reference#rest-api-versioning'
-  --azure-endpoint AZURE_ENDPOINT
-                        The Azure endpoint, e.g.
-                        'https://endpoint.openai.azure.com'
-  --azure-ad-token AZURE_AD_TOKEN
-                        A token from Azure Active Directory,
-                        https://www.microsoft.com/en-
-                        us/security/business/identity-access/microsoft-entra-
-                        id
-  -V, --version         show program's version number and exit.
--   **Frontend**: Added , , , .
+-   None. A new client-side printing library might be added.
 
 **All files of reference**
--   **/app/backend/server.py**: Contains all business logic, including the new forecast endpoint that needs to be moved.
--   **/app/backend/.env**: Contains the  needed for the forecast feature.
--   **/app/frontend/src/pages/admin/Analytics.js**: Contains the new Prediksi tab that will consume the forecast data.
--   **/app/frontend/src/pages/admin/Products.js**: Contains the UI for renaming Produk to Barang and the new invoice/due date fields.
+-   **/app/frontend/src/components/cashier/ReceiptPreview.js**: The primary file for fixing the USB printing issue.
+-   **/app/frontend/src/pages/cashier/POS.js**: Contains the Cetak Struk button and the context for the receipt data.
+-   **/app/frontend/src/pages/admin/Login.js**: The login redirect logic was fixed here.
+-   **/app/backend/routers/transaction_routes.py**: Contains the backend logic for returns and exchanges.
 
 **Areas that need refactoring**:
--    is now over 3000 lines long and urgently needs to be broken down into a proper project structure (e.g., , , ). The addition of multiple large features has made it very difficult to maintain.
--   The widespread Produk -> Barang renaming highlights the need for a centralized string/localization file ( or a simple constants file) to avoid large, repetitive search-and-replace operations in the future.
+-   The major refactoring of  is complete.
+-   A centralized file for strings/localization would still be beneficial to avoid future mass search-and-replace operations, but this is a low-priority enhancement.
 
 **key api endpoints**
--    **(NEEDS FIXING)**
--    (CRUD endpoints)
--   
--   
--   
--    (Logic updated to exclude imports and add new metrics)
--   
--   
--    (Logic updated to accept  and )
+-    **(New)**: Searches for transactions by ID for the return/exchange feature.
+-    **(New)**: Processes a return or exchange for a given transaction.
+-    **(New)**: Fetches detailed transaction data for the day.
+-    **(New)**: CRUD endpoints for managing personal loans.
+-    **(New)**: CRUD endpoints for managing farmer debts.
 
 **Critical Info for New Agent**
--   Your immediate and highest priority task is to fix the broken  endpoint. The problem is already diagnosed: you just need to move the function definition in  to be *before* the  line.
--   After fixing the endpoint, conduct a thorough test of the entire batch of features implemented in the last session, including the AI forecast, the Produk -> Barang renaming, the new purchase fields, and the updated dashboard metrics.
--   The  is required for the forecast feature and is already present in . Do not modify it.
--   Use the corrected credentials for testing.
+-   Your highest priority is to solve the USB thermal printing problem described in Last working item. The current  method in  is not suitable. You must investigate generating raw printer commands (like ESC/POS) from client-side JavaScript or creating a highly simplified print-only stylesheet as an alternative.
+-   The application is in a stable state. All other features have been implemented and passed extensive testing via the .
+-   Do not regress the fix for the Karyawan Kantor role login. They, along with Manager, should be redirected to the admin dashboard, not the POS.
 
 **documents and test reports created in this job**
--    (Continuously updated)
--    (Latest successful test run before the forecast feature)
+-    (Updated with all new features)
+-    (Last successful test run, 26/26 tests passed)
+-    (Last successful test run, 34/34 tests passed)
+-    (Last successful test run, 23/23 tests passed)
 
 **Last 10 User Messages and any pending HUMAN messages**
-1.  **User**: Requests to merge the Armada page with Canvasser, fix the  CSS, add Manager & Karyawan Kantor roles with specific permissions, and add an audit trail.
-2.  **Agent**: Asks for clarification on role permissions.
-3.  **User**: Provides detailed permissions for the new roles.
-4.  **Agent**: Presents a plan to implement all requests, which is approved by the user.
-5.  **User**: After the features are implemented, requests 6 new enhancements: combine vehicle/canvasser pages (agent notes this is done), create a dashboard pie chart for warehouse value, add new asset metrics, add POS daily summary/HPP/stock transfer, show per-invoice due dates, and fix the PDF export.
-6.  **Agent**: Asks for clarification on the pie chart library and timeframe for stock movement metrics.
-7.  **User**: Specifies  for the pie chart and per day for the metrics.
-8.  **Agent**: Presents a plan for the 6 enhancements, which the user approves.
-9.  **User**: After implementation, requests an AI-powered stock forecast, to exclude import data from stock metrics, to rename Produk to Barang, and to add invoice/due date fields to new purchases only.
-10. **Agent**: Asks for clarification on the AI integration type and location for the new feature.
-11. **User**: Specifies using an LLM for advanced prediction and placing it in the Analytics page.
-12. **Agent**: Proposes an integration plan using OpenAI via Emergent LLM Key.
-13. **User**: Approves the plan (opsi 1 aja).
-14. **Agent**: Starts implementation and runs into the  error on the forecast endpoint, which is the current state.
+-   **User (Msg 176)**: Reports 4 new items: 1) Add POS return/exchange feature. 2) Add return policy text to receipt. 3) Add custom PDF header. 4) **Bug:** Karyawan Kantor account has wrong permissions/redirect.
+-   **Agent (Msg 177)**: Proposes a plan to fix the bug and implement the three new features.
+-   **User (Msg 179)**: Approves the plan (sudah sesuai).
+-   **Agent (Msg 180-275)**: Debugs and fixes the role bug, then implements and tests all three features successfully, including using the testing agent which finds and fixes two additional minor bugs.
+-   **Agent (Msg 275)**: Finishes the task and summarizes the completed work.
+-   **User (Msg 276)**: Reports a new problem: USB printing for receipts is poorly formatted, unlike Bluetooth printing.
+-   **Agent (Msg 277)**: Asks for clarification on the printer model, which button is used, and the specific formatting issues.
+-   **User (Msg 279)**: Provides details: 58mm thermal printer, the standard cetak struk button, and issues are misaligned text, small font, and incorrect layout.
+-   **Agent (Msg 280-283)**: Acknowledges the issue and begins investigating the code in .
 
 **Project Health Check:**
--   **Broken**: The new  endpoint is currently broken (returns 404).
+-   **Broken**: The USB receipt printing functionality is not working correctly.
 -   **Mocked**: None.
 
 **3rd Party Integrations**
 -   **OpenAI GPT-4o**: For AI-powered stock forecasting. Uses the **Emergent LLM Key**.
 
 **Testing status**
--   **Testing agent used after significant changes**: YES. The last full run was successful before the AI forecast feature was added.
+-   **Testing agent used after significant changes**: YES. The agent was used multiple times after each major feature batch and refactoring, successfully verifying application stability.
 -   **Troubleshoot agent used after agent stuck in loop**: NO
 -   **Test files created**: []
 -   **Known regressions**: None.
@@ -198,9 +154,12 @@ options:
 -   **Admin**:
     -   Email: 
     -   Password: 
+-   **Karyawan Kantor (Office Staff) - for testing fixed permissions**:
+    -   Email: 
+    -   Password: 
 -   **Canvasser**:
     -   Email: 
     -   Password: 
 
 **What agent forgot to execute**
--   The agent did not forget anything. It was actively debugging a critical bug in a multi-step implementation when the session ended. The final step of the fix (pasting the code in the correct location) was not completed.</analysis>
+-   The agent has not forgotten anything. It was actively investigating the user's most recent request when the session ended.</analysis>

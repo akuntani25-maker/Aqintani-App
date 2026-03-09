@@ -1,0 +1,104 @@
+{
+  "summary": "Iteration 22 Testing: USB/Bluetooth thermal printer buttons and Canvasser 'Cetak Struk' button. All 10 features tested and PASSED. Frontend only testing - no backend issues.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/test_reports/iteration_22.json"
+  ],
+  "passed_tests": [
+    "Test #1: ReceiptPreview page loads with 'Cetak Struk USB' button (data-testid='usb-print-button') - PASS",
+    "Test #2: ReceiptPreview page has 'Cetak Bluetooth' button (data-testid='bluetooth-print-button') - PASS",
+    "Test #3: ReceiptPreview 'Kembali ke POS' back button works - PASS",
+    "Test #4: PartnerOrderReceipt page has 'Cetak Struk USB' button - PASS",
+    "Test #5: PartnerOrderReceipt page has 'Cetak Bluetooth' button - PASS",
+    "Test #6: PartnerOrderReceipt back button (default) navigates to /admin/partner-orders - PASS",
+    "Test #7: PartnerOrderReceipt with from=canvasser back button navigates to /canvasser - PASS",
+    "Test #8: Canvasser dashboard shows 'Cetak Struk' button on each order card (data-testid='print-btn-{order.id}') - PASS (found 2 print buttons)",
+    "Test #9: Clicking 'Cetak Struk' on canvasser dashboard navigates to /partner-receipt?id=ORDER_ID&from=canvasser - PASS",
+    "Test #10: Canvasser login (sahidin@aqintani.com/123456) redirects to /canvasser - PASS",
+    "Test #11: Admin login (admin@aqintani.com/admin123) works and redirects to /admin/dashboard - PASS",
+    "Test #12: POS page loads correctly for admin with products and action buttons (Rincian, Hutang Petani, Retur/Tukar) - PASS"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [],
+  "updated_files": [],
+  "success_rate": {
+    "backend": "N/A - Frontend only testing",
+    "frontend": "100% (12/12 tests)"
+  },
+  "test_credentials": {
+    "admin": "admin@aqintani.com / admin123",
+    "canvasser": "sahidin@aqintani.com / 123456",
+    "office_staff": "kantor@aqintani.com / kantor123"
+  },
+  "seed_data_created": "1 test transaction created during ReceiptPreview testing (id: 5ad74e31-b7c4-4757-a159-829bc7706ad6)",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iteration 22 verified USB/Bluetooth thermal printer implementation. Key findings: 1) ReceiptPreview.js has 'Cetak Struk USB' and 'Cetak Bluetooth' buttons using ThermalPrinter utility with ESC/POS commands via WebUSB/Web Bluetooth APIs, 2) PartnerOrderReceipt.js has same print buttons with dynamic back URL based on 'from' query param, 3) CanvasserDashboard.js has 'Cetak Struk' button on each order card that navigates to /partner-receipt?id=ORDER_ID&from=canvasser, 4) Both partner orders (UD. BAROKAH and UD. SARANA TANI) are in 'delivered' status with remaining=0. WebUSB/Bluetooth APIs require physical hardware and browser prompts - tested button presence/clickability only.",
+  "features_verified": {
+    "receipt_preview_usb_button": {
+      "selector": "[data-testid='usb-print-button']",
+      "text": "Cetak Struk USB",
+      "status": "WORKING"
+    },
+    "receipt_preview_bluetooth_button": {
+      "selector": "[data-testid='bluetooth-print-button']",
+      "text": "Cetak Bluetooth",
+      "status": "WORKING"
+    },
+    "partner_receipt_usb_button": {
+      "selector": "[data-testid='usb-print-button']",
+      "text": "Cetak Struk USB",
+      "status": "WORKING"
+    },
+    "partner_receipt_bluetooth_button": {
+      "selector": "[data-testid='bluetooth-print-button']",
+      "text": "Cetak Bluetooth",
+      "status": "WORKING"
+    },
+    "partner_receipt_back_navigation": {
+      "default_url": "/admin/partner-orders",
+      "from_canvasser_url": "/canvasser",
+      "status": "WORKING"
+    },
+    "canvasser_dashboard_cetak_struk": {
+      "selector": "[data-testid='print-btn-{order.id}']",
+      "text": "Cetak Struk",
+      "navigation_url": "/partner-receipt?id=ORDER_ID&from=canvasser",
+      "status": "WORKING"
+    },
+    "canvasser_login_redirect": {
+      "expected_url": "/canvasser",
+      "status": "WORKING"
+    },
+    "admin_login": {
+      "expected_url": "/admin/dashboard",
+      "status": "WORKING"
+    },
+    "pos_page_admin": {
+      "buttons": ["Rincian", "Hutang Petani", "Retur/Tukar"],
+      "status": "WORKING"
+    }
+  },
+  "known_partner_orders": [
+    {
+      "id": "061254de-33f2-4781-9136-cb6f818ef697",
+      "store": "UD. BAROKAH",
+      "status": "delivered",
+      "remaining": 0
+    },
+    {
+      "id": "4bc9f7ca-1445-47a8-a21c-7ea96f1f4e81",
+      "store": "UD. SARANA TANI",
+      "status": "delivered",
+      "remaining": 0
+    }
+  ]
+}
