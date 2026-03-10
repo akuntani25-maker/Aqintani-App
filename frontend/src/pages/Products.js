@@ -284,7 +284,7 @@ export const Products = () => {
                 )}
                 <div className="space-y-2">
                   <Label>Isi per Dus *</Label>
-                  <Input type="number" min="1" value={formData.items_per_box} onChange={(e) => setFormData({ ...formData, items_per_box: parseInt(e.target.value) || 1 })} required data-testid="product-items-per-box-input" />
+                  <Input type="number" min="0.1" step="0.1" value={formData.items_per_box} onChange={(e) => setFormData({ ...formData, items_per_box: parseFloat(e.target.value) || 1 })} required data-testid="product-items-per-box-input" />
                 </div>
               </div>
               {formData.stock > 0 && formData.items_per_box > 0 && (

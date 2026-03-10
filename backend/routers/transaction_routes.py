@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime, timezone, timedelta
 
 from database import db
-from auth import get_current_user, require_admin
+from auth import get_current_user, require_admin_panel_access, require_pos_access
 from models import (
     TransactionCreate, Transaction, TransactionItem,
     ReturnCreate
@@ -112,7 +112,7 @@ async def get_transaction(transaction_id: str, current_user: dict = Depends(get_
 
 # ============= RETURNS =============
 @router.post("/returns")
-async def create_return(data: ReturnCreate, admin: dict = Depends(require_admin)):
+async def create_return(data: ReturnCreate, admin: dict = Depends(require_pos_access)):
     now = datetime.now(timezone.utc)
     return_doc = {
         "id": str(uuid.uuid4()), "return_number": f"RTN{now.strftime('%Y%m%d%H%M%S')}",
@@ -145,7 +145,7 @@ async def create_return(data: ReturnCreate, admin: dict = Depends(require_admin)
 
 
 @router.get("/returns")
-async def get_returns(source_id: str = None, admin: dict = Depends(require_admin)):
+async def get_returns(source_id: str = None, admin: dict = Depends(require_admin_panel_access)):
     query = {}
     if source_id:
         query["source_id"] = source_id

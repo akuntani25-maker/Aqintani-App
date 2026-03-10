@@ -88,7 +88,7 @@ class ProductCreate(BaseModel):
     price: float
     cost_price: float
     box_price: Optional[float] = 0
-    items_per_box: int = 1
+    items_per_box: float = 1
     initial_paid: Optional[float] = 0
     expiry_date: Optional[str] = ""
     batch_number: Optional[str] = ""
@@ -110,7 +110,7 @@ class Product(BaseModel):
     price: float
     cost_price: float
     box_price: float = 0
-    items_per_box: int = 1
+    items_per_box: float = 1
     expiry_date: str
     batch_number: str
     description: str
@@ -289,7 +289,7 @@ class StockTransferCreate(BaseModel):
     product_id: str
     from_warehouse_id: str
     to_warehouse_id: str
-    quantity: int
+    quantity: float
     notes: Optional[str] = ""
 
 

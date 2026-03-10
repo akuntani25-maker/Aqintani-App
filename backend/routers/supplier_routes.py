@@ -7,7 +7,7 @@ from datetime import datetime, timezone, timedelta
 from starlette.responses import StreamingResponse
 
 from database import db
-from auth import get_current_user, require_admin
+from auth import get_current_user, require_admin_panel_access
 from models import SupplierCreate, Supplier, PurchaseCreate, Purchase
 from services import ensure_warehouse_stock, recalculate_product_stock
 
@@ -34,7 +34,7 @@ async def get_suppliers(
 
 
 @router.post("/suppliers", response_model=Supplier)
-async def create_supplier(data: SupplierCreate, admin: dict = Depends(require_admin)):
+async def create_supplier(data: SupplierCreate, admin: dict = Depends(require_admin_panel_access)):
     supplier_doc = {
         "id": str(uuid.uuid4()),
         "name": data.name,
@@ -49,7 +49,7 @@ async def create_supplier(data: SupplierCreate, admin: dict = Depends(require_ad
 
 
 @router.put("/suppliers/{supplier_id}", response_model=Supplier)
-async def update_supplier(supplier_id: str, data: SupplierCreate, admin: dict = Depends(require_admin)):
+async def update_supplier(supplier_id: str, data: SupplierCreate, admin: dict = Depends(require_admin_panel_access)):
     result = await db.suppliers.find_one_and_update(
         {"id": supplier_id},
         {"$set": data.model_dump()},
@@ -62,7 +62,7 @@ async def update_supplier(supplier_id: str, data: SupplierCreate, admin: dict = 
 
 
 @router.delete("/suppliers/{supplier_id}")
-async def delete_supplier(supplier_id: str, admin: dict = Depends(require_admin)):
+async def delete_supplier(supplier_id: str, admin: dict = Depends(require_admin_panel_access)):
     result = await db.suppliers.delete_one({"id": supplier_id})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Supplier not found")
@@ -70,7 +70,7 @@ async def delete_supplier(supplier_id: str, admin: dict = Depends(require_admin)
 
 
 @router.get("/suppliers/{supplier_id}/purchases")
-async def get_supplier_purchases(supplier_id: str, admin: dict = Depends(require_admin)):
+async def get_supplier_purchases(supplier_id: str, admin: dict = Depends(require_admin_panel_access)):
     purchases = await db.purchases.find({"supplier_id": supplier_id}, {"_id": 0}).sort("created_at", -1).to_list(1000)
     return purchases
 
@@ -85,7 +85,7 @@ async def get_supplier_payments(supplier_id: str, current_user: dict = Depends(g
 
 
 @router.get("/suppliers/{supplier_id}/debt")
-async def get_supplier_debt(supplier_id: str, admin: dict = Depends(require_admin)):
+async def get_supplier_debt(supplier_id: str, admin: dict = Depends(require_admin_panel_access)):
     purchases = await db.purchases.find({"supplier_id": supplier_id}, {"_id": 0}).to_list(1000)
     total_purchases = sum(p.get("total", 0) for p in purchases)
     total_paid = sum(p.get("paid", 0) for p in purchases)
@@ -101,7 +101,7 @@ async def get_supplier_debt(supplier_id: str, admin: dict = Depends(require_admi
 
 # ============= PURCHASES =============
 @router.get("/purchases")
-async def get_purchases(supplier_id: Optional[str] = None, admin: dict = Depends(require_admin)):
+async def get_purchases(supplier_id: Optional[str] = None, admin: dict = Depends(require_admin_panel_access)):
     query = {}
     if supplier_id:
         query["supplier_id"] = supplier_id
@@ -110,7 +110,7 @@ async def get_purchases(supplier_id: Optional[str] = None, admin: dict = Depends
 
 
 @router.put("/purchases/{purchase_id}/due-date")
-async def set_purchase_due_date(purchase_id: str, due_date: str = "", admin: dict = Depends(require_admin)):
+async def set_purchase_due_date(purchase_id: str, due_date: str = "", admin: dict = Depends(require_admin_panel_access)):
     update = {"$set": {"due_date": due_date}} if due_date else {"$unset": {"due_date": ""}}
     result = await db.purchases.update_one({"id": purchase_id}, update)
     if result.matched_count == 0:
@@ -119,7 +119,7 @@ async def set_purchase_due_date(purchase_id: str, due_date: str = "", admin: dic
 
 
 @router.post("/purchases/{purchase_id}/return")
-async def process_purchase_return(purchase_id: str, request: Request, admin: dict = Depends(require_admin)):
+async def process_purchase_return(purchase_id: str, request: Request, admin: dict = Depends(require_admin_panel_access)):
     body = await request.json()
     items = body.get("items", [])
     notes = body.get("notes", "")
@@ -177,7 +177,7 @@ async def process_purchase_return(purchase_id: str, request: Request, admin: dic
 
 
 @router.post("/purchases", response_model=Purchase)
-async def create_purchase(data: PurchaseCreate, admin: dict = Depends(require_admin)):
+async def create_purchase(data: PurchaseCreate, admin: dict = Depends(require_admin_panel_access)):
     supplier = await db.suppliers.find_one({"id": data.supplier_id}, {"_id": 0})
     if not supplier:
         raise HTTPException(status_code=404, detail="Supplier not found")
@@ -205,7 +205,7 @@ async def create_purchase(data: PurchaseCreate, admin: dict = Depends(require_ad
 
 
 @router.post("/purchases/{purchase_id}/pay")
-async def pay_purchase(purchase_id: str, amount: float, admin: dict = Depends(require_admin)):
+async def pay_purchase(purchase_id: str, amount: float, admin: dict = Depends(require_admin_panel_access)):
     purchase = await db.purchases.find_one({"id": purchase_id})
     if not purchase:
         raise HTTPException(status_code=404, detail="Purchase not found")
@@ -226,7 +226,7 @@ async def pay_purchase(purchase_id: str, amount: float, admin: dict = Depends(re
 
 
 @router.delete("/purchases/{purchase_id}")
-async def delete_purchase(purchase_id: str, admin: dict = Depends(require_admin)):
+async def delete_purchase(purchase_id: str, admin: dict = Depends(require_admin_panel_access)):
     result = await db.purchases.delete_one({"id": purchase_id})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Purchase not found")
@@ -247,7 +247,7 @@ async def get_payment_history(type: Optional[str] = None, reference_id: Optional
 
 # ============= SUPPLIER DEBT MANAGEMENT =============
 @router.get("/supplier-debts/overview")
-async def get_supplier_debts_overview(admin: dict = Depends(require_admin)):
+async def get_supplier_debts_overview(admin: dict = Depends(require_admin_panel_access)):
     suppliers = await db.suppliers.find({}, {"_id": 0}).sort("name", 1).to_list(1000)
     purchases = await db.purchases.find({}, {"_id": 0}).to_list(10000)
     supplier_purchases = {}
@@ -281,7 +281,7 @@ async def get_supplier_debts_overview(admin: dict = Depends(require_admin)):
 
 
 @router.get("/supplier-debts/summary")
-async def get_supplier_debts_summary(admin: dict = Depends(require_admin)):
+async def get_supplier_debts_summary(admin: dict = Depends(require_admin_panel_access)):
     purchases = await db.purchases.find({}, {"_id": 0}).to_list(10000)
     total_debt = sum(max(0, p.get("remaining", 0)) for p in purchases)
     suppliers_with_debt = len(set(p["supplier_id"] for p in purchases if p.get("remaining", 0) > 0))
@@ -302,7 +302,7 @@ async def get_supplier_debts_summary(admin: dict = Depends(require_admin)):
 
 
 @router.get("/supplier-debts/{supplier_id}/purchases")
-async def get_supplier_unpaid_purchases(supplier_id: str, show_all: bool = False, admin: dict = Depends(require_admin)):
+async def get_supplier_unpaid_purchases(supplier_id: str, show_all: bool = False, admin: dict = Depends(require_admin_panel_access)):
     query = {"supplier_id": supplier_id}
     if not show_all:
         query["remaining"] = {"$gt": 0}
@@ -311,7 +311,7 @@ async def get_supplier_unpaid_purchases(supplier_id: str, show_all: bool = False
 
 
 @router.post("/supplier-debts/{supplier_id}/pay")
-async def pay_supplier_debt(supplier_id: str, amount: float, notes: str = "", admin: dict = Depends(require_admin)):
+async def pay_supplier_debt(supplier_id: str, amount: float, notes: str = "", admin: dict = Depends(require_admin_panel_access)):
     supplier = await db.suppliers.find_one({"id": supplier_id}, {"_id": 0})
     if not supplier:
         raise HTTPException(status_code=404, detail="Supplier not found")
@@ -352,7 +352,7 @@ async def pay_supplier_debt(supplier_id: str, amount: float, notes: str = "", ad
 
 
 @router.get("/supplier-debts/export-csv")
-async def export_supplier_debts_csv(admin: dict = Depends(require_admin)):
+async def export_supplier_debts_csv(admin: dict = Depends(require_admin_panel_access)):
     suppliers = await db.suppliers.find({}, {"_id": 0}).sort("name", 1).to_list(1000)
     purchases = await db.purchases.find({}, {"_id": 0}).to_list(10000)
     supplier_purchases = {}

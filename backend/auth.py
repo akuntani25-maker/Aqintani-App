@@ -71,3 +71,10 @@ async def require_admin_panel_access(current_user: dict = Depends(get_current_us
     if current_user.get("role") not in ("admin", "manager", "office_staff"):
         raise HTTPException(status_code=403, detail="Admin panel access required")
     return current_user
+
+
+async def require_pos_access(current_user: dict = Depends(get_current_user)):
+    """Allow admin, manager, office_staff, and cashier to access POS features"""
+    if current_user.get("role") not in ("admin", "manager", "office_staff", "cashier"):
+        raise HTTPException(status_code=403, detail="POS access required")
+    return current_user

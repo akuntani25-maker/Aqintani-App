@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime, timezone
 
 from database import db
-from auth import get_current_user, require_admin
+from auth import get_current_user, require_admin_panel_access
 from models import (
     PartnerStoreCreate, PartnerStore,
     PartnerOrderCreate, PartnerOrder
@@ -21,7 +21,7 @@ async def get_partner_stores(current_user: dict = Depends(get_current_user)):
 
 
 @router.post("/partner-stores", response_model=PartnerStore)
-async def create_partner_store(data: PartnerStoreCreate, admin: dict = Depends(require_admin)):
+async def create_partner_store(data: PartnerStoreCreate, admin: dict = Depends(require_admin_panel_access)):
     store_doc = {
         "id": str(uuid.uuid4()), **data.model_dump(),
         "current_debt": 0, "created_at": datetime.now(timezone.utc).isoformat()
@@ -31,7 +31,7 @@ async def create_partner_store(data: PartnerStoreCreate, admin: dict = Depends(r
 
 
 @router.put("/partner-stores/{store_id}", response_model=PartnerStore)
-async def update_partner_store(store_id: str, data: PartnerStoreCreate, admin: dict = Depends(require_admin)):
+async def update_partner_store(store_id: str, data: PartnerStoreCreate, admin: dict = Depends(require_admin_panel_access)):
     result = await db.partner_stores.find_one_and_update(
         {"id": store_id}, {"$set": data.model_dump()},
         return_document=True, projection={"_id": 0}
@@ -42,7 +42,7 @@ async def update_partner_store(store_id: str, data: PartnerStoreCreate, admin: d
 
 
 @router.delete("/partner-stores/{store_id}")
-async def delete_partner_store(store_id: str, admin: dict = Depends(require_admin)):
+async def delete_partner_store(store_id: str, admin: dict = Depends(require_admin_panel_access)):
     result = await db.partner_stores.delete_one({"id": store_id})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Partner store not found")
@@ -50,7 +50,7 @@ async def delete_partner_store(store_id: str, admin: dict = Depends(require_admi
 
 
 @router.post("/partner-stores/{store_id}/pay")
-async def pay_partner_store(store_id: str, amount: float, notes: str = "", admin: dict = Depends(require_admin)):
+async def pay_partner_store(store_id: str, amount: float, notes: str = "", admin: dict = Depends(require_admin_panel_access)):
     store = await db.partner_stores.find_one({"id": store_id})
     if not store:
         raise HTTPException(status_code=404, detail="Partner store not found")
@@ -154,7 +154,7 @@ async def update_order_status(order_id: str, order_status: str = Query(..., alia
 
 
 @router.delete("/partner-orders/{order_id}")
-async def delete_partner_order(order_id: str, admin: dict = Depends(require_admin)):
+async def delete_partner_order(order_id: str, admin: dict = Depends(require_admin_panel_access)):
     order = await db.partner_orders.find_one({"id": order_id}, {"_id": 0})
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
@@ -198,7 +198,7 @@ async def get_partner_prices(partner_store_id: Optional[str] = None, current_use
 
 
 @router.put("/partner-prices")
-async def set_partner_price(partner_store_id: str, product_id: str, custom_price: float, admin: dict = Depends(require_admin)):
+async def set_partner_price(partner_store_id: str, product_id: str, custom_price: float, admin: dict = Depends(require_admin_panel_access)):
     await db.partner_prices.update_one(
         {"partner_store_id": partner_store_id, "product_id": product_id},
         {"$set": {"custom_price": custom_price, "updated_at": datetime.now(timezone.utc).isoformat()}},
@@ -208,6 +208,6 @@ async def set_partner_price(partner_store_id: str, product_id: str, custom_price
 
 
 @router.delete("/partner-prices")
-async def delete_partner_price(partner_store_id: str, product_id: str, admin: dict = Depends(require_admin)):
+async def delete_partner_price(partner_store_id: str, product_id: str, admin: dict = Depends(require_admin_panel_access)):
     await db.partner_prices.delete_one({"partner_store_id": partner_store_id, "product_id": product_id})
     return {"message": "Harga mitra dihapus"}

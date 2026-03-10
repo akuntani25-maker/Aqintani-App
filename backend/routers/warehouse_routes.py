@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime, timezone
 
 from database import db
-from auth import get_current_user, require_admin
+from auth import get_current_user, require_admin_panel_access, require_pos_access
 from models import StockAdjustmentCreate, StockTransferCreate
 from services import recalculate_product_stock, ensure_warehouse_stock
 
@@ -40,7 +40,7 @@ async def get_warehouse_stock(
 
 
 @router.put("/warehouse-stock")
-async def update_warehouse_stock(product_id: str, warehouse_id: str, stock: int, admin: dict = Depends(require_admin)):
+async def update_warehouse_stock(product_id: str, warehouse_id: str, stock: int, admin: dict = Depends(require_admin_panel_access)):
     await db.warehouse_stock.update_one(
         {"product_id": product_id, "warehouse_id": warehouse_id},
         {"$set": {"stock": stock}}, upsert=True
@@ -50,7 +50,7 @@ async def update_warehouse_stock(product_id: str, warehouse_id: str, stock: int,
 
 
 @router.post("/stock-adjustments")
-async def create_stock_adjustment(data: StockAdjustmentCreate, admin: dict = Depends(require_admin)):
+async def create_stock_adjustment(data: StockAdjustmentCreate, admin: dict = Depends(require_admin_panel_access)):
     product = await db.products.find_one({"id": data.product_id}, {"_id": 0})
     if not product:
         raise HTTPException(status_code=404, detail="Produk tidak ditemukan")
@@ -74,7 +74,7 @@ async def create_stock_adjustment(data: StockAdjustmentCreate, admin: dict = Dep
 
 
 @router.get("/stock-adjustments")
-async def get_stock_adjustments(product_id: Optional[str] = None, admin: dict = Depends(require_admin)):
+async def get_stock_adjustments(product_id: Optional[str] = None, admin: dict = Depends(require_admin_panel_access)):
     query = {}
     if product_id:
         query["product_id"] = product_id
@@ -83,7 +83,7 @@ async def get_stock_adjustments(product_id: Optional[str] = None, admin: dict = 
 
 
 @router.get("/stock-transfers")
-async def get_stock_transfers(product_id: Optional[str] = None, admin: dict = Depends(require_admin)):
+async def get_stock_transfers(product_id: Optional[str] = None, admin: dict = Depends(require_pos_access)):
     query = {}
     if product_id:
         query["product_id"] = product_id
@@ -92,7 +92,7 @@ async def get_stock_transfers(product_id: Optional[str] = None, admin: dict = De
 
 
 @router.post("/stock-transfers")
-async def create_stock_transfer(data: StockTransferCreate, admin: dict = Depends(require_admin)):
+async def create_stock_transfer(data: StockTransferCreate, admin: dict = Depends(require_pos_access)):
     if data.from_warehouse_id == data.to_warehouse_id:
         raise HTTPException(status_code=400, detail="Gudang asal dan tujuan tidak boleh sama")
     if data.quantity <= 0:
@@ -114,9 +114,9 @@ async def create_stock_transfer(data: StockTransferCreate, admin: dict = Depends
     if from_unit == "dus" and to_unit == "satuan":
         converted_qty = data.quantity * items_per_box
     elif from_unit == "satuan" and to_unit == "dus":
-        if data.quantity % items_per_box != 0:
+        if items_per_box > 0 and data.quantity % items_per_box != 0:
             raise HTTPException(status_code=400, detail=f"Jumlah satuan ({data.quantity}) harus kelipatan {items_per_box} untuk konversi ke dus")
-        converted_qty = data.quantity // items_per_box
+        converted_qty = data.quantity / items_per_box if items_per_box > 0 else data.quantity
     else:
         converted_qty = data.quantity
     await db.warehouse_stock.update_one(

@@ -107,7 +107,7 @@ async def get_due_calendar(year: int, month: int, admin: dict = Depends(require_
 
 # ============= REPORTS =============
 @router.get("/reports/daily")
-async def get_daily_report(date: str, admin: dict = Depends(require_admin)):
+async def get_daily_report(date: str, admin: dict = Depends(require_admin_panel_access)):
     transactions = await db.transactions.find({"date": date}, {"_id": 0}).to_list(1000)
     total_sales = sum(t["total"] for t in transactions)
     payment_methods = {}
@@ -122,7 +122,7 @@ async def get_daily_report(date: str, admin: dict = Depends(require_admin)):
 
 
 @router.get("/reports/monthly")
-async def get_monthly_report(year: int, month: int, admin: dict = Depends(require_admin)):
+async def get_monthly_report(year: int, month: int, admin: dict = Depends(require_admin_panel_access)):
     start_date = f"{year}-{month:02d}-01"
     end_date = f"{year+1}-01-01" if month == 12 else f"{year}-{month+1:02d}-01"
     transactions = await db.transactions.find({"date": {"$gte": start_date, "$lt": end_date}}, {"_id": 0}).to_list(10000)
@@ -135,7 +135,7 @@ async def get_monthly_report(year: int, month: int, admin: dict = Depends(requir
 
 
 @router.get("/reports/sales-detail")
-async def get_sales_detail_report(date_from: str, date_to: str, admin: dict = Depends(require_admin)):
+async def get_sales_detail_report(date_from: str, date_to: str, admin: dict = Depends(require_admin_panel_access)):
     transactions = await db.transactions.find({"date": {"$gte": date_from, "$lte": date_to}}, {"_id": 0}).to_list(10000)
     product_ids = set()
     for t in transactions:
@@ -172,7 +172,7 @@ async def get_sales_detail_report(date_from: str, date_to: str, admin: dict = De
 
 
 @router.get("/reports/partner-sales-detail")
-async def get_partner_sales_detail_report(date_from: str, date_to: str, admin: dict = Depends(require_admin)):
+async def get_partner_sales_detail_report(date_from: str, date_to: str, admin: dict = Depends(require_admin_panel_access)):
     orders = await db.partner_orders.find({"date": {"$gte": date_from, "$lte": date_to}}, {"_id": 0}).to_list(10000)
     product_ids = set()
     for o in orders:
@@ -217,7 +217,7 @@ async def get_partner_sales_detail_report(date_from: str, date_to: str, admin: d
 
 
 @router.get("/reports/best-sellers")
-async def get_best_sellers_report(date_from: str, date_to: str, admin: dict = Depends(require_admin)):
+async def get_best_sellers_report(date_from: str, date_to: str, admin: dict = Depends(require_admin_panel_access)):
     transactions = await db.transactions.find({"date": {"$gte": date_from, "$lte": date_to}}, {"_id": 0}).to_list(10000)
     orders = await db.partner_orders.find({"date": {"$gte": date_from, "$lte": date_to}}, {"_id": 0}).to_list(10000)
     all_product_ids = set()
@@ -280,7 +280,7 @@ async def get_best_sellers_report(date_from: str, date_to: str, admin: dict = De
 
 # ============= ANALYTICS =============
 @router.get("/analytics/products")
-async def get_product_analytics(admin: dict = Depends(require_admin)):
+async def get_product_analytics(admin: dict = Depends(require_admin_panel_access)):
     thirty_days_ago = (datetime.now(timezone.utc) - timedelta(days=30)).strftime("%Y-%m-%d")
     transactions = await db.transactions.find({"date": {"$gte": thirty_days_ago}}, {"_id": 0, "items": 1}).to_list(10000)
     product_sales = {}
@@ -298,7 +298,7 @@ async def get_product_analytics(admin: dict = Depends(require_admin)):
 
 
 @router.get("/analytics/summary")
-async def get_analytics_summary(admin: dict = Depends(require_admin)):
+async def get_analytics_summary(admin: dict = Depends(require_admin_panel_access)):
     now = datetime.now(timezone.utc)
     this_month_start = now.strftime("%Y-%m-01")
     thirty_days_ago = (now - timedelta(days=30)).strftime("%Y-%m-%d")
@@ -346,7 +346,7 @@ async def get_analytics_summary(admin: dict = Depends(require_admin)):
 
 # ============= AI STOCK FORECAST =============
 @router.post("/forecast/stock")
-async def forecast_stock(admin: dict = Depends(require_admin)):
+async def forecast_stock(admin: dict = Depends(require_admin_panel_access)):
     from emergentintegrations.llm.openai import LlmChat, UserMessage
 
     now = datetime.now(timezone.utc)

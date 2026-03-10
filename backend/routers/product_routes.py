@@ -4,7 +4,7 @@ import uuid
 from datetime import datetime, timezone
 
 from database import db
-from auth import get_current_user, require_admin
+from auth import get_current_user, require_admin, require_admin_panel_access
 from models import (
     ProductCreate, Product, CategoryCreate, Category
 )
@@ -20,7 +20,7 @@ async def get_categories(current_user: dict = Depends(get_current_user)):
 
 
 @router.post("/categories", response_model=Category)
-async def create_category(data: CategoryCreate, admin: dict = Depends(require_admin)):
+async def create_category(data: CategoryCreate, admin: dict = Depends(require_admin_panel_access)):
     category_doc = {
         "id": str(uuid.uuid4()),
         "name": data.name,
@@ -32,7 +32,7 @@ async def create_category(data: CategoryCreate, admin: dict = Depends(require_ad
 
 
 @router.put("/categories/{category_id}", response_model=Category)
-async def update_category(category_id: str, data: CategoryCreate, admin: dict = Depends(require_admin)):
+async def update_category(category_id: str, data: CategoryCreate, admin: dict = Depends(require_admin_panel_access)):
     result = await db.categories.find_one_and_update(
         {"id": category_id},
         {"$set": {"name": data.name, "description": data.description}},
@@ -45,7 +45,7 @@ async def update_category(category_id: str, data: CategoryCreate, admin: dict = 
 
 
 @router.delete("/categories/{category_id}")
-async def delete_category(category_id: str, admin: dict = Depends(require_admin)):
+async def delete_category(category_id: str, admin: dict = Depends(require_admin_panel_access)):
     result = await db.categories.delete_one({"id": category_id})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Category not found")
@@ -103,7 +103,7 @@ async def get_product(product_id: str, current_user: dict = Depends(get_current_
 
 
 @router.post("/products", response_model=Product)
-async def create_product(data: ProductCreate, admin: dict = Depends(require_admin)):
+async def create_product(data: ProductCreate, admin: dict = Depends(require_admin_panel_access)):
     now = datetime.now(timezone.utc)
     items_per_box = data.items_per_box or 1
     warehouse_id = data.warehouse_id or "gudang_utama"
@@ -172,7 +172,7 @@ async def create_product(data: ProductCreate, admin: dict = Depends(require_admi
 
 
 @router.put("/products/{product_id}", response_model=Product)
-async def update_product(product_id: str, data: ProductCreate, admin: dict = Depends(require_admin)):
+async def update_product(product_id: str, data: ProductCreate, admin: dict = Depends(require_admin_panel_access)):
     update_data = data.model_dump()
     update_data.pop("warehouse_id", None)
     update_data.pop("stock", None)
@@ -197,7 +197,7 @@ async def update_product(product_id: str, data: ProductCreate, admin: dict = Dep
 
 
 @router.delete("/products/{product_id}")
-async def delete_product(product_id: str, admin: dict = Depends(require_admin)):
+async def delete_product(product_id: str, admin: dict = Depends(require_admin_panel_access)):
     product = await db.products.find_one({"id": product_id}, {"_id": 0})
     result = await db.products.delete_one({"id": product_id})
     if result.deleted_count == 0:
@@ -207,7 +207,7 @@ async def delete_product(product_id: str, admin: dict = Depends(require_admin)):
 
 
 @router.get("/products/{product_id}/price-comparison")
-async def get_product_price_comparison(product_id: str, admin: dict = Depends(require_admin)):
+async def get_product_price_comparison(product_id: str, admin: dict = Depends(require_admin_panel_access)):
     all_purchases = await db.purchases.find({}, {"_id": 0}).to_list(10000)
     price_data = {}
     for purchase in all_purchases:

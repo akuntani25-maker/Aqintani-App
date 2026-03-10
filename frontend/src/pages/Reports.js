@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { api } from '../context/AuthContext';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -16,6 +16,11 @@ export const Reports = () => {
   const [dateTo, setDateTo] = useState(new Date().toISOString().split('T')[0]);
   const [reportData, setReportData] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [storeSettings, setStoreSettings] = useState(null);
+
+  useEffect(() => {
+    api.get('/store-settings').then(res => setStoreSettings(res.data)).catch(() => {});
+  }, []);
 
   const fetchReport = async () => {
     setLoading(true);
@@ -42,10 +47,12 @@ export const Reports = () => {
     let csv = "\uFEFF"; // BOM for Excel UTF-8
 
     // Header / Headline
-    csv += "UD. AQIN TANI\n";
+    csv += `${storeSettings?.store_name || 'UD. AQIN TANI'}\n`;
     csv += `Laporan ${tabLabels[reportData.type]}\n`;
     csv += `Periode: ${dateFrom} s/d ${dateTo}\n`;
     csv += `Dicetak: ${new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}\n`;
+    if (storeSettings?.phone) csv += `Telp: ${storeSettings.phone}\n`;
+    if (storeSettings?.address) csv += `Alamat: ${storeSettings.address}\n`;
     csv += "\n";
 
     if (reportData.type === 'pos') {
@@ -107,12 +114,16 @@ export const Reports = () => {
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(18);
     doc.setTextColor(255, 255, 255);
-    doc.text('UD. AQIN TANI', 14, 14);
+    doc.text(storeSettings?.store_name || 'UD. AQIN TANI', 14, 14);
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(9);
     doc.setTextColor(148, 163, 184);
     doc.text('Menjual Pupuk, Obat Pertanian, dan Alat Pertanian', 14, 20);
-    doc.text('Telp: 0812-3456-7890  |  Jl. Raya Utama No. 1, Kec. Contoh, Kota Anda', 14, 26);
+    const contactLine = [
+      storeSettings?.phone ? `Telp: ${storeSettings.phone}` : '',
+      storeSettings?.address || ''
+    ].filter(Boolean).join('  |  ');
+    doc.text(contactLine || '', 14, 26);
 
     const tabLabels = { pos: 'Penjualan POS', partner: 'Penjualan Kios Mitra', bestseller: 'Barang Terlaris' };
     doc.setFontSize(9);
