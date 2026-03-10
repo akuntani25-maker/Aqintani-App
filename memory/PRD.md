@@ -4,21 +4,21 @@
 Aplikasi web responsif untuk toko farmasi dan pertanian bernama "UD. AQIN TANI" dengan sistem manajemen bisnis lengkap.
 
 ## User Personas
-- **Admin**: Manajemen penuh (barang, supplier, gudang, laporan, pengguna, piutang pribadi)
+- **Admin**: Manajemen penuh (barang, supplier, gudang, laporan, pengguna, piutang pribadi, import data)
 - **Manager**: Seperti admin tanpa manajemen pengguna
-- **Karyawan Kantor (Office Staff)**: Akses dashboard, barang, supplier, laporan
-- **Kasir (Cashier)**: POS, hutang petani, retur/tukar barang, profil
+- **Karyawan Kantor (Office Staff)**: Dashboard, barang, kategori, supplier, hutang supplier, kios mitra, laporan, analitik, armada, POS
+- **Kasir (Cashier)**: POS (transaksi, transfer stok, retur/tukar, hutang petani), profil
 - **Kanvaser (Canvasser)**: Dashboard kanvaser, cetak struk pesanan, profil
 
 ## Core Requirements
-1. Multi-role authentication (Admin, Manager, Karyawan Kantor, Kasir, Kanvaser)
-2. Product/Barang management dengan kategori dan supplier
+1. Multi-role authentication (5 roles) with RBAC
+2. Product/Barang management with categories and suppliers
 3. Multi-warehouse inventory (Gudang Utama/Toko/Lainnya)
-4. POS system dengan daily summary, HPP, stock transfer (search-based), retur/tukar barang
+4. POS system with daily summary, HPP, stock transfer, retur/tukar barang
 5. Partner store (Kios Mitra) management
 6. Supplier debt management
 7. AI-powered stock forecasting (OpenAI GPT-4o)
-8. Comprehensive reporting (PDF/CSV)
+8. Comprehensive reporting (PDF/CSV with store settings header)
 9. Audit trail
 10. Vehicle/Armada management
 11. Data import (CSV/Excel)
@@ -28,6 +28,7 @@ Aplikasi web responsif untuk toko farmasi dan pertanian bernama "UD. AQIN TANI" 
 15. Rincian Transaksi Harian
 16. Retur/Tukar Barang di POS (2-day limit)
 17. Cetak struk pada halaman Kanvaser
+18. Dynamic items_per_box (decimal support for dus)
 
 ## Architecture
 ```
@@ -37,51 +38,32 @@ Aplikasi web responsif untuk toko farmasi dan pertanian bernama "UD. AQIN TANI" 
 │             warehouse, report, admin, loan_farmer)
 
 /app/frontend/src/
-├── pages/
-│   ├── POS.js (retur/tukar, transfer search, farmer/rincian buttons)
-│   ├── PersonalLoans.js, FarmerDebts.js, DailyTransactions.js
-│   ├── ReceiptPreview.js (USB ESC/POS + Bluetooth printing)
-│   ├── PartnerOrderReceipt.js (USB ESC/POS + Bluetooth, dynamic back nav)
-│   ├── CanvasserDashboard.js (Cetak Struk button on orders)
-│   ├── Reports.js (PDF header: store name + description + contact)
-│   ├── Dashboard.js (asset = inventory + partner + piutang + farmer - supplier)
-│   ├── Login.js (admin/manager/office_staff → /admin/dashboard)
-│   └── ... (existing pages)
-├── utils/
-│   └── ThermalPrinter.js (ESC/POS commands for USB & Bluetooth)
-└── components/
-    └── ui/ (shadcn components)
+├── pages/ (POS, Products, Reports, FarmerDebts, PersonalLoans, etc.)
+├── utils/ThermalPrinter.js (ESC/POS for USB & Bluetooth)
+└── components/ui/ (shadcn)
 ```
 
-## Key DB Collections
-users, categories, suppliers, products, warehouses, warehouse_stock,
-stock_adjustments, stock_transfers, transactions, purchases, payment_history,
-partner_stores, partner_orders, partner_prices, canvassers, vehicles, returns,
-audit_log, store_settings, personal_loans, loan_payments, farmers,
-farmer_transactions, farmer_payments, pos_returns
+## RBAC Permission Model
+- `require_admin` → admin only (user mgmt, import, clear data)
+- `require_admin_or_manager` → admin + manager (vehicles, audit log)
+- `require_admin_panel_access` → admin + manager + office_staff (products, categories, suppliers, debts, reports, analytics, partner stores)
+- `require_pos_access` → admin + manager + office_staff + cashier (stock transfers, returns)
+- `get_current_user` → any authenticated user (read products, POS transactions, farmer debts)
 
 ## What's Been Implemented (Complete)
-- Full RBAC system (5 roles) with correct login redirects
-- Dashboard with all metrics including piutang + hutang petani
-- POS: daily summary, HPP, search-based transfer, retur/tukar (2-day limit)
-- AI stock forecasting (Prediksi tab)
-- "Produk" → "Barang" terminology
-- Piutang Pribadi, Hutang Petani pages
-- Rincian Transaksi Harian page
-- Receipt with return policy note
-- PDF header with store info
-- Refactored backend (modular router architecture)
-- **USB Thermal Printing Fix**: Replaced window.print() with WebUSB ESC/POS commands
-- **Canvasser Cetak Struk**: Added print receipt button on canvasser dashboard orders
-- All testing passed (iterations 6-8, 22)
+- Full RBAC system with correct permissions per role
+- USB ESC/POS thermal printing (replacing broken window.print())
+- Canvasser receipt printing feature
+- Dynamic items_per_box (float/decimal)
+- PDF/CSV export with dynamic store settings (phone, address)
+- All previous features (POS, retur/tukar, piutang, hutang petani, forecasting, etc.)
 
 ## Credentials
 - Admin: admin@aqintani.com / admin123
 - Office Staff: kantor@aqintani.com / kantor123
+- Cashier: kasir@aqintani.com / kasir123
 - Canvasser: sahidin@aqintani.com / 123456
 
-## Printing Architecture
-- **USB Printing**: Uses WebUSB API + ESC/POS raw commands via ThermalPrinter.js
-- **Bluetooth Printing**: Uses Web Bluetooth API + ESC/POS raw commands via ThermalPrinter.js
-- Both methods produce identical output, optimized for 58mm thermal printers
-- Paper size configurable: 58mm (32 chars) or 48mm (24 chars)
+## Test Reports
+- iteration_22.json: Receipt printing (12/12 passed)
+- iteration_23.json: RBAC + decimal items_per_box (36+ passed)
