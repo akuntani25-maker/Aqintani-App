@@ -27,6 +27,7 @@ async def get_dashboard_stats(admin: dict = Depends(require_admin_panel_access))
 
     # Warehouse inventory value + chart
     warehouses = await db.warehouses.find({}, {"_id": 0}).to_list(100)
+    wh_unit_map = {w["id"]: w.get("unit", "satuan") for w in warehouses}
     all_products = await db.products.find({}, {"_id": 0, "id": 1, "cost_price": 1, "items_per_box": 1}).to_list(100000)
     prod_map = {p["id"]: p for p in all_products}
     all_wh_stocks = await db.warehouse_stock.find({}, {"_id": 0}).to_list(100000)
@@ -39,8 +40,15 @@ async def get_dashboard_stats(admin: dict = Depends(require_admin_panel_access))
         if not prod:
             continue
         ipb = prod.get("items_per_box", 1) or 1
-        cost_per_unit = (prod.get("cost_price", 0) or 0) / ipb
-        warehouse_values[wid] = warehouse_values.get(wid, 0) + stk * cost_per_unit
+        cost_price = prod.get("cost_price", 0) or 0
+        wh_unit = wh_unit_map.get(wid, "satuan")
+        if wh_unit == "dus":
+            # Stock in boxes, cost_price is per box
+            item_value = stk * cost_price
+        else:
+            # Stock in units, convert cost_price to per-unit
+            item_value = stk * (cost_price / ipb)
+        warehouse_values[wid] = warehouse_values.get(wid, 0) + item_value
 
     warehouse_chart = []
     total_inventory = 0
@@ -334,7 +342,9 @@ async def get_analytics_summary(admin: dict = Depends(require_admin_panel_access
         if cat_name not in category_stock:
             category_stock[cat_name] = {"name": cat_name, "count": 0, "stock_value": 0}
         category_stock[cat_name]["count"] += 1
-        category_stock[cat_name]["stock_value"] += p.get("stock", 0) * p.get("cost_price", 0)
+        ipb = p.get("items_per_box", 1) or 1
+        cost_per_unit = (p.get("cost_price", 0) or 0) / ipb
+        category_stock[cat_name]["stock_value"] += p.get("stock", 0) * cost_per_unit
     return {
         "monthly_sales": monthly_sales, "monthly_transactions": len(month_transactions),
         "monthly_purchases": monthly_purchases_total, "monthly_purchases_unpaid": monthly_purchases_unpaid,
