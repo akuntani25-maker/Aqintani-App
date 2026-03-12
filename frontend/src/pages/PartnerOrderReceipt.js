@@ -1,10 +1,45 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from '../context/AuthContext';
 import { Button } from '../components/ui/button';
-import { ArrowLeft, Bluetooth, Loader2, Usb } from 'lucide-react';
+import { ArrowLeft, Bluetooth, Loader2, Printer } from 'lucide-react';
 import { toast } from 'sonner';
 import { thermalPrinter } from '../utils/ThermalPrinter';
+
+const SEP = '================================';
+const CHAR_W = 32;
+
+function rightAlign(left, right) {
+  const gap = Math.max(1, CHAR_W - left.length - right.length);
+  return left + ' '.repeat(gap) + right;
+}
+
+function printThermalHTML(lines, title = 'Struk') {
+  const win = window.open('', '_blank', 'width=400,height=600');
+  if (!win) { toast.error('Pop-up diblokir. Izinkan pop-up untuk mencetak.'); return; }
+
+  const body = lines.map(l => {
+    if (l.startsWith('##')) return `<div style="text-align:center;font-weight:bold;font-size:13px">${l.slice(2)}</div>`;
+    if (l.startsWith('#')) return `<div style="text-align:center;font-size:11px">${l.slice(1)}</div>`;
+    if (l === SEP) return `<div style="border-top:1px dashed #000;margin:3px 0"></div>`;
+    if (l.startsWith('**')) return `<div style="font-weight:bold">${l.slice(2)}</div>`;
+    return `<div>${l}</div>`;
+  }).join('');
+
+  win.document.write(`<!DOCTYPE html><html><head><title>${title}</title><style>
+@page{size:58mm auto;margin:0}
+*{margin:0;padding:0;box-sizing:border-box}
+body{width:48mm;max-width:48mm;padding:2mm 1mm;font:12px/1.5 'Courier New',monospace;color:#000;-webkit-text-size-adjust:none}
+@media print{
+  body{width:48mm;max-width:48mm;padding:1mm 0.5mm;font-size:12px}
+  @page{size:58mm auto;margin:0}
+}
+div{white-space:pre-wrap;word-break:break-all}
+</style></head><body>${body}</body></html>`);
+  win.document.close();
+  win.focus();
+  setTimeout(() => { win.print(); setTimeout(() => win.close(), 500); }, 300);
+}
 
 export const PartnerOrderReceipt = () => {
   const [searchParams] = useSearchParams();
@@ -13,34 +48,60 @@ export const PartnerOrderReceipt = () => {
   const [storeSettings, setStoreSettings] = useState(null);
   const [loading, setLoading] = useState(true);
   const [btStatus, setBtStatus] = useState('idle');
-  const [usbStatus, setUsbStatus] = useState('idle');
 
-  const handleUSBPrint = async () => {
+  const handleBrowserPrint = useCallback(() => {
     if (!order) return;
-    try {
-      if (!thermalPrinter.isConnected() || thermalPrinter.connectionType !== 'usb') {
-        setUsbStatus('connecting');
-        const res = await thermalPrinter.connectUSB();
-        if (!res.success) {
-          toast.error(res.message);
-          setUsbStatus('idle');
-          return;
-        }
-        toast.success(res.message);
-      }
-      setUsbStatus('printing');
-      const ok = await thermalPrinter.printPartnerOrderReceipt(order, storeSettings);
-      if (ok) {
-        toast.success('Struk berhasil dicetak via USB!');
-      } else {
-        toast.error('Gagal mencetak. Coba ulangi.');
-      }
-    } catch (err) {
-      toast.error('Error: ' + err.message);
-    } finally {
-      setUsbStatus('idle');
+    const storeName = storeSettings?.store_name || 'UD. AQIN TANI';
+    const storeAddr = storeSettings?.address || '';
+    const storePhone = storeSettings?.phone || '';
+    const fmtN = (v) => new Intl.NumberFormat('id-ID').format(v);
+    const tgl = new Date(order.created_at).toLocaleString('id-ID', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' });
+    const previousDebt = Math.max(0, (order.partner_debt_total || 0) - (order.remaining || 0));
+    const gTotal = previousDebt + order.total;
+
+    const lines = [];
+    lines.push(`##${storeName}`);
+    if (storeAddr) lines.push(`#${storeAddr}`);
+    if (storePhone) lines.push(`#Telp: ${storePhone}`);
+    lines.push(SEP);
+    lines.push(`**STRUK PESANAN KIOS MITRA`);
+    lines.push(`No   : ${order.order_number}`);
+    lines.push(`Tgl  : ${tgl}`);
+    lines.push(`Kios : ${order.partner_store_name}`);
+    if (order.partner_phone) lines.push(`Telp : ${order.partner_phone}`);
+    if (order.canvasser_name) lines.push(`Sales: ${order.canvasser_name}`);
+    lines.push(SEP);
+
+    order.items.forEach(item => {
+      lines.push(`**${item.product_name}`);
+      lines.push(rightAlign(`  ${item.quantity} x ${fmtN(item.price)}`, fmtN(item.subtotal)));
+    });
+
+    lines.push(SEP);
+    lines.push(rightAlign('Subtotal', fmtN(order.subtotal)));
+    if (order.discount > 0) lines.push(rightAlign('Diskon', '-' + fmtN(order.discount)));
+    lines.push(SEP);
+    lines.push(rightAlign('**TOTAL', fmtN(order.total)));
+    if (order.paid > 0) lines.push(rightAlign('Dibayar', fmtN(order.paid)));
+    if (order.remaining > 0) lines.push(rightAlign('Sisa Bon', fmtN(order.remaining)));
+
+    if (previousDebt > 0 || order.remaining > 0) {
+      lines.push(SEP);
+      lines.push(`**REKAP BON / HUTANG`);
+      if (previousDebt > 0) lines.push(rightAlign('Bon Sebelumnya', fmtN(previousDebt)));
+      lines.push(rightAlign('Bon Pesanan Ini', fmtN(order.remaining)));
+      lines.push(SEP);
+      lines.push(rightAlign('**TOTAL HUTANG', fmtN(order.partner_debt_total || 0)));
     }
-  };
+
+    lines.push(SEP);
+    lines.push(rightAlign('**GRAND TOTAL', fmtN(gTotal)));
+    lines.push(SEP);
+    lines.push(`#Terima kasih!`);
+    lines.push(`#Simpan struk sebagai bukti`);
+
+    printThermalHTML(lines, 'Struk Kios Mitra');
+  }, [order, storeSettings]);
 
   const handleBluetoothPrint = async () => {
     if (!order) return;
@@ -57,23 +118,17 @@ export const PartnerOrderReceipt = () => {
       }
       setBtStatus('printing');
       const ok = await thermalPrinter.printPartnerOrderReceipt(order, storeSettings);
-      if (ok) {
-        toast.success('Struk berhasil dicetak via Bluetooth!');
-      } else {
-        toast.error('Gagal mencetak. Coba ulangi.');
-      }
+      if (ok) toast.success('Struk berhasil dicetak via Bluetooth!');
+      else toast.error('Gagal mencetak. Coba ulangi.');
     } catch (err) {
       toast.error('Error: ' + err.message);
-    } finally {
-      setBtStatus('idle');
-    }
+    } finally { setBtStatus('idle'); }
   };
 
   useEffect(() => {
     const orderId = searchParams.get('id');
-    if (orderId) {
-      fetchData(orderId);
-    } else {
+    if (orderId) fetchData(orderId);
+    else {
       toast.error('Order ID tidak ditemukan');
       navigate(searchParams.get('from') === 'canvasser' ? '/canvasser' : '/admin/partner-orders');
     }
@@ -87,20 +142,15 @@ export const PartnerOrderReceipt = () => {
       ]);
       setOrder(orderRes.data);
       setStoreSettings(settingsRes.data);
-    } catch (error) {
+    } catch {
       toast.error('Gagal memuat data pesanan');
       navigate(searchParams.get('from') === 'canvasser' ? '/canvasser' : '/admin/partner-orders');
-    } finally {
-      setLoading(false);
-    }
+    } finally { setLoading(false); }
   };
 
   const fmt = (v) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(v);
 
-  if (loading) {
-    return <div className="min-h-screen flex items-center justify-center"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div></div>;
-  }
-
+  if (loading) return <div className="min-h-screen flex items-center justify-center"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div></div>;
   if (!order) return null;
 
   const previousDebt = Math.max(0, (order.partner_debt_total || 0) - (order.remaining || 0));
@@ -109,16 +159,14 @@ export const PartnerOrderReceipt = () => {
 
   return (
     <div className="min-h-screen bg-gray-100">
-      {/* Action bar */}
       <div className="bg-white border-b shadow-sm sticky top-0 z-10">
         <div className="max-w-4xl mx-auto px-6 py-4 flex items-center justify-between">
           <Button variant="outline" onClick={() => navigate(backUrl)} data-testid="back-button">
             <ArrowLeft className="w-4 h-4 mr-2" />Kembali
           </Button>
           <div className="flex gap-2">
-            <Button onClick={handleUSBPrint} disabled={usbStatus !== 'idle'} data-testid="usb-print-button">
-              {usbStatus !== 'idle' ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Usb className="w-4 h-4 mr-2" />}
-              {usbStatus === 'connecting' ? 'Menghubungkan...' : usbStatus === 'printing' ? 'Mencetak...' : 'Cetak Struk USB'}
+            <Button onClick={handleBrowserPrint} data-testid="browser-print-button">
+              <Printer className="w-4 h-4 mr-2" />Cetak Struk
             </Button>
             <Button variant="outline" onClick={handleBluetoothPrint} disabled={btStatus !== 'idle'} data-testid="bluetooth-print-button">
               {btStatus !== 'idle' ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Bluetooth className="w-4 h-4 mr-2" />}
@@ -128,9 +176,8 @@ export const PartnerOrderReceipt = () => {
         </div>
       </div>
 
-      {/* On-screen Preview */}
       <div className="max-w-md mx-auto p-4 sm:p-6">
-        <div id="receipt-content" className="bg-white rounded-xl shadow-lg p-5 sm:p-6 text-sm" style={{fontFamily: "'Merchant Copy', monospace"}} data-testid="receipt-content">
+        <div id="receipt-content" className="bg-white rounded-xl shadow-lg p-5 sm:p-6 text-sm" style={{fontFamily: "'Courier New', monospace"}} data-testid="receipt-content">
           <div className="text-center mb-3 pb-3 border-b border-gray-300">
             <h1 className="text-lg font-bold">{storeSettings?.store_name || 'UD. AQIN TANI'}</h1>
             <p className="text-xs text-gray-600">{storeSettings?.address || 'Toko Obat & Alat Pertanian'}</p>
@@ -191,6 +238,12 @@ export const PartnerOrderReceipt = () => {
             <p className="font-semibold">Terima kasih!</p>
             <p>Simpan struk sebagai bukti pesanan</p>
           </div>
+        </div>
+
+        <div className="mt-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
+          <p className="text-sm text-blue-800">
+            <strong>Tips:</strong> Gunakan "Cetak Struk" untuk mencetak via printer yang terinstall di PC. Gunakan "Cetak Bluetooth" dari HP/tablet.
+          </p>
         </div>
       </div>
     </div>
