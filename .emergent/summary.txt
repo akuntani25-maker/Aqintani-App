@@ -1,79 +1,70 @@
 <analysis>**original_problem_statement**: The user wants to build a responsive web application for a pharmacy and agriculture store named UD. AQIN TANI.
 
 **PRODUCT REQUIREMENTS:**
-1.  **Core App:** A full-stack application (FastAPI, React, MongoDB) with multiple user roles (Admin, Manager, Karyawan Kantor, Cashier, Canvasser). The entire backend has been refactored from a single  file into a modular structure with routers, models, and services.
+1.  **Core App:** A full-stack application (FastAPI, React, MongoDB) with multiple user roles (Admin, Manager, Karyawan Kantor, Cashier, Canvasser).
 2.  **Admin Features:** A comprehensive dashboard to manage barang (goods), suppliers, categories, inventory, and view detailed sales reports. Includes role and user management. An audit trail logs all critical actions.
 3.  **Advanced Features:**
-    *   **Sales & Debt Management:**
-        *   A unified dashboard for delivery drivers () and vehicle () management.
-        *   A system for managing partner store orders.
-        *   A Point of Sale (POS) interface for cashiers.
-        *   **New:** A page to manage personal loans ().
-        *   **New:** A page, accessible from the POS, to manage farmer debts ().
-    *   **Inventory & Purchasing:**
-        *   Multi-warehouse inventory management with stock adjustments and transfers.
-        *   A purchasing system that tracks supplier debt via invoice numbers and due dates.
-        *   **New:** A full-featured return and exchange system integrated into the POS, which updates original transaction records and stock levels.
-    *   **Analytics & Reporting:**
-        *   An admin dashboard with key metrics, including Net Asset Value (now calculated as ), stock movement, and inventory value charts.
-        *   An AI-powered stock forecasting feature.
-        *   **New:** A dedicated page for viewing detailed daily transactions.
-        *   Customizable PDF report headers with store information and CSV exports.
-4.  **UI/UX:** A modern, elegant, and fully responsive user interface. All instances of Produk (Product) have been changed to Barang (Goods). Several UI elements, like product selection, have been upgraded to use search inputs for better usability.
+    *   **Sales & Debt Management:** POS interface, canvasser dashboard, partner store order management, personal loans (), and farmer debts ().
+    *   **Inventory & Purchasing:** Multi-warehouse inventory, stock adjustments/transfers, purchasing system with supplier debt tracking. The  field now supports decimal values.
+    *   **Analytics & Reporting:** An admin dashboard with key metrics, AI-powered stock forecasting, a profit/loss report (), and detailed daily transactions. PDF/CSV headers are now dynamic.
+    *   **POS Operations:** A complete return/exchange system and a full shift management system (open/close shift with financial summaries).
+4.  **UI/UX:** A modern, responsive UI. Includes low-stock notifications on the dashboard and sidebar, and a price history viewer for products.
 5.  **Hardware Integration:**
-    *   A print-preview screen for generating transaction receipts.
-    *   **New Requirement**: The standard USB printing format for thermal receipts needs to be fixed to match the quality and layout of Bluetooth printing.
+    *   **Original Problem**: Printing receipts from a PC to a USB thermal printer resulted in poor quality.
+    *   **Current Goal**: Implement a solution that uses the printer's high-quality internal fonts, similar to how Bluetooth printing works.
 
 **User's preferred language**: The user's primary language is Indonesian. The next agent MUST respond in Indonesian.
 
 **what currently exists?**
-A feature-rich, full-stack business management application. The backend has been successfully refactored from a monolithic  into a clean, modular structure (, , etc.), improving maintainability. The application includes comprehensive role-based access control, a full audit trail, advanced POS features (returns, debt management, daily summaries, stock transfers), an AI stock forecasting module, and enhanced reporting. All previously requested features and bug fixes, including a critical login-redirect bug for the Karyawan Kantor role, have been implemented and successfully tested.
+A feature-rich, full-stack business management application with a modular backend and a comprehensive React frontend. The application supports role-based access, inventory management, a POS system, financial tracking (loans, debts), and advanced reporting. The agent has just implemented a series of major features including a POS shift management system, a profit/loss report, low-stock alerts, and product price history tracking. All previous bug fixes, including critical RBAC permission errors and warehouse value calculation inaccuracies, have been resolved and tested. The current focus is on solving a persistent thermal printer issue.
 
 **Last working item**:
--   **Last item agent was working**: Investigating a user-reported issue where printing receipts to a 58mm thermal printer via USB results in a poorly formatted, messy printout. The user confirmed the Bluetooth printing function works correctly, but the standard Cetak Struk (Print Receipt) button, which uses the browser's  function, produces an unusable result.
+-   **Last item agent was working**: Implementing a local Python-based print server to solve the issue of poor-quality receipt printing from a PC. The user confirmed that browser-based printing () produces garbled text, whereas Bluetooth printing (which uses raw ESC/POS commands) works perfectly because it leverages the printer's built-in fonts. The new approach involves the web application sending receipt data to a local server running on the user's PC, which then generates and sends the high-quality ESC/POS commands directly to the USB printer.
 -   **Status**: IN PROGRESS
 -   **Agent Testing Done**: N
--   **Which testing method agent to use?**: This is a frontend/hardware interaction issue.
-    1.  The agent should first attempt to fix this by creating a highly simplified, print-specific CSS stylesheet () in  to force a plain, single-column layout.
-    2.  If that fails, the agent must research and implement a client-side JavaScript library (like ) to generate raw ESC/POS commands directly, bypassing the browser's print dialog entirely. This is the more robust but complex solution.
-    3.  Final verification will require a screenshot of the print preview dialog, but the user will need to confirm the physical printout.
+-   **Which testing method agent to use?**: This requires manual testing with user guidance. The agent cannot run the local print server itself. The agent must:
+    1.  Provide the user with the  script.
+    2.  Instruct the user on how to install the necessary Python dependencies (, , ).
+    3.  Guide the user on running the script ().
+    4.  Ask the user to test the Cetak Struk button from the POS and confirm if the physical printout is now high quality.
 -   **User Testing Done**: N
 
 **All Pending/In progress Issue list**:
--   **Issue 1: Fix USB Thermal Printer Formatting (P0)**
-    -   **Attempted fixes**: The agent has only begun investigating by reviewing .
+-   **Issue 1: Finalize and Test the Local Print Server Solution (P0)**
+    -   **Attempted fixes**:
+        1.  Using  CSS with  was insufficient; the font rendering was still poor.
+        2.  A local Python print server architecture has been designed and partially implemented. The agent has created  and modified , , and the  utility to support this new flow.
     -   **Next debug checklist**:
-        1.  Analyze the  function in . It currently uses , which is the root of the problem.
-        2.  **Approach A (Simple Fix):** Create an aggressive  stylesheet within the component to hide all non-essential elements and force a very basic, single-column, text-only layout. Test if this improves the output on the thermal printer.
-        3.  **Approach B (Robust Fix):** If Approach A fails, search for a client-side JavaScript library to generate raw ESC/POS printer commands.
-        4.  Integrate the chosen library into a new print function, replacing the  call. This function will construct the receipt text and convert it into a command buffer to be sent to the printer.
-    -   **Why fix this issue and what will be achieved with the fix?**: This is critical for business operations, as it will allow cashiers to print clean, professional receipts for customers using standard USB thermal printers.
+        1.  Verify the frontend code in  and . Ensure the  function correctly POSTs receipt data to .
+        2.  Confirm the fallback to the standard browser print dialog () is triggered if the connection to the local server fails.
+        3.  Prepare and provide clear, step-by-step instructions for the user on how to set up and run the  on their Windows PC. This is the most critical step for success.
+        4.  Work with the user to test the entire flow and confirm the physical receipt quality.
+    -   **Why fix this issue and what will be achieved with the fix?**: This is a critical operational blocker. Fixing it will enable cashiers to print clean, professional, and readable receipts from any PC using a standard USB thermal printer, matching the quality of Bluetooth printing.
     -   **Status**: IN PROGRESS
-    -   **Is recurring issue?**: N
-    -   **Should Test frontend/backend/both after fix?**: Frontend
-    -   **Blocked on other issue**: None
+    -   **Is recurring issue?**: Y (The printing problem has been approached in several ways).
+    -   **Should Test frontend/backend/both after fix?**: Frontend (with user-assisted local testing).
+    -   **Blocked on other issue**: None.
 
 **In progress Task List**:
 -   None.
 
 **Upcoming and Future Tasks**
--   None have been specified by the user. The agent should focus on resolving the printing issue and then ask the user for the next set of priorities.
+-   The user has not specified any new tasks. After resolving the printing issue, the agent should ask for the next set of priorities. The previous suggestion to print purchase invoices was rejected by the user.
 
 **Completed work in this session**
--   **AI Feature Fixed**: Resolved a  on the  endpoint caused by an incorrect  import.
--   **Major Backend Refactoring**: Successfully decomposed the monolithic  into a modular structure with directories for , , and . Verified with full regression testing.
--   **Bug Fix**: Corrected a login redirection bug where Karyawan Kantor users were incorrectly sent to the POS page instead of the admin dashboard.
--   **Feature Batch 1 Implemented & Tested**:
-    -   **POS Returns/Exchanges**: Added a complete workflow for returning or exchanging items, which updates inventory and the original transaction record.
-    -   **Custom PDF Headers**: Implemented a custom header with store details for all exported PDF reports.
-    -   **Receipt Note**: Added a return policy notice to the printed receipt.
--   **Feature Batch 2 Implemented & Tested**:
-    -   **Personal Loans & Farmer Debts**: Created new pages and backend logic to track personal loans and farmer debts.
-    -   **Dashboard Metric Update**: The Nilai Aset Bersih (Net Asset Value) now correctly includes loan and debt totals.
-    -   **Detailed Transactions Page**: Created a new page for viewing detailed transaction histories for the day.
-    -   **POS UI Enhancements**: Upgraded the stock transfer product selector to a search input for improved usability.
--   **Code Cleanup**: Completed the renaming of all Produk instances to Barang across the entire frontend.
--   **Testing Agent Fixes**: The testing agent identified and automatically fixed two bugs: a permissions error for  on a dashboard endpoint and an undefined variable in .
+-   **Local Print Server (In Progress)**: Created a  script using Flask and  and refactored frontend receipt components to communicate with it, providing a robust solution for high-quality USB printing.
+-   **Printing UI Refinement**: Simplified the receipt printing options to Cetak Struk (for PC) and Cetak Bluetooth (for mobile), removing the confusing USB Web API button.
+-   **Feature Batch Implemented & Tested**:
+    -   **POS Shift Management**: Implemented a full open/close shift workflow in  with backend routes in .
+    -   **Profit & Loss Report**: Added a new Laba/Rugi tab to the reports page with date-range filtering and PDF/CSV export functionality.
+    -   **Low Stock Alerts**: Implemented dashboard notifications for low-stock items, including a product list and a sidebar badge.
+    -   **Price History**: Added a feature to log and view the price change history for each product.
+-   **RBAC Bug Fixes**: Corrected all identified role-based access control issues, ensuring Karyawan Kantor and Kasir have the appropriate permissions for their tasks without seeing Admin access required errors.
+-   **Data Model & Logic Fixes**:
+    -   Updated the  field to support  values, allowing for decimal quantities in product units.
+    -   Fixed a critical bug in the warehouse value calculation to correctly use  and  based on the warehouse's unit type (dus vs. pcs).
+    -   Made PDF/CSV report headers dynamic, pulling store information from system settings.
+-   **Canvasser Receipt Printing**: Added a Cetak Struk button to the canvasser dashboard for paid orders.
 
 **Earlier issues found/mentioned but not fixed**
 -   None.
@@ -85,67 +76,72 @@ A feature-rich, full-stack business management application. The backend has been
 
 
 **Key Technical Concepts**
--   **Backend**: FastAPI, Motor (Async MongoDB), Pydantic, JWT, Modular Router Architecture.
--   **Frontend**: React, React Router, Tailwind CSS, Shadcn/UI, .
--   **Printing**: Currently uses . Needs to be migrated to a raw command approach (e.g., using **ESC/POS** commands) for thermal printer compatibility.
--   **AI Integration**: OpenAI via  for stock forecasting.
+-   **Backend**: FastAPI, Motor (Async MongoDB), Pydantic, JWT.
+-   **Frontend**: React, React Router, Tailwind CSS, Shadcn/UI.
+-   **Printing**:
+    -   **Current**: Migrating to a local **Flask + python-escpos** server to generate raw **ESC/POS** commands for USB printers.
+    -   **Fallback**: Browser  with  CSS.
+    -   **Mobile**: Web Bluetooth API for direct ESC/POS commands.
+-   **AI Integration**: OpenAI via .
 
 **key DB schema**
--   : Modified to include  (e.g., 'completed', 'returned'), , and updated  and  upon return/exchange.
 -   : **(New Collection)** .
--   : **(New Collection)** .
+-   : Modified to include .
 
 **changes in tech stack**
--   None. A new client-side printing library might be added.
+-   **Addition**: A local print server component requiring **Flask**, **Flask-Cors**, and **python-escpos**. These are user-side dependencies, not part of the core backend .
 
 **All files of reference**
--   **/app/frontend/src/components/cashier/ReceiptPreview.js**: The primary file for fixing the USB printing issue.
--   **/app/frontend/src/pages/cashier/POS.js**: Contains the Cetak Struk button and the context for the receipt data.
--   **/app/frontend/src/pages/admin/Login.js**: The login redirect logic was fixed here.
--   **/app/backend/routers/transaction_routes.py**: Contains the backend logic for returns and exchanges.
+-   **/app/print_server.py**: The new local server script the user must run.
+-   **/app/frontend/src/utils/ThermalPrinter.js**: Refactored utility to separate ESC/POS data generation from sending.
+-   **/app/frontend/src/components/cashier/ReceiptPreview.js**: The main POS receipt, updated to use the print server.
+-   **/app/frontend/src/components/partner/PartnerOrderReceipt.js**: The partner order receipt, also updated.
 
 **Areas that need refactoring**:
--   The major refactoring of  is complete.
--   A centralized file for strings/localization would still be beneficial to avoid future mass search-and-replace operations, but this is a low-priority enhancement.
+-   None.
 
 **key api endpoints**
--    **(New)**: Searches for transactions by ID for the return/exchange feature.
--    **(New)**: Processes a return or exchange for a given transaction.
--    **(New)**: Fetches detailed transaction data for the day.
--    **(New)**: CRUD endpoints for managing personal loans.
--    **(New)**: CRUD endpoints for managing farmer debts.
+-   : The new local print server endpoint.
+-   , : For POS shift management.
+-   : To generate the profit and loss report.
+-   : To view a product's price history.
 
 **Critical Info for New Agent**
--   Your highest priority is to solve the USB thermal printing problem described in Last working item. The current  method in  is not suitable. You must investigate generating raw printer commands (like ESC/POS) from client-side JavaScript or creating a highly simplified print-only stylesheet as an alternative.
--   The application is in a stable state. All other features have been implemented and passed extensive testing via the .
--   Do not regress the fix for the Karyawan Kantor role login. They, along with Manager, should be redirected to the admin dashboard, not the POS.
+-   Your primary task is to guide the user through setting up and testing the local Python print server (). You cannot test this yourself. Success depends on providing clear, simple instructions for the user to follow on their PC.
+-   The solution is designed with a fallback: if the local server isn't running or fails, the Cetak Struk button will revert to using the browser's  dialog. You should explain this to the user.
+-   The application's other features have been extensively tested and are stable. Do not modify other parts of the codebase unless directly related to fixing the printing issue.
 
 **documents and test reports created in this job**
--    (Updated with all new features)
--    (Last successful test run, 26/26 tests passed)
--    (Last successful test run, 34/34 tests passed)
--    (Last successful test run, 23/23 tests passed)
+-   
+-   
+-   
+-    (Updated)
 
 **Last 10 User Messages and any pending HUMAN messages**
--   **User (Msg 176)**: Reports 4 new items: 1) Add POS return/exchange feature. 2) Add return policy text to receipt. 3) Add custom PDF header. 4) **Bug:** Karyawan Kantor account has wrong permissions/redirect.
--   **Agent (Msg 177)**: Proposes a plan to fix the bug and implement the three new features.
--   **User (Msg 179)**: Approves the plan (sudah sesuai).
--   **Agent (Msg 180-275)**: Debugs and fixes the role bug, then implements and tests all three features successfully, including using the testing agent which finds and fixes two additional minor bugs.
--   **Agent (Msg 275)**: Finishes the task and summarizes the completed work.
--   **User (Msg 276)**: Reports a new problem: USB printing for receipts is poorly formatted, unlike Bluetooth printing.
--   **Agent (Msg 277)**: Asks for clarification on the printer model, which button is used, and the specific formatting issues.
--   **User (Msg 279)**: Provides details: 58mm thermal printer, the standard cetak struk button, and issues are misaligned text, small font, and incorrect layout.
--   **Agent (Msg 280-283)**: Acknowledges the issue and begins investigating the code in .
+-   **User (Msg 334)**: Approves adding export buttons to the Profit/Loss report.
+-   **Agent (Msg 335-362)**: Implements and verifies the PDF/CSV export for the Profit/Loss report.
+-   **User (Msg 363)**: Reports that the USB printer is still not working from the PC. They cannot detect it and Bluetooth driver is unavailable. Asks for a solution to make PC printing as simple and reliable as mobile Bluetooth printing.
+-   **Agent (Msg 364)**: Proposes three options: 1) A simplified Print via Browser button with better CSS, 2) A link to a downloadable PDF, 3) A troubleshooting guide for printer drivers.
+-   **User (Msg 366)**: Asks to implement options 1 and 3, and remove option 2.
+-   **Agent (Msg 367-380)**: Implements the simplified UI (removes USB button, improves CSS for browser printing).
+-   **User (Msg 381 & 384)**: Asks if the browser print can use the printer's firmware fonts like Bluetooth does, because the current font quality is poor and unreadable.
+-   **Agent (Msg 385)**: Understands the core problem (browser font rendering vs. printer firmware fonts). Proposes the definitive solution: a local print server on the PC to send raw ESC/POS commands.
+-   **User (Msg 386)**: Agrees to this approach (implementasi).
+-   **Agent (Msg 387-396)**: Begins implementing the local print server solution by creating  and refactoring the frontend components to use it. The work is currently in progress.
 
 **Project Health Check:**
--   **Broken**: The USB receipt printing functionality is not working correctly.
+-   **Broken**: The primary method for printing receipts from a PC is not functional to the user's quality standards. The new local print server solution is the fix but is untested.
 -   **Mocked**: None.
 
 **3rd Party Integrations**
 -   **OpenAI GPT-4o**: For AI-powered stock forecasting. Uses the **Emergent LLM Key**.
+-   **Local Print Server Dependencies (User-side installation)**:
+    -   Flask
+    -   Flask-Cors
+    -   python-escpos
 
 **Testing status**
--   **Testing agent used after significant changes**: YES. The agent was used multiple times after each major feature batch and refactoring, successfully verifying application stability.
+-   **Testing agent used after significant changes**: YES. The testing agent was used successfully to validate the large batch of features (Shift Mgmt, RBAC fixes, etc.).
 -   **Troubleshoot agent used after agent stuck in loop**: NO
 -   **Test files created**: []
 -   **Known regressions**: None.
@@ -154,7 +150,10 @@ A feature-rich, full-stack business management application. The backend has been
 -   **Admin**:
     -   Email: 
     -   Password: 
--   **Karyawan Kantor (Office Staff) - for testing fixed permissions**:
+-   **Karyawan Kantor (Office Staff)**:
+    -   Email: 
+    -   Password: 
+-   **Cashier**:
     -   Email: 
     -   Password: 
 -   **Canvasser**:
@@ -162,4 +161,4 @@ A feature-rich, full-stack business management application. The backend has been
     -   Password: 
 
 **What agent forgot to execute**
--   The agent has not forgotten anything. It was actively investigating the user's most recent request when the session ended.</analysis>
+-   The agent has not forgotten anything. It is in the middle of implementing the user's latest, most complex request. The implementation needs to be completed and then verified with the user.</analysis>
