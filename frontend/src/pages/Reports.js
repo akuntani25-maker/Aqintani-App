@@ -207,6 +207,111 @@ export const Reports = () => {
     toast.success('PDF berhasil diexport');
   };
 
+  const exportProfitLossPDF = () => {
+    if (!profitLoss || !profitLoss.daily_data?.length) return;
+    const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+    const pageWidth = doc.internal.pageSize.getWidth();
+
+    // Header / Kop Surat
+    doc.setFillColor(15, 23, 42);
+    doc.rect(0, 0, pageWidth, 32, 'F');
+    doc.setFillColor(37, 99, 235);
+    doc.rect(0, 32, pageWidth, 2, 'F');
+
+    doc.setFont('helvetica', 'bold');
+    doc.setFontSize(18);
+    doc.setTextColor(255, 255, 255);
+    doc.text(storeSettings?.store_name || 'UD. AQIN TANI', 14, 14);
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.setTextColor(148, 163, 184);
+    doc.text('Menjual Pupuk, Obat Pertanian, dan Alat Pertanian', 14, 20);
+    const plContact = [
+      storeSettings?.phone ? `Telp: ${storeSettings.phone}` : '',
+      storeSettings?.address || ''
+    ].filter(Boolean).join('  |  ');
+    doc.text(plContact || '', 14, 26);
+
+    doc.setFontSize(9);
+    doc.setTextColor(255, 255, 255);
+    doc.text(`Laporan Laba/Rugi | Periode: ${dateFrom} s/d ${dateTo}`, pageWidth - 14, 14, { align: 'right' });
+    doc.text(`Dicetak: ${new Date().toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}`, pageWidth - 14, 20, { align: 'right' });
+
+    let startY = 40;
+
+    // Summary boxes
+    const summaryItems = [
+      { label: 'Revenue POS', value: fmt(profitLoss.pos_revenue) },
+      { label: 'Revenue Mitra', value: fmt(profitLoss.partner_revenue) },
+      { label: 'Total Revenue', value: fmt(profitLoss.total_revenue) },
+      { label: 'Total HPP', value: fmt(profitLoss.total_cogs), color: [220, 38, 38] },
+      { label: 'Laba Kotor', value: fmt(profitLoss.gross_profit), color: [5, 150, 105] },
+      { label: 'Margin', value: profitLoss.margin_percent + '%', color: [37, 99, 235] },
+    ];
+
+    const boxW = (pageWidth - 28 - 20) / 6;
+    summaryItems.forEach((item, i) => {
+      const x = 14 + i * (boxW + 4);
+      doc.setFillColor(248, 250, 252);
+      doc.roundedRect(x, startY, boxW, 16, 2, 2, 'F');
+      doc.setFontSize(6.5);
+      doc.setTextColor(100, 116, 139);
+      doc.text(item.label.toUpperCase(), x + 3, startY + 6);
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'bold');
+      if (item.color) doc.setTextColor(...item.color);
+      else doc.setTextColor(15, 23, 42);
+      doc.text(item.value, x + 3, startY + 13);
+      doc.setFont('helvetica', 'normal');
+    });
+    startY += 24;
+
+    // Additional info line
+    doc.setFontSize(8);
+    doc.setTextColor(100, 116, 139);
+    doc.text(`Total Transaksi POS: ${profitLoss.total_transactions}  |  Total Order Mitra: ${profitLoss.total_partner_orders}`, 14, startY);
+    startY += 8;
+
+    // Daily breakdown table
+    const head = [['Tanggal', 'Revenue', 'HPP (COGS)', 'Laba Kotor']];
+    const body = profitLoss.daily_data.map(d => [
+      d.date,
+      fmt(d.revenue),
+      fmt(d.cogs),
+      fmt(d.profit),
+    ]);
+    const footRow = [['TOTAL', fmt(profitLoss.total_revenue), fmt(profitLoss.total_cogs), fmt(profitLoss.gross_profit)]];
+
+    autoTable(doc, {
+      head,
+      body,
+      foot: footRow,
+      startY,
+      theme: 'grid',
+      styles: { fontSize: 8, cellPadding: 3, lineColor: [226, 232, 240], lineWidth: 0.2 },
+      headStyles: { fillColor: [15, 23, 42], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 8 },
+      footStyles: { fillColor: [241, 245, 249], textColor: [15, 23, 42], fontStyle: 'bold', fontSize: 9 },
+      alternateRowStyles: { fillColor: [248, 250, 252] },
+      columnStyles: {
+        0: { cellWidth: 40 },
+        1: { halign: 'right' },
+        2: { halign: 'right', textColor: [220, 38, 38] },
+        3: { halign: 'right', textColor: [5, 150, 105], fontStyle: 'bold' },
+      },
+      margin: { left: 14, right: 14 },
+      didDrawPage: (data) => {
+        const pageNum = doc.internal.getNumberOfPages();
+        doc.setFontSize(7);
+        doc.setTextColor(148, 163, 184);
+        doc.text(`${storeSettings?.store_name || 'UD. AQIN TANI'} - Laporan Laba/Rugi`, 14, doc.internal.pageSize.getHeight() - 8);
+        doc.text(`Halaman ${data.pageNumber} dari ${pageNum}`, pageWidth - 14, doc.internal.pageSize.getHeight() - 8, { align: 'right' });
+      }
+    });
+
+    doc.save(`laporan-laba-rugi-${dateFrom}-${dateTo}.pdf`);
+    toast.success('PDF Laba/Rugi berhasil diexport');
+  };
+
   const marginPercent = reportData && reportData.total_sales > 0
     ? ((reportData.total_margin / reportData.total_sales) * 100).toFixed(1)
     : '0';
@@ -518,6 +623,35 @@ export const Reports = () => {
       {/* Profit & Loss Report */}
       {profitLoss && (
         <div className="space-y-6" data-testid="profit-loss-result">
+          {/* Export Buttons */}
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" size="sm" onClick={exportProfitLossPDF} data-testid="export-pl-pdf">
+              <Download className="w-4 h-4 mr-2" />Export PDF
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => {
+              if (!profitLoss?.daily_data?.length) return;
+              let csv = `${storeSettings?.store_name || 'UD. AQIN TANI'}\nLaporan Laba/Rugi\nPeriode: ${dateFrom} s/d ${dateTo}\nDicetak: ${new Date().toLocaleDateString('id-ID')}\n`;
+              if (storeSettings?.phone) csv += `Telp: ${storeSettings.phone}\n`;
+              if (storeSettings?.address) csv += `Alamat: ${storeSettings.address}\n`;
+              csv += `\nTotal Revenue,${profitLoss.total_revenue}\nTotal HPP,${profitLoss.total_cogs}\nLaba Kotor,${profitLoss.gross_profit}\nMargin,${profitLoss.margin_percent}%\n`;
+              csv += `\nTanggal,Revenue,HPP,Laba\n`;
+              profitLoss.daily_data.forEach(d => { csv += `${d.date},${d.revenue},${d.cogs},${d.profit}\n`; });
+              csv += `TOTAL,${profitLoss.total_revenue},${profitLoss.total_cogs},${profitLoss.gross_profit}\n`;
+              const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+              const url = URL.createObjectURL(blob);
+              const link = document.createElement("a");
+              link.setAttribute("href", url);
+              link.setAttribute("download", `laporan-laba-rugi-${dateFrom}-${dateTo}.csv`);
+              document.body.appendChild(link);
+              link.click();
+              document.body.removeChild(link);
+              URL.revokeObjectURL(url);
+              toast.success('CSV Laba/Rugi berhasil diexport');
+            }} data-testid="export-pl-csv">
+              <FileDown className="w-4 h-4 mr-2" />Export CSV
+            </Button>
+          </div>
+
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <Card className="p-5">
               <p className="text-xs text-muted-foreground uppercase tracking-wider">Total Revenue</p>

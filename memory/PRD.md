@@ -21,11 +21,8 @@ Aplikasi web responsif untuk toko farmasi dan pertanian bernama "UD. AQIN TANI" 
 ```
 /app/backend/
 ├── server.py, database.py, auth.py, models.py, services.py
-├── routers/
-│   ├── auth_routes.py, product_routes.py, supplier_routes.py
-│   ├── transaction_routes.py, partner_routes.py, canvasser_routes.py
-│   ├── warehouse_routes.py, report_routes.py, admin_routes.py
-│   ├── loan_farmer_routes.py, shift_routes.py (NEW)
+├── routers/ (auth, product, supplier, transaction, partner, canvasser,
+│             warehouse, report, admin, loan_farmer, shift)
 
 /app/frontend/src/
 ├── pages/ (POS, Products, Reports, Dashboard, etc.)
@@ -39,19 +36,18 @@ stock_adjustments, stock_transfers, transactions, purchases, payment_history,
 partner_stores, partner_orders, partner_prices, canvassers, vehicles, returns,
 audit_log, store_settings, personal_loans, loan_payments, farmers,
 farmer_transactions, farmer_payments, pos_returns,
-**price_history** (NEW), **shifts** (NEW)
+price_history, shifts
 
 ## What's Been Implemented (Complete)
 1. Full RBAC (5 roles, correct permissions)
-2. USB ESC/POS thermal printing
-3. Canvasser receipt printing
-4. Dynamic items_per_box (decimal)
-5. PDF/CSV with dynamic store settings header
-6. Fixed warehouse value calculation
-7. **Notifikasi Stok Menipis** - Dashboard shows detailed low stock products, sidebar badge
-8. **Riwayat Perubahan Harga** - Auto-logged when HPP/price changes, viewable per product
-9. **Laporan Laba/Rugi** - Revenue vs actual COGS per period with daily breakdown + chart
-10. **Multi-user POS Shift Management** - Open/close shift with balance tracking
+2. USB ESC/POS thermal printing + Canvasser receipt printing
+3. Dynamic items_per_box (decimal)
+4. PDF/CSV with dynamic store settings header
+5. Fixed warehouse value calculation (gudang utama/toko/lainnya)
+6. Notifikasi Stok Menipis - Dashboard detail + sidebar badge
+7. Riwayat Perubahan Harga - Auto-logged, viewable per product
+8. Laporan Laba/Rugi - Revenue vs actual COGS + daily breakdown + chart + **Export PDF & CSV**
+9. Multi-user POS Shift Management - Open/close with balance tracking
 
 ## Test Reports
 - iteration_22: Receipt printing (12/12 passed)
