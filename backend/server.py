@@ -1,4 +1,5 @@
 from fastapi import FastAPI, APIRouter
+from fastapi.responses import PlainTextResponse
 from starlette.middleware.cors import CORSMiddleware
 import os
 import logging
@@ -108,3 +109,20 @@ async def startup_db():
 @app.on_event("shutdown")
 async def shutdown_db_client():
     pass
+
+
+
+# Serve print_server.py for download
+PRINT_SERVER_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "print_server.py")
+
+@app.get("/api/download/print-server")
+async def download_print_server():
+    if os.path.exists(PRINT_SERVER_PATH):
+        with open(PRINT_SERVER_PATH, "r") as f:
+            content = f.read()
+        return PlainTextResponse(
+            content,
+            media_type="application/octet-stream",
+            headers={"Content-Disposition": "attachment; filename=print_server.py"}
+        )
+    return PlainTextResponse("File not found", status_code=404)

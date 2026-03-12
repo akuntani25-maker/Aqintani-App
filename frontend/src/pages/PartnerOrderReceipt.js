@@ -214,11 +214,14 @@ export const PartnerOrderReceipt = () => {
             <p>Simpan struk sebagai bukti pesanan</p>
           </div>
         </div>
-        <div className={`mt-4 p-3 rounded-lg border text-sm ${serverAvailable ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-amber-50 border-amber-200 text-amber-800'}`}>
+        <div className={`mt-4 p-3 rounded-lg border text-sm ${serverAvailable ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-amber-50 border-amber-200 text-amber-800'}`} data-testid="print-server-status">
           {serverAvailable ? (
             <p><strong>Print Server terdeteksi.</strong> Struk akan dicetak menggunakan font firmware printer (kualitas terbaik).</p>
           ) : (
-            <p><strong>Print Server tidak aktif.</strong> "Cetak Struk" akan menggunakan browser print. Untuk kualitas terbaik, jalankan <code className="bg-white px-1 py-0.5 rounded text-xs">print_server.py</code> di PC Anda.</p>
+            <div>
+              <p><strong>Print Server tidak aktif.</strong> "Cetak Struk" akan menggunakan browser print.</p>
+              <p className="mt-1">Untuk kualitas terbaik, <a href={`${process.env.REACT_APP_BACKEND_URL}/api/download/print-server`} download="print_server.py" className="underline font-semibold hover:text-amber-900">download print_server.py</a> dan jalankan di PC Anda.</p>
+            </div>
           )}
         </div>
       </div>

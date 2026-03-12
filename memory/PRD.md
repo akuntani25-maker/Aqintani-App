@@ -18,9 +18,10 @@ Aplikasi web responsif untuk toko farmasi dan pertanian bernama "UD. AQIN TANI" 
 - `get_current_user` → any authenticated user
 
 ## Printing Architecture
-- **Cetak Struk (Browser Print)** - `window.print()` via new window with optimized thermal CSS (@page size:58mm, Courier New monospace, 48mm printable width). Works with any printer installed on the OS.
-- **Cetak Bluetooth** - ESC/POS raw commands via Web Bluetooth API. For mobile/tablet.
-- USB option removed (WebUSB incompatible with most PC setups)
+- **Cetak Struk (PC)** - Prioritas: Local Print Server (ESC/POS raw via localhost:9100) → Fallback: browser `window.print()` dengan CSS thermal 58mm
+- **Cetak Bluetooth** - ESC/POS raw commands via Web Bluetooth API. Untuk mobile/tablet.
+- **Local Print Server** - `print_server.py` (Flask + pywin32) berjalan di PC user, menerima raw ESC/POS data dan kirim ke printer USB. Download tersedia via `/api/download/print-server`.
+- USB WebUSB option dihapus (tidak kompatibel dengan sebagian besar setup PC)
 
 ## What's Been Implemented (Complete)
 1. Full RBAC (5 roles, correct permissions)
@@ -33,14 +34,23 @@ Aplikasi web responsif untuk toko farmasi dan pertanian bernama "UD. AQIN TANI" 
 8. Riwayat Perubahan Harga - Auto-logged, viewable per product
 9. Laporan Laba/Rugi - Revenue vs COGS + daily breakdown + chart + Export PDF/CSV
 10. Multi-user POS Shift Management
+11. **Local Print Server Solution** - `print_server.py` created with Flask + pywin32 for high-quality USB thermal printing. Frontend auto-detects server, with browser print fallback. Download link available in receipt page.
 
 ## Credentials
 - Admin: admin@aqintani.com / admin123
-- Office Staff: kantor@aqintani.com / kantor123
+- Office Staff: karyawan@aqintani.com / karyawan123
 - Cashier: kasir@aqintani.com / kasir123
-- Canvasser: sahidin@aqintani.com / 123456
+- Canvasser: canvasser@gmail.com / 123456
 
 ## Test Reports
 - iteration_22: Receipt printing (12/12 passed)
 - iteration_23: RBAC fixes (36+ passed)
 - iteration_24: 4 new features (21/21 backend + all UI passed)
+
+## Key Files
+- `/app/print_server.py` - Local print server script (user runs on PC)
+- `/app/PRINT_SERVER_GUIDE.md` - Setup guide in Indonesian
+- `/app/frontend/src/utils/ThermalPrinter.js` - ESC/POS utility + server communication
+- `/app/frontend/src/pages/ReceiptPreview.js` - POS receipt with print server integration
+- `/app/frontend/src/pages/PartnerOrderReceipt.js` - Partner order receipt with print server integration
+- `/app/backend/server.py` - Added `/api/download/print-server` endpoint
