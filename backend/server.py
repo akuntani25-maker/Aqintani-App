@@ -20,6 +20,7 @@ from routers import (
     report_routes,
     admin_routes,
     loan_farmer_routes,
+    shift_routes,
 )
 
 app = FastAPI()
@@ -36,6 +37,7 @@ api_router.include_router(warehouse_routes.router)
 api_router.include_router(report_routes.router)
 api_router.include_router(admin_routes.router)
 api_router.include_router(loan_farmer_routes.router)
+api_router.include_router(shift_routes.router)
 
 app.include_router(api_router)
 

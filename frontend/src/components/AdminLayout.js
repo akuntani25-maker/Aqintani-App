@@ -35,6 +35,7 @@ export const AdminLayout = () => {
   const navigate = useNavigate();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [permissions, setPermissions] = useState([]);
+  const [lowStockCount, setLowStockCount] = useState(0);
 
   useEffect(() => {
     const fetchPerms = async () => {
@@ -46,6 +47,18 @@ export const AdminLayout = () => {
       }
     };
     fetchPerms();
+  }, []);
+
+  useEffect(() => {
+    const fetchLowStock = async () => {
+      try {
+        const res = await api.get('/products/low-stock');
+        setLowStockCount(Array.isArray(res.data) ? res.data.length : 0);
+      } catch {}
+    };
+    fetchLowStock();
+    const interval = setInterval(fetchLowStock, 60000);
+    return () => clearInterval(interval);
   }, []);
 
   const handleLogout = () => { logout(); navigate('/login'); };
@@ -130,7 +143,12 @@ export const AdminLayout = () => {
               data-testid={`menu-${item.label.toLowerCase()}`}
             >
               <item.icon className="w-5 h-5 shrink-0" />
-              <span>{item.label}</span>
+              <span className="flex-1">{item.label}</span>
+              {item.perm === 'products' && lowStockCount > 0 && (
+                <span className="bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center" data-testid="low-stock-badge">
+                  {lowStockCount}
+                </span>
+              )}
             </NavLink>
           ))}
         </nav>

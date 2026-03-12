@@ -264,16 +264,38 @@ export const Dashboard = () => {
         </Card>
       </div>
 
-      {/* Low Stock Alert */}
+      {/* Low Stock Alert - Enhanced */}
       {stats?.low_stock_count > 0 && (
         <Card className="p-6 bg-orange-50 border-orange-200" data-testid="low-stock-alert">
-          <div className="flex items-start gap-3">
+          <div className="flex items-start gap-3 mb-4">
             <AlertTriangle className="w-5 h-5 text-orange-500 mt-1" />
             <div>
-              <h3 className="font-semibold text-orange-900">Peringatan Stok</h3>
+              <h3 className="font-semibold text-orange-900">Peringatan Stok Menipis</h3>
               <p className="text-sm text-orange-700 mt-1">Ada {stats.low_stock_count} produk dengan stok menipis. Segera lakukan restock.</p>
             </div>
           </div>
+          {stats.low_stock_products?.length > 0 && (
+            <div className="space-y-2">
+              {stats.low_stock_products.map((p, i) => (
+                <div key={p.id || i} className="flex items-center justify-between p-3 rounded-lg bg-white border border-orange-200" data-testid={`low-stock-item-${i}`}>
+                  <div>
+                    <p className="font-medium text-sm">{p.name}</p>
+                    <p className="text-xs text-muted-foreground">Min: {p.min_stock_alert} satuan</p>
+                  </div>
+                  <div className="text-right">
+                    <p className={`font-bold text-sm ${p.stock <= 0 ? 'text-red-600' : 'text-orange-600'}`}>
+                      {p.stock} satuan
+                    </p>
+                    {p.items_per_box > 1 && (
+                      <p className="text-xs text-muted-foreground">
+                        ({Math.floor(p.stock / p.items_per_box)} dus + {p.stock % p.items_per_box} pcs)
+                      </p>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
         </Card>
       )}
     </div>

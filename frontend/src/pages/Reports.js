@@ -6,7 +6,8 @@ import { Label } from '../components/ui/label';
 import { Card } from '../components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
 import { toast } from 'sonner';
-import { FileText, Download, TrendingUp, TrendingDown, DollarSign, ShoppingCart, Store, Award, FileDown } from 'lucide-react';
+import { FileText, Download, TrendingUp, TrendingDown, DollarSign, ShoppingCart, Store, Award, FileDown, BarChart3 } from 'lucide-react';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
@@ -15,6 +16,7 @@ export const Reports = () => {
   const [dateFrom, setDateFrom] = useState(new Date().toISOString().split('T')[0]);
   const [dateTo, setDateTo] = useState(new Date().toISOString().split('T')[0]);
   const [reportData, setReportData] = useState(null);
+  const [profitLoss, setProfitLoss] = useState(null);
   const [loading, setLoading] = useState(false);
   const [storeSettings, setStoreSettings] = useState(null);
 
@@ -25,14 +27,20 @@ export const Reports = () => {
   const fetchReport = async () => {
     setLoading(true);
     setReportData(null);
+    setProfitLoss(null);
     try {
-      const endpoints = {
-        pos: '/reports/sales-detail',
-        partner: '/reports/partner-sales-detail',
-        bestseller: '/reports/best-sellers'
-      };
-      const res = await api.get(`${endpoints[activeTab]}?date_from=${dateFrom}&date_to=${dateTo}`);
-      setReportData({ ...res.data, type: activeTab });
+      if (activeTab === 'profit_loss') {
+        const res = await api.get(`/reports/profit-loss?date_from=${dateFrom}&date_to=${dateTo}`);
+        setProfitLoss(res.data);
+      } else {
+        const endpoints = {
+          pos: '/reports/sales-detail',
+          partner: '/reports/partner-sales-detail',
+          bestseller: '/reports/best-sellers'
+        };
+        const res = await api.get(`${endpoints[activeTab]}?date_from=${dateFrom}&date_to=${dateTo}`);
+        setReportData({ ...res.data, type: activeTab });
+      }
     } catch (error) {
       toast.error('Gagal memuat laporan');
     } finally { setLoading(false); }
@@ -219,8 +227,11 @@ export const Reports = () => {
           <Button variant={activeTab === 'partner' ? 'default' : 'outline'} size="sm" onClick={() => { setActiveTab('partner'); setReportData(null); }} data-testid="tab-partner">
             <Store className="w-4 h-4 mr-1" />Kios Mitra
           </Button>
-          <Button variant={activeTab === 'bestseller' ? 'default' : 'outline'} size="sm" onClick={() => { setActiveTab('bestseller'); setReportData(null); }} data-testid="tab-bestseller">
+          <Button variant={activeTab === 'bestseller' ? 'default' : 'outline'} size="sm" onClick={() => { setActiveTab('bestseller'); setReportData(null); setProfitLoss(null); }} data-testid="tab-bestseller">
             <Award className="w-4 h-4 mr-1" />Terlaris
+          </Button>
+          <Button variant={activeTab === 'profit_loss' ? 'default' : 'outline'} size="sm" onClick={() => { setActiveTab('profit_loss'); setReportData(null); setProfitLoss(null); }} data-testid="tab-profit-loss">
+            <BarChart3 className="w-4 h-4 mr-1" />Laba/Rugi
           </Button>
         </div>
         <div className="flex flex-col md:flex-row gap-4 items-end">
@@ -497,6 +508,89 @@ export const Reports = () => {
                       );
                     })}
                   </TableBody>
+                </Table>
+              </div>
+            </Card>
+          )}
+        </div>
+      )}
+
+      {/* Profit & Loss Report */}
+      {profitLoss && (
+        <div className="space-y-6" data-testid="profit-loss-result">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <Card className="p-5">
+              <p className="text-xs text-muted-foreground uppercase tracking-wider">Total Revenue</p>
+              <p className="text-lg md:text-xl font-bold mt-1" data-testid="pl-revenue">{fmt(profitLoss.total_revenue)}</p>
+              <p className="text-xs text-muted-foreground mt-1">POS: {fmt(profitLoss.pos_revenue)} | Mitra: {fmt(profitLoss.partner_revenue)}</p>
+            </Card>
+            <Card className="p-5">
+              <p className="text-xs text-muted-foreground uppercase tracking-wider">Total HPP (COGS)</p>
+              <p className="text-lg md:text-xl font-bold text-red-600 mt-1" data-testid="pl-cogs">{fmt(profitLoss.total_cogs)}</p>
+              <p className="text-xs text-muted-foreground mt-1">POS: {fmt(profitLoss.pos_cogs)} | Mitra: {fmt(profitLoss.partner_cogs)}</p>
+            </Card>
+            <Card className="p-5 bg-emerald-50 border-emerald-200">
+              <p className="text-xs text-emerald-700 uppercase tracking-wider font-semibold">Laba Kotor</p>
+              <p className={`text-lg md:text-xl font-bold mt-1 ${profitLoss.gross_profit >= 0 ? 'text-emerald-600' : 'text-red-600'}`} data-testid="pl-gross-profit">{fmt(profitLoss.gross_profit)}</p>
+            </Card>
+            <Card className="p-5">
+              <p className="text-xs text-muted-foreground uppercase tracking-wider">Margin</p>
+              <p className="text-lg md:text-xl font-bold text-blue-600 mt-1" data-testid="pl-margin">{profitLoss.margin_percent}%</p>
+              <p className="text-xs text-muted-foreground mt-1">{profitLoss.total_transactions} transaksi | {profitLoss.total_partner_orders} order mitra</p>
+            </Card>
+          </div>
+
+          {profitLoss.daily_data?.length > 0 && (
+            <Card className="p-6">
+              <h3 className="font-semibold mb-4">Grafik Laba/Rugi Harian</h3>
+              <ResponsiveContainer width="100%" height={300}>
+                <BarChart data={profitLoss.daily_data}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                  <XAxis dataKey="date" tick={{ fill: '#6B7280', fontSize: 11 }} />
+                  <YAxis tick={{ fill: '#6B7280', fontSize: 11 }} tickFormatter={(v) => `${(v / 1000000).toFixed(1)}jt`} />
+                  <Tooltip formatter={(v) => fmt(v)} contentStyle={{ borderRadius: '8px', border: '1px solid #e5e7eb' }} />
+                  <Legend />
+                  <Bar dataKey="revenue" name="Revenue" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="cogs" name="HPP" fill="#ef4444" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="profit" name="Laba" fill="#10b981" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </Card>
+          )}
+
+          {profitLoss.daily_data?.length > 0 && (
+            <Card className="p-6">
+              <h3 className="font-semibold mb-4">Rincian Harian</h3>
+              <div className="rounded-lg border overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-muted/50">
+                      <TableHead>Tanggal</TableHead>
+                      <TableHead className="text-right">Revenue</TableHead>
+                      <TableHead className="text-right">HPP</TableHead>
+                      <TableHead className="text-right">Laba</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {profitLoss.daily_data.map((d, i) => (
+                      <TableRow key={i} data-testid={`pl-row-${i}`}>
+                        <TableCell>{d.date}</TableCell>
+                        <TableCell className="text-right font-medium">{fmt(d.revenue)}</TableCell>
+                        <TableCell className="text-right text-red-600">{fmt(d.cogs)}</TableCell>
+                        <TableCell className="text-right">
+                          <span className={`font-semibold ${d.profit >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>{fmt(d.profit)}</span>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                  <tfoot>
+                    <tr className="border-t-2 bg-muted/30 font-bold">
+                      <td className="p-3">TOTAL</td>
+                      <td className="p-3 text-right">{fmt(profitLoss.total_revenue)}</td>
+                      <td className="p-3 text-right text-red-600">{fmt(profitLoss.total_cogs)}</td>
+                      <td className="p-3 text-right text-emerald-600">{fmt(profitLoss.gross_profit)}</td>
+                    </tr>
+                  </tfoot>
                 </Table>
               </div>
             </Card>

@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { toast } from 'sonner';
-import { Plus, Search, Pencil, Trash2, Package, ArrowRightLeft, Filter, AlertTriangle, ClipboardEdit } from 'lucide-react';
+import { Plus, Search, Pencil, Trash2, Package, ArrowRightLeft, Filter, AlertTriangle, ClipboardEdit, History } from 'lucide-react';
 import { CurrencyInput } from '../components/CurrencyInput';
 import { Pagination } from '../components/Pagination';
 
@@ -45,6 +45,11 @@ export const Products = () => {
   const [stockAdjValues, setStockAdjValues] = useState({});
   const [stockAdjReason, setStockAdjReason] = useState('Koreksi fisik');
   const [stockAdjSaving, setStockAdjSaving] = useState(false);
+
+  // Price History
+  const [priceHistoryOpen, setPriceHistoryOpen] = useState(false);
+  const [priceHistory, setPriceHistory] = useState([]);
+  const [priceHistoryProduct, setPriceHistoryProduct] = useState(null);
 
   const [formData, setFormData] = useState({
     name: '', barcode: '', category_id: '', supplier_id: '',
@@ -184,6 +189,15 @@ export const Products = () => {
     } catch (error) {
       toast.error(error.response?.data?.detail || 'Gagal menyesuaikan stok');
     } finally { setStockAdjSaving(false); }
+  };
+
+  const openPriceHistory = async (product) => {
+    setPriceHistoryProduct(product);
+    try {
+      const res = await api.get(`/products/${product.id}/price-history`);
+      setPriceHistory(res.data);
+    } catch { setPriceHistory([]); }
+    setPriceHistoryOpen(true);
   };
 
   const filteredProducts = products.filter(p => {
@@ -481,6 +495,9 @@ export const Products = () => {
                     <TableCell className="text-right text-muted-foreground">{fmt(product.cost_price / Math.max(1, product.items_per_box || 1))}</TableCell>
                     <TableCell>
                       <div className="flex items-center justify-center gap-1">
+                        <Button size="sm" variant="ghost" onClick={() => openPriceHistory(product)} title="Riwayat Harga" data-testid={`price-history-${product.id}`}>
+                          <History className="w-4 h-4 text-amber-600" />
+                        </Button>
                         <Button size="sm" variant="ghost" onClick={() => openStockAdj(product)} title="Koreksi Stok" data-testid={`adjust-stock-${product.id}`}>
                           <ClipboardEdit className="w-4 h-4 text-blue-600" />
                         </Button>
@@ -634,6 +651,53 @@ export const Products = () => {
                   <ClipboardEdit className="w-4 h-4 mr-2" />{stockAdjSaving ? 'Menyimpan...' : 'Simpan Koreksi'}
                 </Button>
               </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Price History Dialog */}
+      <Dialog open={priceHistoryOpen} onOpenChange={setPriceHistoryOpen}>
+        <DialogContent className="max-w-lg max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Riwayat Perubahan Harga</DialogTitle>
+          </DialogHeader>
+          {priceHistoryProduct && (
+            <div className="space-y-4">
+              <div className="p-3 bg-accent rounded-lg">
+                <p className="font-semibold">{priceHistoryProduct.name}</p>
+                <p className="text-sm text-muted-foreground">HPP Saat Ini: {fmt(priceHistoryProduct.cost_price)} / Jual: {fmt(priceHistoryProduct.price)}</p>
+              </div>
+              {priceHistory.length === 0 ? (
+                <p className="text-center text-muted-foreground py-6">Belum ada riwayat perubahan harga</p>
+              ) : (
+                <div className="space-y-3">
+                  {priceHistory.map((h, i) => (
+                    <div key={h.id || i} className="border rounded-lg p-3 space-y-1" data-testid={`price-history-item-${i}`}>
+                      <div className="flex justify-between text-xs text-muted-foreground">
+                        <span>{new Date(h.changed_at).toLocaleString('id-ID')}</span>
+                        <span>oleh {h.changed_by}</span>
+                      </div>
+                      {h.old_cost_price !== h.new_cost_price && (
+                        <div className="flex items-center gap-2 text-sm">
+                          <span className="text-muted-foreground">HPP:</span>
+                          <span className="line-through text-red-500">{fmt(h.old_cost_price)}</span>
+                          <span>→</span>
+                          <span className="font-medium text-emerald-600">{fmt(h.new_cost_price)}</span>
+                        </div>
+                      )}
+                      {h.old_price !== h.new_price && (
+                        <div className="flex items-center gap-2 text-sm">
+                          <span className="text-muted-foreground">Jual:</span>
+                          <span className="line-through text-red-500">{fmt(h.old_price)}</span>
+                          <span>→</span>
+                          <span className="font-medium text-emerald-600">{fmt(h.new_price)}</span>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </DialogContent>

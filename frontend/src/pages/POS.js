@@ -6,7 +6,7 @@ import { Input } from '../components/ui/input';
 import { Card } from '../components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { toast } from 'sonner';
-import { Search, Plus, Minus, Trash2, ShoppingCart, LogOut, CreditCard, Banknote, Smartphone, Printer, Pencil, ArrowRightLeft, BarChart3, FileText, Users, RotateCcw } from 'lucide-react';
+import { Search, Plus, Minus, Trash2, ShoppingCart, LogOut, CreditCard, Banknote, Smartphone, Printer, Pencil, ArrowRightLeft, BarChart3, FileText, Users, RotateCcw, Clock } from 'lucide-react';
 import { CurrencyInput } from '../components/CurrencyInput';
 import { Pagination } from '../components/Pagination';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../components/ui/dialog';
@@ -109,6 +109,15 @@ export const POS = () => {
   const [transferSearch, setTransferSearch] = useState('');
   const [transferResults, setTransferResults] = useState([]);
 
+  // Shift management
+  const [currentShift, setCurrentShift] = useState(null);
+  const [shiftLoading, setShiftLoading] = useState(true);
+  const [showOpenShift, setShowOpenShift] = useState(false);
+  const [showCloseShift, setShowCloseShift] = useState(false);
+  const [openingBalance, setOpeningBalance] = useState(0);
+  const [closingBalance, setClosingBalance] = useState(0);
+  const [shiftNotes, setShiftNotes] = useState('');
+
   // Return/Exchange state
   const [showReturn, setShowReturn] = useState(false);
   const [returnTxnSearch, setReturnTxnSearch] = useState('');
@@ -202,7 +211,41 @@ export const POS = () => {
     fetchProducts();
     fetchDailySummary();
     fetchWarehouses();
+    fetchCurrentShift();
   }, []);
+
+  const fetchCurrentShift = async () => {
+    try {
+      const res = await api.get('/shifts/current');
+      setCurrentShift(res.data);
+      if (!res.data) setShowOpenShift(true);
+    } catch {
+      setShowOpenShift(true);
+    } finally {
+      setShiftLoading(false);
+    }
+  };
+
+  const handleOpenShift = async () => {
+    try {
+      const res = await api.post(`/shifts/open?opening_balance=${openingBalance}`);
+      setCurrentShift(res.data);
+      setShowOpenShift(false);
+      toast.success('Shift berhasil dibuka');
+    } catch (e) { toast.error('Gagal membuka shift'); }
+  };
+
+  const handleCloseShift = async () => {
+    try {
+      const res = await api.post(`/shifts/close?closing_balance=${closingBalance}&notes=${encodeURIComponent(shiftNotes)}`);
+      setCurrentShift(null);
+      setShowCloseShift(false);
+      toast.success('Shift berhasil ditutup');
+      setClosingBalance(0);
+      setShiftNotes('');
+      setShowOpenShift(true);
+    } catch (e) { toast.error('Gagal menutup shift'); }
+  };
 
   const fetchProducts = async () => {
     try {
@@ -422,6 +465,11 @@ export const POS = () => {
               <p className="text-sm text-muted-foreground">Kasir: {user?.name}</p>
             </div>
             <div className="flex items-center gap-2">
+              {currentShift && (
+                <Button variant="outline" size="sm" onClick={async () => { await fetchCurrentShift(); setShowCloseShift(true); }} className="text-orange-600 border-orange-200" data-testid="close-shift-button">
+                  <Clock className="w-4 h-4 mr-2" />Tutup Shift
+                </Button>
+              )}
               <Button variant="outline" onClick={() => navigate('/pos/daily-transactions')} data-testid="pos-daily-txn-button">
                 <FileText className="w-4 h-4 mr-2" />Rincian
               </Button>
@@ -859,6 +907,63 @@ export const POS = () => {
                 </div>
               </>
             )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Open Shift Dialog */}
+      <Dialog open={showOpenShift && !shiftLoading} onOpenChange={setShowOpenShift}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Buka Shift Baru</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">Masukkan saldo awal kasir untuk memulai shift.</p>
+            <div className="space-y-2">
+              <Label>Saldo Awal (Rp)</Label>
+              <CurrencyInput value={openingBalance} onChange={setOpeningBalance} data-testid="opening-balance-input" />
+            </div>
+            <div className="flex gap-2 justify-end">
+              <Button onClick={handleOpenShift} data-testid="confirm-open-shift">Buka Shift</Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Close Shift Dialog */}
+      <Dialog open={showCloseShift} onOpenChange={setShowCloseShift}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Tutup Shift</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            {currentShift && (
+              <div className="bg-muted p-4 rounded-lg space-y-2 text-sm">
+                <div className="flex justify-between"><span className="text-muted-foreground">Kasir:</span><span className="font-medium">{currentShift.user_name}</span></div>
+                <div className="flex justify-between"><span className="text-muted-foreground">Dibuka:</span><span>{new Date(currentShift.opened_at).toLocaleString('id-ID')}</span></div>
+                <div className="flex justify-between"><span className="text-muted-foreground">Saldo Awal:</span><span>{fmt(currentShift.opening_balance)}</span></div>
+                <div className="flex justify-between border-t pt-2"><span className="text-muted-foreground">Total Penjualan:</span><span className="font-bold text-emerald-600">{fmt(currentShift.total_sales)}</span></div>
+                <div className="flex justify-between"><span className="text-muted-foreground">Jumlah Transaksi:</span><span className="font-bold">{currentShift.total_transactions}</span></div>
+                <div className="flex justify-between border-t pt-2 font-semibold"><span>Ekspektasi Kas:</span><span>{fmt(currentShift.opening_balance + currentShift.total_sales)}</span></div>
+              </div>
+            )}
+            <div className="space-y-2">
+              <Label>Saldo Akhir Aktual (Rp)</Label>
+              <CurrencyInput value={closingBalance} onChange={setClosingBalance} data-testid="closing-balance-input" />
+            </div>
+            {currentShift && closingBalance > 0 && (
+              <div className={`text-sm font-medium p-2 rounded ${Math.abs(closingBalance - (currentShift.opening_balance + currentShift.total_sales)) < 100 ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700'}`}>
+                Selisih: {fmt(closingBalance - (currentShift.opening_balance + currentShift.total_sales))}
+              </div>
+            )}
+            <div className="space-y-2">
+              <Label>Catatan</Label>
+              <Input value={shiftNotes} onChange={(e) => setShiftNotes(e.target.value)} placeholder="Catatan akhir shift..." data-testid="shift-notes-input" />
+            </div>
+            <div className="flex gap-2 justify-end">
+              <Button variant="outline" onClick={() => setShowCloseShift(false)}>Batal</Button>
+              <Button onClick={handleCloseShift} className="bg-orange-600 hover:bg-orange-700" data-testid="confirm-close-shift">Tutup Shift</Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>

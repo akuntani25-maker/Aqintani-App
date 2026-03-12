@@ -77,7 +77,7 @@ async def get_dashboard_stats(admin: dict = Depends(require_admin_panel_access))
 
     # Personal loans (piutang pribadi) & farmer debts (hutang petani)
     personal_loans = await db.personal_loans.find({"remaining": {"$gt": 0}}, {"_id": 0, "remaining": 1}).to_list(10000)
-    total_personal_loans = sum(l.get("remaining", 0) for l in personal_loans)
+    total_personal_loans = sum(loan.get("remaining", 0) for loan in personal_loans)
     farmers = await db.farmers.find({}, {"_id": 0, "current_debt": 1}).to_list(10000)
     total_farmer_debt = sum(f.get("current_debt", 0) for f in farmers)
 
@@ -91,9 +91,16 @@ async def get_dashboard_stats(admin: dict = Depends(require_admin_panel_access))
         {"due_date": {"$gte": month_start, "$lte": month_end}, "remaining": {"$gt": 0}}, {"_id": 0}
     ).to_list(100)
 
+    # Low stock product details
+    low_stock_products = await db.products.find(
+        {"$expr": {"$lte": ["$stock", "$min_stock_alert"]}},
+        {"_id": 0, "id": 1, "name": 1, "stock": 1, "min_stock_alert": 1, "items_per_box": 1}
+    ).sort("stock", 1).limit(10).to_list(10)
+
     return {
         "today_sales": today_sales, "today_transactions": len(today_transactions),
         "total_products": total_products, "low_stock_count": low_stock_count,
+        "low_stock_products": low_stock_products,
         "last_7_days": last_7_days, "inventory_value": total_inventory,
         "warehouse_chart": warehouse_chart, "stock_in_today": stock_in_today,
         "stock_out_today": stock_out_today, "total_supplier_debt": total_supplier_debt,
@@ -351,6 +358,105 @@ async def get_analytics_summary(admin: dict = Depends(require_admin_panel_access
         "total_partner_sales": total_partner_sales, "total_partner_unpaid": total_partner_unpaid,
         "estimated_margin": monthly_sales - monthly_cost,
         "chart_data": chart_data, "category_breakdown": list(category_stock.values())
+    }
+
+
+# ============= PROFIT & LOSS REPORT =============
+@router.get("/reports/profit-loss")
+async def get_profit_loss_report(date_from: str, date_to: str, admin: dict = Depends(require_admin_panel_access)):
+    """Laporan Laba/Rugi berdasarkan HPP aktual per produk"""
+    # POS Transactions
+    transactions = await db.transactions.find(
+        {"date": {"$gte": date_from, "$lte": date_to}, "status": {"$ne": "returned"}},
+        {"_id": 0}
+    ).to_list(100000)
+
+    products_cache = {}
+    async def get_product(pid):
+        if pid not in products_cache:
+            p = await db.products.find_one({"id": pid}, {"_id": 0, "cost_price": 1, "items_per_box": 1})
+            products_cache[pid] = p
+        return products_cache[pid]
+
+    pos_revenue = 0
+    pos_cogs = 0
+    for t in transactions:
+        pos_revenue += t.get("total", 0)
+        for item in t.get("items", []):
+            pid = item.get("product_id", "")
+            qty = item.get("quantity", 0)
+            prod = await get_product(pid)
+            if prod:
+                ipb = prod.get("items_per_box", 1) or 1
+                cost_per_unit = (prod.get("cost_price", 0) or 0) / ipb
+                pos_cogs += qty * cost_per_unit
+
+    # Partner Orders
+    partner_orders = await db.partner_orders.find(
+        {"date": {"$gte": date_from, "$lte": date_to}},
+        {"_id": 0}
+    ).to_list(100000)
+
+    partner_revenue = 0
+    partner_cogs = 0
+    for o in partner_orders:
+        partner_revenue += o.get("total", 0)
+        for item in o.get("items", []):
+            pid = item.get("product_id", "")
+            qty = item.get("quantity", 0)
+            prod = await get_product(pid)
+            if prod:
+                ipb = prod.get("items_per_box", 1) or 1
+                cost_per_unit = (prod.get("cost_price", 0) or 0) / ipb
+                partner_cogs += qty * cost_per_unit
+
+    total_revenue = pos_revenue + partner_revenue
+    total_cogs = pos_cogs + partner_cogs
+    gross_profit = total_revenue - total_cogs
+    margin_pct = (gross_profit / total_revenue * 100) if total_revenue > 0 else 0
+
+    # Daily breakdown
+    daily = {}
+    for t in transactions:
+        d = t.get("date", "")
+        if d not in daily:
+            daily[d] = {"date": d, "revenue": 0, "cogs": 0}
+        daily[d]["revenue"] += t.get("total", 0)
+        for item in t.get("items", []):
+            prod = await get_product(item.get("product_id", ""))
+            if prod:
+                ipb = prod.get("items_per_box", 1) or 1
+                daily[d]["cogs"] += item.get("quantity", 0) * ((prod.get("cost_price", 0) or 0) / ipb)
+
+    for o in partner_orders:
+        d = o.get("date", "")
+        if d not in daily:
+            daily[d] = {"date": d, "revenue": 0, "cogs": 0}
+        daily[d]["revenue"] += o.get("total", 0)
+        for item in o.get("items", []):
+            prod = await get_product(item.get("product_id", ""))
+            if prod:
+                ipb = prod.get("items_per_box", 1) or 1
+                daily[d]["cogs"] += item.get("quantity", 0) * ((prod.get("cost_price", 0) or 0) / ipb)
+
+    daily_data = sorted(
+        [{"date": v["date"], "revenue": round(v["revenue"]), "cogs": round(v["cogs"]), "profit": round(v["revenue"] - v["cogs"])} for v in daily.values()],
+        key=lambda x: x["date"]
+    )
+
+    return {
+        "period": {"from": date_from, "to": date_to},
+        "pos_revenue": round(pos_revenue),
+        "pos_cogs": round(pos_cogs),
+        "partner_revenue": round(partner_revenue),
+        "partner_cogs": round(partner_cogs),
+        "total_revenue": round(total_revenue),
+        "total_cogs": round(total_cogs),
+        "gross_profit": round(gross_profit),
+        "margin_percent": round(margin_pct, 1),
+        "total_transactions": len(transactions),
+        "total_partner_orders": len(partner_orders),
+        "daily_data": daily_data,
     }
 
 

@@ -173,11 +173,31 @@ async def create_product(data: ProductCreate, admin: dict = Depends(require_admi
 
 @router.put("/products/{product_id}", response_model=Product)
 async def update_product(product_id: str, data: ProductCreate, admin: dict = Depends(require_admin_panel_access)):
+    old_product = await db.products.find_one({"id": product_id}, {"_id": 0})
+    if not old_product:
+        raise HTTPException(status_code=404, detail="Product not found")
+
     update_data = data.model_dump()
     update_data.pop("warehouse_id", None)
     update_data.pop("stock", None)
     update_data.pop("initial_paid", None)
     update_data["updated_at"] = datetime.now(timezone.utc).isoformat()
+
+    # Log price changes
+    old_cp = old_product.get("cost_price", 0)
+    old_sp = old_product.get("price", 0)
+    if old_cp != data.cost_price or old_sp != data.price:
+        await db.price_history.insert_one({
+            "id": str(uuid.uuid4()),
+            "product_id": product_id,
+            "product_name": data.name,
+            "old_cost_price": old_cp,
+            "new_cost_price": data.cost_price,
+            "old_price": old_sp,
+            "new_price": data.price,
+            "changed_by": admin.get("name", ""),
+            "changed_at": datetime.now(timezone.utc).isoformat(),
+        })
 
     result = await db.products.find_one_and_update(
         {"id": product_id},
@@ -185,8 +205,6 @@ async def update_product(product_id: str, data: ProductCreate, admin: dict = Dep
         return_document=True,
         projection={"_id": 0}
     )
-    if not result:
-        raise HTTPException(status_code=404, detail="Product not found")
 
     await ensure_warehouse_stock(product_id)
     await recalculate_product_stock(product_id)
@@ -194,6 +212,14 @@ async def update_product(product_id: str, data: ProductCreate, admin: dict = Dep
 
     result = await db.products.find_one({"id": product_id}, {"_id": 0})
     return result
+
+
+@router.get("/products/{product_id}/price-history")
+async def get_price_history(product_id: str, current_user: dict = Depends(get_current_user)):
+    history = await db.price_history.find(
+        {"product_id": product_id}, {"_id": 0}
+    ).sort("changed_at", -1).to_list(100)
+    return history
 
 
 @router.delete("/products/{product_id}")
