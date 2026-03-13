@@ -20,8 +20,7 @@ Aplikasi web responsif untuk toko farmasi dan pertanian bernama "UD. AQIN TANI" 
 ## Printing Architecture
 - **Cetak Struk (PC)** - Prioritas: Local Print Server (ESC/POS raw via localhost:9100) → Fallback: browser `window.print()` dengan CSS thermal 58mm
 - **Cetak Bluetooth** - ESC/POS raw commands via Web Bluetooth API. Untuk mobile/tablet.
-- **Local Print Server** - `print_server.py` (Flask + pywin32) berjalan di PC user, menerima raw ESC/POS data dan kirim ke printer USB. Download tersedia via `/api/download/print-server`.
-- USB WebUSB option dihapus (tidak kompatibel dengan sebagian besar setup PC)
+- **Local Print Server** - `print_server.py` (Flask + pywin32) berjalan di PC user. Mendukung Windows Service (auto-start). Download via `/api/download/print-server`.
 
 ## What's Been Implemented (Complete)
 1. Full RBAC (5 roles, correct permissions)
@@ -34,7 +33,10 @@ Aplikasi web responsif untuk toko farmasi dan pertanian bernama "UD. AQIN TANI" 
 8. Riwayat Perubahan Harga - Auto-logged, viewable per product
 9. Laporan Laba/Rugi - Revenue vs COGS + daily breakdown + chart + Export PDF/CSV
 10. Multi-user POS Shift Management
-11. **Local Print Server Solution** - `print_server.py` created with Flask + pywin32 for high-quality USB thermal printing. Frontend auto-detects server, with browser print fallback. Download link available in receipt page.
+11. Local Print Server Solution - Flask + pywin32, supports Windows Service (auto-start on boot)
+12. **Penomoran Berkelanjutan** - Rincian transaksi harian POS dengan nomor urut item yang berlanjut antar transaksi
+13. **PDF Portrait + Total di Akhir** - Export PDF laporan diubah ke portrait, total hanya muncul di halaman terakhir
+14. **Label Fix** - "Supplier Berhutang" diubah jadi "Hutang ke Supplier"
 
 ## Credentials
 - Admin: admin@aqintani.com / admin123
@@ -43,14 +45,13 @@ Aplikasi web responsif untuk toko farmasi dan pertanian bernama "UD. AQIN TANI" 
 - Canvasser: canvasser@gmail.com / 123456
 
 ## Test Reports
-- iteration_22: Receipt printing (12/12 passed)
-- iteration_23: RBAC fixes (36+ passed)
+- iteration_25: 4 user changes (17/17 backend + all UI passed)
 - iteration_24: 4 new features (21/21 backend + all UI passed)
+- iteration_23: RBAC fixes (36+ passed)
 
 ## Key Files
-- `/app/print_server.py` - Local print server script (user runs on PC)
+- `/app/print_server.py` - Local print server with Windows Service support
 - `/app/PRINT_SERVER_GUIDE.md` - Setup guide in Indonesian
-- `/app/frontend/src/utils/ThermalPrinter.js` - ESC/POS utility + server communication
-- `/app/frontend/src/pages/ReceiptPreview.js` - POS receipt with print server integration
-- `/app/frontend/src/pages/PartnerOrderReceipt.js` - Partner order receipt with print server integration
-- `/app/backend/server.py` - Added `/api/download/print-server` endpoint
+- `/app/frontend/src/pages/DailyTransactions.js` - Running number logic
+- `/app/frontend/src/pages/Reports.js` - PDF export portrait + showFoot lastPage
+- `/app/frontend/src/pages/SupplierDebt.js` - Label "Hutang ke Supplier"
