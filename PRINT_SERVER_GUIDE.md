@@ -5,8 +5,8 @@ Program kecil yang berjalan di PC Anda agar tombol **"Cetak Struk"** di aplikasi
 
 ## Cara Kerja
 ```
-Aplikasi POS  →  Print Server (di PC)  →  Printer USB
-   (browser)      (localhost:9100)        (ESC/POS raw)
+Aplikasi POS  -->  Print Server (di PC)  -->  Printer USB
+  (browser)       (localhost:9100)          (ESC/POS raw)
 ```
 
 ---
@@ -26,40 +26,57 @@ pip install flask flask-cors pywin32
 ```
 
 ### 3. Download File print_server.py
-- Download file `print_server.py` dari aplikasi
+- Download file `print_server.py` dari link di halaman struk aplikasi
 - Simpan di folder yang mudah diakses, misalnya `C:\PrintServer\print_server.py`
 
 ### 4. Pastikan Printer USB Terhubung
 - Colok kabel USB printer thermal ke PC
 - Pastikan printer muncul di **Settings > Printers & Scanners**
-- Jika belum muncul, install driver printer terlebih dahulu
 
-### 5. Jalankan Print Server
-Buka Command Prompt, lalu:
+---
 
+## Cara Menjalankan
+
+### Opsi A: Jalankan Manual (sekali pakai)
 ```
 cd C:\PrintServer
 python print_server.py
 ```
 
-Jika berhasil, akan muncul:
+### Opsi B: Install sebagai Windows Service (REKOMENDASI)
+Dengan cara ini, print server **otomatis jalan saat Windows start** tanpa perlu setup ulang.
+
+Buka **Command Prompt sebagai Administrator** (klik kanan > Run as administrator):
+
 ```
-==================================================
-  UD. AQIN TANI - Local Print Server
-==================================================
-  OS      : Windows
-  Port    : 9100
-  Printer : [Nama printer Anda]
-==================================================
-  Server siap di http://localhost:9100
-  Tekan Ctrl+C untuk menghentikan
-==================================================
+cd C:\PrintServer
+
+:: Install service (cukup sekali)
+python print_server.py install
+
+:: Jalankan service
+python print_server.py start
 ```
 
-### 6. Test Cetak
-Buka browser, lalu buka aplikasi POS. Di halaman struk:
-- Akan muncul pesan hijau: **"Print Server terdeteksi"**
-- Klik **"Cetak Struk"** → struk langsung tercetak dengan kualitas tinggi!
+Selesai! Print server sekarang **otomatis berjalan** setiap kali Windows dinyalakan.
+
+#### Perintah Service Lainnya:
+```
+python print_server.py stop       :: Hentikan service
+python print_server.py restart    :: Restart service
+python print_server.py remove     :: Hapus service dari Windows
+```
+
+---
+
+## Verifikasi
+Buka browser, ketik: `http://localhost:9100/status`
+
+Jika muncul `{"status": "ok", "printer": "..."}`, print server sudah aktif.
+
+Di halaman struk aplikasi:
+- Banner hijau: **"Print Server terdeteksi"** = sudah siap cetak
+- Banner kuning: **"Print Server tidak aktif"** = belum jalan
 
 ---
 
@@ -70,32 +87,18 @@ Buka browser, lalu buka aplikasi POS. Di halaman struk:
 - Pastikan printer menyala
 - Pastikan driver printer terinstall (cek di Settings > Printers)
 
-### "Print Server tidak aktif" (di aplikasi)
-- Pastikan `print_server.py` sedang berjalan di Command Prompt
-- Jangan tutup jendela Command Prompt saat menggunakan POS
+### Service gagal install
+- Pastikan Command Prompt dibuka **sebagai Administrator**
+- Pastikan `pywin32` terinstall: `pip install pywin32`
+- Jalankan `python -m win32serviceutil` untuk verifikasi
 
-### Ingin ganti printer?
-Buka browser, ketik:
-```
-http://localhost:9100/printers
-```
-Akan muncul daftar printer. Untuk memilih printer tertentu:
-```
-http://localhost:9100/set-printer
-```
-POST dengan body: `{"name": "Nama Printer Anda"}`
-
-### Test Print (tanpa aplikasi)
-Buka browser, ketik:
-```
-http://localhost:9100/test
-```
-Lalu klik atau gunakan Postman untuk POST ke URL tersebut.
+### Print Server tidak aktif (di aplikasi)
+- Cek apakah service berjalan: buka `services.msc`, cari "UD. AQIN TANI - Print Server"
+- Atau jalankan manual: `python print_server.py`
 
 ---
 
 ## Tips
-- **Jangan tutup** jendela Command Prompt selama menggunakan POS
-- Untuk **auto-start**, buat shortcut `print_server.py` di folder Startup Windows
-- Jika print server tidak aktif, tombol "Cetak Struk" otomatis menggunakan **browser print** sebagai fallback
+- **Gunakan Opsi B (Windows Service)** agar tidak perlu menjalankan manual setiap kali
 - Print server ini **100% lokal** - tidak ada data yang dikirim ke internet
+- Jika print server tidak aktif, tombol "Cetak Struk" otomatis menggunakan **browser print** sebagai fallback

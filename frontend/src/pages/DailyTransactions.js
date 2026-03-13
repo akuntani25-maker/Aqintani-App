@@ -34,6 +34,20 @@ export const DailyTransactions = () => {
   const transactions = data?.transactions || [];
   const farmerTxns = data?.farmer_transactions || [];
 
+  // Hitung running number berkelanjutan untuk semua item
+  let runningNo = 0;
+  const txnStartNos = transactions.map(txn => {
+    const start = runningNo + 1;
+    runningNo += txn.items.length;
+    return start;
+  });
+  const farmerStartNo = runningNo;
+  const farmerTxnStartNos = farmerTxns.map(txn => {
+    const start = runningNo + 1;
+    runningNo += txn.items.length;
+    return start;
+  });
+
   return (
     <div className="min-h-screen bg-background p-4 md:p-6 lg:p-8" data-testid="daily-transactions-page">
       <div className="max-w-6xl mx-auto space-y-6">
@@ -78,7 +92,7 @@ export const DailyTransactions = () => {
             <div className="p-8 text-center text-muted-foreground">Belum ada transaksi pada tanggal ini</div>
           ) : (
             <div className="divide-y">
-              {transactions.map(txn => (
+              {transactions.map((txn, txnIdx) => (
                 <div key={txn.id} className="p-4" data-testid={`txn-${txn.id}`}>
                   <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-3 gap-2">
                     <div>
@@ -95,6 +109,7 @@ export const DailyTransactions = () => {
                   </div>
                   <Table>
                     <TableHeader><TableRow className="text-xs">
+                      <TableHead className="py-1 w-12 text-center">No</TableHead>
                       <TableHead className="py-1">Barang</TableHead>
                       <TableHead className="py-1 text-right">Harga</TableHead>
                       <TableHead className="py-1 text-center">Qty</TableHead>
@@ -103,6 +118,7 @@ export const DailyTransactions = () => {
                     <TableBody>
                       {txn.items.map((item, idx) => (
                         <TableRow key={idx} className="text-sm">
+                          <TableCell className="py-1 text-center font-mono text-muted-foreground">{txnStartNos[txnIdx] + idx}</TableCell>
                           <TableCell className="py-1">{item.product_name}</TableCell>
                           <TableCell className="py-1 text-right">{fmt(item.price)}</TableCell>
                           <TableCell className="py-1 text-center">{item.quantity}</TableCell>
@@ -124,7 +140,7 @@ export const DailyTransactions = () => {
               <h2 className="text-lg font-semibold flex items-center gap-2"><DollarSign className="w-5 h-5 text-amber-500" /> Transaksi Hutang Petani ({farmerTxns.length})</h2>
             </div>
             <div className="divide-y">
-              {farmerTxns.map(txn => (
+              {farmerTxns.map((txn, txnIdx) => (
                 <div key={txn.id} className="p-4" data-testid={`farmer-txn-${txn.id}`}>
                   <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-3 gap-2">
                     <div>
@@ -139,6 +155,7 @@ export const DailyTransactions = () => {
                   </div>
                   <Table>
                     <TableHeader><TableRow className="text-xs">
+                      <TableHead className="py-1 w-12 text-center">No</TableHead>
                       <TableHead className="py-1">Barang</TableHead>
                       <TableHead className="py-1 text-right">Harga</TableHead>
                       <TableHead className="py-1 text-center">Qty</TableHead>
@@ -147,6 +164,7 @@ export const DailyTransactions = () => {
                     <TableBody>
                       {txn.items.map((item, idx) => (
                         <TableRow key={idx} className="text-sm">
+                          <TableCell className="py-1 text-center font-mono text-muted-foreground">{farmerTxnStartNos[txnIdx] + idx}</TableCell>
                           <TableCell className="py-1">{item.product_name}</TableCell>
                           <TableCell className="py-1 text-right">{fmt(item.price)}</TableCell>
                           <TableCell className="py-1 text-center">{item.quantity}</TableCell>

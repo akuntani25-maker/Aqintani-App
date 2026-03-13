@@ -223,7 +223,7 @@ export const SupplierDebt = () => {
           <Card className="p-3 md:p-4" data-testid="suppliers-with-debt-card">
             <div className="flex items-center gap-2 mb-1">
               <Users className="w-4 h-4 text-orange-600" />
-              <span className="text-xs md:text-sm text-muted-foreground font-medium">Supplier Berhutang</span>
+              <span className="text-xs md:text-sm text-muted-foreground font-medium">Hutang ke Supplier</span>
             </div>
             <p className="text-base md:text-xl font-bold text-orange-600">{summary.suppliers_with_debt}</p>
           </Card>

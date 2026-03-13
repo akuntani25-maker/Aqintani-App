@@ -110,7 +110,7 @@ export const Reports = () => {
 
   const exportPDF = () => {
     if (!reportData || !reportData.rows.length) return;
-    const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
     const pageWidth = doc.internal.pageSize.getWidth();
 
     // Kop Surat
@@ -141,7 +141,7 @@ export const Reports = () => {
 
     let startY = 40;
 
-    // Summary boxes
+    // Summary boxes (2 per row for portrait)
     doc.setTextColor(30, 41, 59);
     if (reportData.type === 'pos' || reportData.type === 'partner') {
       const summaryItems = [
@@ -150,21 +150,24 @@ export const Reports = () => {
         { label: 'Total Margin', value: fmt(reportData.total_margin) },
         { label: 'Margin %', value: marginPercent + '%' },
       ];
-      const boxW = (pageWidth - 28 - 12) / 4;
+      const boxW = (pageWidth - 28 - 4) / 2;
       summaryItems.forEach((item, i) => {
-        const x = 14 + i * (boxW + 4);
+        const row = Math.floor(i / 2);
+        const col = i % 2;
+        const x = 14 + col * (boxW + 4);
+        const y = startY + row * 20;
         doc.setFillColor(248, 250, 252);
-        doc.roundedRect(x, startY, boxW, 16, 2, 2, 'F');
+        doc.roundedRect(x, y, boxW, 16, 2, 2, 'F');
         doc.setFontSize(7);
         doc.setTextColor(100, 116, 139);
-        doc.text(item.label.toUpperCase(), x + 4, startY + 6);
+        doc.text(item.label.toUpperCase(), x + 4, y + 6);
         doc.setFontSize(11);
         doc.setFont('helvetica', 'bold');
         doc.setTextColor(15, 23, 42);
-        doc.text(item.value, x + 4, startY + 13);
+        doc.text(item.value, x + 4, y + 13);
         doc.setFont('helvetica', 'normal');
       });
-      startY += 22;
+      startY += 44;
     }
 
     // Table
@@ -187,11 +190,12 @@ export const Reports = () => {
       head,
       body,
       foot: footRow || undefined,
+      showFoot: 'lastPage',
       startY,
       theme: 'grid',
-      styles: { fontSize: 7.5, cellPadding: 2.5, lineColor: [226, 232, 240], lineWidth: 0.2 },
-      headStyles: { fillColor: [15, 23, 42], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 7.5 },
-      footStyles: { fillColor: [241, 245, 249], textColor: [15, 23, 42], fontStyle: 'bold', fontSize: 8 },
+      styles: { fontSize: 7, cellPadding: 2, lineColor: [226, 232, 240], lineWidth: 0.2 },
+      headStyles: { fillColor: [15, 23, 42], textColor: [255, 255, 255], fontStyle: 'bold', fontSize: 7 },
+      footStyles: { fillColor: [241, 245, 249], textColor: [15, 23, 42], fontStyle: 'bold', fontSize: 7.5 },
       alternateRowStyles: { fillColor: [248, 250, 252] },
       margin: { left: 14, right: 14 },
       didDrawPage: (data) => {
@@ -209,7 +213,7 @@ export const Reports = () => {
 
   const exportProfitLossPDF = () => {
     if (!profitLoss || !profitLoss.daily_data?.length) return;
-    const doc = new jsPDF({ orientation: 'landscape', unit: 'mm', format: 'a4' });
+    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
     const pageWidth = doc.internal.pageSize.getWidth();
 
     // Header / Kop Surat
@@ -239,7 +243,7 @@ export const Reports = () => {
 
     let startY = 40;
 
-    // Summary boxes
+    // Summary boxes (3 per row for portrait)
     const summaryItems = [
       { label: 'Revenue POS', value: fmt(profitLoss.pos_revenue) },
       { label: 'Revenue Mitra', value: fmt(profitLoss.partner_revenue) },
@@ -249,22 +253,25 @@ export const Reports = () => {
       { label: 'Margin', value: profitLoss.margin_percent + '%', color: [37, 99, 235] },
     ];
 
-    const boxW = (pageWidth - 28 - 20) / 6;
+    const boxW = (pageWidth - 28 - 8) / 3;
     summaryItems.forEach((item, i) => {
-      const x = 14 + i * (boxW + 4);
+      const row = Math.floor(i / 3);
+      const col = i % 3;
+      const x = 14 + col * (boxW + 4);
+      const y = startY + row * 20;
       doc.setFillColor(248, 250, 252);
-      doc.roundedRect(x, startY, boxW, 16, 2, 2, 'F');
+      doc.roundedRect(x, y, boxW, 16, 2, 2, 'F');
       doc.setFontSize(6.5);
       doc.setTextColor(100, 116, 139);
-      doc.text(item.label.toUpperCase(), x + 3, startY + 6);
+      doc.text(item.label.toUpperCase(), x + 3, y + 6);
       doc.setFontSize(10);
       doc.setFont('helvetica', 'bold');
       if (item.color) doc.setTextColor(...item.color);
       else doc.setTextColor(15, 23, 42);
-      doc.text(item.value, x + 3, startY + 13);
+      doc.text(item.value, x + 3, y + 13);
       doc.setFont('helvetica', 'normal');
     });
-    startY += 24;
+    startY += 44;
 
     // Additional info line
     doc.setFontSize(8);
@@ -286,6 +293,7 @@ export const Reports = () => {
       head,
       body,
       foot: footRow,
+      showFoot: 'lastPage',
       startY,
       theme: 'grid',
       styles: { fontSize: 8, cellPadding: 3, lineColor: [226, 232, 240], lineWidth: 0.2 },
@@ -293,7 +301,7 @@ export const Reports = () => {
       footStyles: { fillColor: [241, 245, 249], textColor: [15, 23, 42], fontStyle: 'bold', fontSize: 9 },
       alternateRowStyles: { fillColor: [248, 250, 252] },
       columnStyles: {
-        0: { cellWidth: 40 },
+        0: { cellWidth: 30 },
         1: { halign: 'right' },
         2: { halign: 'right', textColor: [220, 38, 38] },
         3: { halign: 'right', textColor: [5, 150, 105], fontStyle: 'bold' },

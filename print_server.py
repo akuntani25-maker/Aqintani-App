@@ -5,31 +5,41 @@ UD. AQIN TANI - Local Print Server
 Server lokal untuk mencetak struk ke printer thermal USB
 menggunakan perintah ESC/POS (font firmware printer).
 
-Cara pakai:
-  1. Install: pip install flask flask-cors pywin32
-  2. Jalankan: python print_server.py
-  3. Buka aplikasi POS, tekan "Cetak Struk"
+=== MODE 1: Jalankan langsung ===
+  python print_server.py
+
+=== MODE 2: Install sebagai Windows Service (auto-start) ===
+  python print_server.py install
+  python print_server.py start
+
+=== Perintah Service Lainnya ===
+  python print_server.py stop       # Hentikan service
+  python print_server.py remove     # Hapus service
+  python print_server.py restart    # Restart service
 
 Server berjalan di http://localhost:9100
 """
 
 import sys
+import os
 import json
 import platform
+import threading
+import socket
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 
-app = Flask(__name__)
-CORS(app)
-
 # ========== KONFIGURASI ==========
 PORT = 9100
-PRINTER_NAME = None  # None = auto-detect printer pertama, atau isi nama printer manual
+PRINTER_NAME = None  # None = auto-detect, atau isi nama printer manual
+
+# ========== FLASK APP ==========
+app = Flask(__name__)
+CORS(app)
 
 # ========== PRINTER HANDLER ==========
 
 def get_printer_list():
-    """Daftar semua printer yang terinstall di sistem."""
     system = platform.system()
     printers = []
     if system == 'Windows':
@@ -40,7 +50,6 @@ def get_printer_list():
         except ImportError:
             pass
     else:
-        # Linux/Mac - cek /dev/usb/lp*
         import glob
         printers = glob.glob('/dev/usb/lp*')
         if not printers:
@@ -49,7 +58,6 @@ def get_printer_list():
 
 
 def get_default_printer():
-    """Ambil nama printer default atau printer pertama."""
     global PRINTER_NAME
     if PRINTER_NAME:
         return PRINTER_NAME
@@ -70,7 +78,6 @@ def get_default_printer():
 
 
 def send_to_printer_windows(data, printer_name):
-    """Kirim raw data ke printer di Windows via win32print."""
     import win32print
     hPrinter = win32print.OpenPrinter(printer_name)
     try:
@@ -86,23 +93,19 @@ def send_to_printer_windows(data, printer_name):
 
 
 def send_to_printer_linux(data, device_path):
-    """Kirim raw data ke printer di Linux via device file."""
     with open(device_path, 'wb') as f:
         f.write(data)
 
 
 def send_raw_to_printer(data):
-    """Kirim raw ESC/POS bytes ke printer (auto-detect OS)."""
     printer = get_default_printer()
     if not printer:
         raise Exception("Tidak ada printer terdeteksi. Pastikan printer USB terhubung dan terinstall.")
-
     system = platform.system()
     if system == 'Windows':
         send_to_printer_windows(data, printer)
     else:
         send_to_printer_linux(data, printer)
-
     return printer
 
 
@@ -110,7 +113,6 @@ def send_raw_to_printer(data):
 
 @app.route('/status', methods=['GET'])
 def status():
-    """Cek apakah server aktif dan printer tersedia."""
     printer = get_default_printer()
     printers = get_printer_list()
     return jsonify({
@@ -123,12 +125,10 @@ def status():
 
 @app.route('/print', methods=['POST'])
 def print_receipt():
-    """Terima raw ESC/POS data dan kirim ke printer."""
     try:
         data = request.get_data()
         if not data:
             return jsonify({'error': 'Tidak ada data untuk dicetak'}), 400
-
         printer_used = send_raw_to_printer(data)
         return jsonify({
             'success': True,
@@ -141,7 +141,6 @@ def print_receipt():
 
 @app.route('/printers', methods=['GET'])
 def list_printers():
-    """Daftar semua printer yang tersedia."""
     return jsonify({
         'printers': get_printer_list(),
         'default': get_default_printer()
@@ -150,7 +149,6 @@ def list_printers():
 
 @app.route('/set-printer', methods=['POST'])
 def set_printer():
-    """Set printer yang digunakan secara manual."""
     global PRINTER_NAME
     body = request.get_json()
     name = body.get('name', '')
@@ -162,26 +160,20 @@ def set_printer():
 
 @app.route('/test', methods=['POST'])
 def test_print():
-    """Cetak halaman test untuk memastikan printer berfungsi."""
     try:
         test_data = bytearray()
-        # ESC @ (init)
         test_data.extend([0x1B, 0x40])
-        # Center align
         test_data.extend([0x1B, 0x61, 0x01])
-        # Bold on + Double size
         test_data.extend([0x1D, 0x21, 0x11])
         test_data.extend([0x1B, 0x45, 0x01])
         test_data.extend(b'UD. AQIN TANI')
         test_data.extend([0x0A])
-        # Normal size
         test_data.extend([0x1D, 0x21, 0x00])
         test_data.extend([0x1B, 0x45, 0x00])
         test_data.extend(b'Print Server Test')
         test_data.extend([0x0A])
         test_data.extend(b'================================')
         test_data.extend([0x0A])
-        # Left align
         test_data.extend([0x1B, 0x61, 0x00])
         test_data.extend(b'Printer OK!')
         test_data.extend([0x0A])
@@ -189,27 +181,64 @@ def test_print():
         test_data.extend([0x0A])
         test_data.extend(b'================================')
         test_data.extend([0x0A, 0x0A, 0x0A])
-        # Cut
         test_data.extend([0x1D, 0x56, 0x00])
-
         printer_used = send_raw_to_printer(bytes(test_data))
-        return jsonify({
-            'success': True,
-            'message': f'Test print berhasil ke: {printer_used}'
-        })
+        return jsonify({'success': True, 'message': f'Test print berhasil ke: {printer_used}'})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
 
+def run_server():
+    app.run(host='0.0.0.0', port=PORT, debug=False, use_reloader=False)
+
+
+# ========== WINDOWS SERVICE ==========
+
+if platform.system() == 'Windows':
+    try:
+        import win32serviceutil
+        import win32service
+        import win32event
+        import servicemanager
+
+        class AqinTaniPrintService(win32serviceutil.ServiceFramework):
+            _svc_name_ = 'AqinTaniPrintServer'
+            _svc_display_name_ = 'UD. AQIN TANI - Print Server'
+            _svc_description_ = 'Server cetak struk thermal untuk aplikasi UD. AQIN TANI (port 9100)'
+
+            def __init__(self, args):
+                win32serviceutil.ServiceFramework.__init__(self, args)
+                self.hWaitStop = win32event.CreateEvent(None, 0, 0, None)
+                self.server_thread = None
+
+            def SvcStop(self):
+                self.ReportServiceStatus(win32service.SERVICE_STOP_PENDING)
+                win32event.SetEvent(self.hWaitStop)
+
+            def SvcDoRun(self):
+                servicemanager.LogMsg(
+                    servicemanager.EVENTLOG_INFORMATION_TYPE,
+                    servicemanager.PYS_SERVICE_STARTED,
+                    (self._svc_name_, '')
+                )
+                self.server_thread = threading.Thread(target=run_server, daemon=True)
+                self.server_thread.start()
+                win32event.WaitForSingleObject(self.hWaitStop, win32event.INFINITE)
+
+    except ImportError:
+        AqinTaniPrintService = None
+else:
+    AqinTaniPrintService = None
+
+
 # ========== MAIN ==========
 
-if __name__ == '__main__':
+def print_banner():
     print("=" * 50)
     print("  UD. AQIN TANI - Local Print Server")
     print("=" * 50)
     print(f"  OS      : {platform.system()}")
     print(f"  Port    : {PORT}")
-
     printer = get_default_printer()
     printers = get_printer_list()
     if printer:
@@ -217,13 +246,56 @@ if __name__ == '__main__':
     else:
         print("  Printer : TIDAK TERDETEKSI")
         print("  ! Pastikan printer USB terhubung dan driver terinstall")
-
     if len(printers) > 1:
-        print(f"  Semua printer: {', '.join(printers)}")
-
+        print(f"  Semua   : {', '.join(printers)}")
     print("=" * 50)
     print(f"  Server siap di http://localhost:{PORT}")
     print("  Tekan Ctrl+C untuk menghentikan")
     print("=" * 50)
 
-    app.run(host='0.0.0.0', port=PORT, debug=False)
+
+if __name__ == '__main__':
+    # Cek apakah dijalankan sebagai Windows Service command
+    if len(sys.argv) > 1 and sys.argv[1] in ('install', 'start', 'stop', 'remove', 'restart', 'update'):
+        if platform.system() != 'Windows':
+            print("ERROR: Windows Service hanya tersedia di Windows.")
+            sys.exit(1)
+
+        if AqinTaniPrintService is None:
+            print("ERROR: pywin32 belum terinstall.")
+            print("Jalankan: pip install pywin32")
+            sys.exit(1)
+
+        cmd = sys.argv[1]
+
+        if cmd == 'install':
+            # Install service dengan path ke script ini
+            win32serviceutil.HandleCommandLine(AqinTaniPrintService)
+            print("\nService berhasil diinstall!")
+            print("Jalankan: python print_server.py start")
+            print("Service akan otomatis jalan saat Windows start.")
+
+        elif cmd == 'start':
+            win32serviceutil.HandleCommandLine(AqinTaniPrintService)
+            print("Service dimulai.")
+
+        elif cmd == 'stop':
+            win32serviceutil.HandleCommandLine(AqinTaniPrintService)
+            print("Service dihentikan.")
+
+        elif cmd == 'remove':
+            win32serviceutil.HandleCommandLine(AqinTaniPrintService)
+            print("Service dihapus.")
+
+        elif cmd == 'restart':
+            win32serviceutil.HandleCommandLine(AqinTaniPrintService)
+            print("Service di-restart.")
+
+        elif cmd == 'update':
+            win32serviceutil.HandleCommandLine(AqinTaniPrintService)
+            print("Service di-update.")
+
+    else:
+        # Mode biasa: jalankan langsung
+        print_banner()
+        run_server()
