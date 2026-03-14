@@ -23,7 +23,7 @@ async def get_dashboard_stats(admin: dict = Depends(require_admin_panel_access))
         d = (datetime.now(timezone.utc) - timedelta(days=i)).strftime("%Y-%m-%d")
         day_txns = await db.transactions.find({"date": d}, {"_id": 0}).to_list(10000)
         day_total = sum(t.get("total", 0) for t in day_txns)
-        last_7_days.append({"date": d, "total": day_total, "count": len(day_txns)})
+        last_7_days.append({"date": d, "sales": day_total, "count": len(day_txns)})
 
     # Warehouse inventory value + chart
     warehouses = await db.warehouses.find({}, {"_id": 0}).to_list(100)
@@ -69,11 +69,33 @@ async def get_dashboard_stats(admin: dict = Depends(require_admin_panel_access))
         for t in today_transactions
     )
 
+    # Partner orders today (barang keluar via kios mitra)
+    today_partner_orders = await db.partner_orders.find({"date": today}, {"_id": 0}).to_list(10000)
+    partner_stock_out_today = sum(
+        sum(item.get("cost_price", 0) * item.get("quantity", 0) for item in o.get("items", []))
+        for o in today_partner_orders
+    )
+    stock_out_today_pos = stock_out_today
+    stock_out_today_partner = partner_stock_out_today
+    stock_out_today_total = stock_out_today + partner_stock_out_today
+
     # Debts
     unpaid_purchases = await db.purchases.find({"remaining": {"$gt": 0}}, {"_id": 0}).to_list(10000)
     total_supplier_debt = sum(p.get("remaining", 0) for p in unpaid_purchases)
-    partner_stores = await db.partner_stores.find({}, {"_id": 0, "current_debt": 1}).to_list(10000)
+    partner_stores = await db.partner_stores.find({}, {"_id": 0}).to_list(10000)
     total_partner_debt = sum(ps.get("current_debt", 0) for ps in partner_stores)
+
+    # Bon mitra per vehicle
+    vehicles = await db.vehicles.find({}, {"_id": 0}).to_list(100)
+    vehicle_map = {v["id"]: v.get("name", v["id"]) for v in vehicles}
+    partner_debt_by_vehicle = {}
+    for ps in partner_stores:
+        vid = ps.get("vehicle_id", "")
+        vname = vehicle_map.get(vid, "Belum Ditugaskan") if vid else "Belum Ditugaskan"
+        if vname not in partner_debt_by_vehicle:
+            partner_debt_by_vehicle[vname] = 0
+        partner_debt_by_vehicle[vname] += ps.get("current_debt", 0)
+    partner_debt_vehicles = [{"vehicle": k, "debt": v} for k, v in partner_debt_by_vehicle.items() if v > 0]
 
     # Personal loans (piutang pribadi) & farmer debts (hutang petani)
     personal_loans = await db.personal_loans.find({"remaining": {"$gt": 0}}, {"_id": 0, "remaining": 1}).to_list(10000)
@@ -103,8 +125,13 @@ async def get_dashboard_stats(admin: dict = Depends(require_admin_panel_access))
         "low_stock_products": low_stock_products,
         "last_7_days": last_7_days, "inventory_value": total_inventory,
         "warehouse_chart": warehouse_chart, "stock_in_today": stock_in_today,
-        "stock_out_today": stock_out_today, "total_supplier_debt": total_supplier_debt,
-        "total_partner_debt": total_partner_debt, "total_personal_loans": total_personal_loans,
+        "stock_out_today": stock_out_today_total,
+        "stock_out_today_pos": stock_out_today_pos,
+        "stock_out_today_partner": stock_out_today_partner,
+        "total_supplier_debt": total_supplier_debt,
+        "total_partner_debt": total_partner_debt,
+        "partner_debt_vehicles": partner_debt_vehicles,
+        "total_personal_loans": total_personal_loans,
         "total_farmer_debt": total_farmer_debt, "total_assets": total_assets,
         "due_this_month": [{k: v for k, v in d.items() if k != "_id"} for d in due_this_month]
     }

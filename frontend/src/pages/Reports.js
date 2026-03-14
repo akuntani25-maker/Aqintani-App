@@ -461,6 +461,7 @@ export const Reports = () => {
                 <Table>
                   <TableHeader>
                     <TableRow className="bg-muted/50">
+                      <TableHead className="w-12 text-center">No</TableHead>
                       <TableHead>Tanggal</TableHead>
                       <TableHead>Barang</TableHead>
                       <TableHead className="text-center">Qty</TableHead>
@@ -473,11 +474,12 @@ export const Reports = () => {
                   </TableHeader>
                   <TableBody>
                     {reportData.rows.length === 0 ? (
-                      <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">Tidak ada data penjualan</TableCell></TableRow>
+                      <TableRow><TableCell colSpan={9} className="text-center py-8 text-muted-foreground">Tidak ada data penjualan</TableCell></TableRow>
                     ) : reportData.rows.map((row, i) => {
                       const isPositive = row.margin >= 0;
                       return (
                         <TableRow key={i} data-testid={`pos-row-${i}`}>
+                          <TableCell className="text-center text-muted-foreground font-mono">{i + 1}</TableCell>
                           <TableCell className="text-sm whitespace-nowrap">{row.date}</TableCell>
                           <TableCell className="font-medium">{row.product_name}</TableCell>
                           <TableCell className="text-center">{fmtNum(row.quantity)}</TableCell>
@@ -495,7 +497,9 @@ export const Reports = () => {
                   {reportData.rows.length > 0 && (
                     <tfoot>
                       <tr className="border-t-2 bg-muted/30 font-bold">
-                        <td className="p-3" colSpan={5}>TOTAL</td>
+                        <td className="p-3" colSpan={3}>TOTAL</td>
+                        <td className="p-3 text-center">{fmtNum(reportData.rows.reduce((s, r) => s + r.quantity, 0))}</td>
+                        <td className="p-3" colSpan={2}></td>
                         <td className="p-3 text-right">{fmt(reportData.total_sales)}</td>
                         <td className="p-3 text-right text-red-600">{fmt(reportData.total_cost)}</td>
                         <td className="p-3 text-right text-emerald-600">{fmt(reportData.total_margin)}</td>
@@ -515,6 +519,7 @@ export const Reports = () => {
                 <Table>
                   <TableHeader>
                     <TableRow className="bg-muted/50">
+                      <TableHead className="w-12 text-center">No</TableHead>
                       <TableHead>Tanggal</TableHead>
                       <TableHead>Barang</TableHead>
                       <TableHead>Kios Mitra</TableHead>
@@ -528,11 +533,12 @@ export const Reports = () => {
                   </TableHeader>
                   <TableBody>
                     {reportData.rows.length === 0 ? (
-                      <TableRow><TableCell colSpan={9} className="text-center py-8 text-muted-foreground">Tidak ada data penjualan kios mitra</TableCell></TableRow>
+                      <TableRow><TableCell colSpan={10} className="text-center py-8 text-muted-foreground">Tidak ada data penjualan kios mitra</TableCell></TableRow>
                     ) : reportData.rows.map((row, i) => {
                       const isPositive = row.margin >= 0;
                       return (
                         <TableRow key={i} data-testid={`partner-row-${i}`}>
+                          <TableCell className="text-center text-muted-foreground font-mono">{i + 1}</TableCell>
                           <TableCell className="text-sm whitespace-nowrap">{row.date}</TableCell>
                           <TableCell className="font-medium">{row.product_name}</TableCell>
                           <TableCell className="text-sm">{row.partner_store_name}</TableCell>
@@ -556,7 +562,9 @@ export const Reports = () => {
                   {reportData.rows.length > 0 && (
                     <tfoot>
                       <tr className="border-t-2 bg-muted/30 font-bold">
-                        <td className="p-3" colSpan={6}>TOTAL</td>
+                        <td className="p-3" colSpan={4}>TOTAL</td>
+                        <td className="p-3 text-center">{fmtNum(reportData.rows.reduce((s, r) => s + (r.quantity_satuan || 0), 0))}</td>
+                        <td className="p-3" colSpan={2}></td>
                         <td className="p-3 text-right">{fmt(reportData.total_sales)}</td>
                         <td className="p-3 text-right text-red-600">{fmt(reportData.total_cost)}</td>
                         <td className="p-3 text-right text-emerald-600">{fmt(reportData.total_margin)}</td>
@@ -621,6 +629,21 @@ export const Reports = () => {
                       );
                     })}
                   </TableBody>
+                  {reportData.rows.length > 0 && (
+                    <tfoot>
+                      <tr className="border-t-2 bg-muted/30 font-bold">
+                        <td className="p-3" colSpan={2}>TOTAL</td>
+                        <td className="p-3 text-center">{fmtNum(reportData.rows.reduce((s, r) => s + r.qty_pos, 0))}</td>
+                        <td className="p-3 text-center">{fmtNum(reportData.rows.reduce((s, r) => s + r.qty_partner, 0))}</td>
+                        <td className="p-3 text-center font-bold">{fmtNum(reportData.rows.reduce((s, r) => s + r.qty_total, 0))}</td>
+                        <td className="p-3 text-right">{fmt(reportData.rows.reduce((s, r) => s + r.revenue_pos, 0))}</td>
+                        <td className="p-3 text-right">{fmt(reportData.rows.reduce((s, r) => s + r.revenue_partner, 0))}</td>
+                        <td className="p-3 text-right">{fmt(reportData.rows.reduce((s, r) => s + r.revenue_total, 0))}</td>
+                        <td className="p-3 text-right text-red-600">{fmt(reportData.rows.reduce((s, r) => s + r.cost_total, 0))}</td>
+                        <td className="p-3 text-right text-emerald-600">{fmt(reportData.rows.reduce((s, r) => s + r.margin, 0))}</td>
+                      </tr>
+                    </tfoot>
+                  )}
                 </Table>
               </div>
             </Card>

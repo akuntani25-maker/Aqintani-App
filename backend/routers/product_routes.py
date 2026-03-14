@@ -85,6 +85,43 @@ async def get_product_by_barcode(barcode: str, current_user: dict = Depends(get_
     return product
 
 
+@router.get("/products/search-autocomplete")
+async def search_products_autocomplete(q: str = "", current_user: dict = Depends(get_current_user)):
+    """Search products for autocomplete with stock & supplier info."""
+    if len(q) < 1:
+        return []
+    query = {"$or": [
+        {"name": {"$regex": q, "$options": "i"}},
+        {"barcode": {"$regex": q, "$options": "i"}}
+    ]}
+    products = await db.products.find(query, {"_id": 0}).sort("name", 1).limit(15).to_list(15)
+    # Enrich with supplier name and warehouse stock
+    supplier_ids = list(set(p.get("supplier_id", "") for p in products if p.get("supplier_id")))
+    suppliers = await db.suppliers.find({"id": {"$in": supplier_ids}}, {"_id": 0, "id": 1, "name": 1}).to_list(100)
+    sup_map = {s["id"]: s["name"] for s in suppliers}
+    result = []
+    for p in products:
+        result.append({
+            "id": p["id"],
+            "name": p["name"],
+            "barcode": p.get("barcode", ""),
+            "stock": p.get("stock", 0),
+            "category_id": p.get("category_id", ""),
+            "supplier_id": p.get("supplier_id", ""),
+            "supplier_name": sup_map.get(p.get("supplier_id", ""), "-"),
+            "price": p.get("price", 0),
+            "cost_price": p.get("cost_price", 0),
+            "supplier_cost_price": p.get("supplier_cost_price", 0),
+            "box_price": p.get("box_price", 0),
+            "items_per_box": p.get("items_per_box", 1),
+            "min_stock_alert": p.get("min_stock_alert", 10),
+            "expiry_date": p.get("expiry_date", ""),
+            "batch_number": p.get("batch_number", ""),
+            "description": p.get("description", ""),
+        })
+    return result
+
+
 @router.get("/products/low-stock", response_model=List[Product])
 async def get_low_stock_products(current_user: dict = Depends(get_current_user)):
     products = await db.products.find(
@@ -108,10 +145,78 @@ async def create_product(data: ProductCreate, admin: dict = Depends(require_admi
     items_per_box = data.items_per_box or 1
     warehouse_id = data.warehouse_id or "gudang_utama"
     total_satuan = data.stock * items_per_box
+    supplier_cost = data.supplier_cost_price or data.cost_price
 
+    # Handle restock of existing product
+    if data.is_restock and data.existing_product_id:
+        existing = await db.products.find_one({"id": data.existing_product_id}, {"_id": 0})
+        if not existing:
+            raise HTTPException(status_code=404, detail="Produk tidak ditemukan")
+
+        # Add stock to warehouse
+        if data.stock > 0:
+            wh = await db.warehouses.find_one({"id": warehouse_id}, {"_id": 0})
+            if wh and wh.get("unit") == "satuan":
+                await db.warehouse_stock.update_one(
+                    {"product_id": data.existing_product_id, "warehouse_id": warehouse_id},
+                    {"$inc": {"stock": total_satuan}}, upsert=True
+                )
+            else:
+                await db.warehouse_stock.update_one(
+                    {"product_id": data.existing_product_id, "warehouse_id": warehouse_id},
+                    {"$inc": {"stock": data.stock}}, upsert=True
+                )
+
+            # Create purchase record for supplier debt (use supplier_cost_price)
+            if data.supplier_id:
+                supplier = await db.suppliers.find_one({"id": data.supplier_id}, {"_id": 0})
+                supplier_name = supplier["name"] if supplier else ""
+                purchase_total = supplier_cost * data.stock
+                paid = min(data.initial_paid or 0, purchase_total)
+                remaining = purchase_total - paid
+
+                purchase_doc = {
+                    "id": str(uuid.uuid4()),
+                    "purchase_number": data.invoice_number or "",
+                    "supplier_id": data.supplier_id,
+                    "supplier_name": supplier_name,
+                    "items": [{
+                        "product_id": data.existing_product_id,
+                        "product_name": existing["name"],
+                        "quantity": data.stock,
+                        "cost_price": supplier_cost,
+                        "subtotal": purchase_total
+                    }],
+                    "total": purchase_total,
+                    "paid": paid,
+                    "remaining": remaining,
+                    "warehouse_id": warehouse_id,
+                    "notes": f"Restok - {existing['name']}" + (" (Tempo)" if remaining > 0 else ""),
+                    "due_date": data.due_date or "",
+                    "source": "product_restock",
+                    "created_at": now.isoformat(),
+                    "date": now.strftime("%Y-%m-%d")
+                }
+                await db.purchases.insert_one(purchase_doc)
+
+        # Update supplier_cost_price on product if provided
+        update_fields = {"updated_at": now.isoformat()}
+        if data.supplier_cost_price:
+            update_fields["supplier_cost_price"] = data.supplier_cost_price
+        await db.products.update_one({"id": data.existing_product_id}, {"$set": update_fields})
+
+        await recalculate_product_stock(data.existing_product_id)
+        await log_audit(admin, "restock", "product", data.existing_product_id, {"name": existing["name"], "qty": data.stock})
+        result = await db.products.find_one({"id": data.existing_product_id}, {"_id": 0})
+        return result
+
+    # Normal new product creation
     product_data = data.model_dump()
     product_data.pop("warehouse_id", None)
+    product_data.pop("is_restock", None)
+    product_data.pop("existing_product_id", None)
     product_data["stock"] = total_satuan
+    product_data["supplier_cost_price"] = supplier_cost
 
     product_doc = {
         "id": str(uuid.uuid4()),
@@ -140,7 +245,7 @@ async def create_product(data: ProductCreate, admin: dict = Depends(require_admi
         if data.supplier_id:
             supplier = await db.suppliers.find_one({"id": data.supplier_id}, {"_id": 0})
             supplier_name = supplier["name"] if supplier else ""
-            purchase_total = data.cost_price * data.stock
+            purchase_total = supplier_cost * data.stock
             paid = min(data.initial_paid or 0, purchase_total)
             remaining = purchase_total - paid
 
@@ -153,7 +258,7 @@ async def create_product(data: ProductCreate, admin: dict = Depends(require_admi
                     "product_id": product_doc["id"],
                     "product_name": data.name,
                     "quantity": data.stock,
-                    "cost_price": data.cost_price,
+                    "cost_price": supplier_cost,
                     "subtotal": purchase_total
                 }],
                 "total": purchase_total,

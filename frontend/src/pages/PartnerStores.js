@@ -154,6 +154,8 @@ export const PartnerStores = () => {
     (filterVehicle === 'all' || (filterVehicle === 'unassigned' ? !s.vehicle_id : s.vehicle_id === filterVehicle))
   );
 
+  const filteredTotalDebt = filteredStores.reduce((sum, s) => sum + (s.current_debt || 0), 0);
+
   const getVehicleName = (vid) => vehicles.find(v => v.id === vid)?.name || '';
 
   useEffect(() => { setPage(1); }, [searchTerm, filterVehicle]);
@@ -389,8 +391,9 @@ export const PartnerStores = () => {
               <MapPin className="w-6 h-6 text-primary" />
             </div>
             <div>
-              <p className="text-xs text-muted-foreground uppercase tracking-wider">Total Kios</p>
-              <p className="text-base md:text-xl lg:text-2xl font-bold truncate">{stores.length}</p>
+              <p className="text-xs text-muted-foreground uppercase tracking-wider">{filterVehicle !== 'all' ? 'Kios (Filter)' : 'Total Kios'}</p>
+              <p className="text-base md:text-xl lg:text-2xl font-bold truncate">{filteredStores.length}</p>
+              {filterVehicle !== 'all' && <p className="text-xs text-muted-foreground">dari {stores.length} kios</p>}
             </div>
           </div>
         </Card>
@@ -401,10 +404,11 @@ export const PartnerStores = () => {
               <DollarSign className="w-6 h-6 text-orange-600" />
             </div>
             <div>
-              <p className="text-xs text-muted-foreground uppercase tracking-wider">Total Piutang</p>
+              <p className="text-xs text-muted-foreground uppercase tracking-wider">{filterVehicle !== 'all' ? 'Piutang (Filter)' : 'Total Piutang'}</p>
               <p className="text-base md:text-xl lg:text-2xl font-bold truncate">
-                {formatCurrency(stores.reduce((sum, s) => sum + (s.current_debt || 0), 0))}
+                {formatCurrency(filteredTotalDebt)}
               </p>
+              {filterVehicle !== 'all' && <p className="text-xs text-muted-foreground">dari {formatCurrency(stores.reduce((sum, s) => sum + (s.current_debt || 0), 0))}</p>}
             </div>
           </div>
         </Card>

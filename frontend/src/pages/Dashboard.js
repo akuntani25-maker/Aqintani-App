@@ -78,7 +78,7 @@ export const Dashboard = () => {
     { title: 'Bon Supplier Belum Bayar', value: fmt(stats?.total_supplier_debt || 0), icon: CreditCard, color: 'bg-red-500', testId: 'supplier-debt-card' },
     { title: 'Bon Kios Mitra', value: fmt(stats?.total_partner_debt || 0), icon: Store, color: 'bg-amber-500', testId: 'partner-debt-card' },
     { title: 'Barang Masuk Hari Ini', value: fmt(stats?.stock_in_today || 0), icon: ArrowDownToLine, color: 'bg-teal-500', testId: 'stock-in-card' },
-    { title: 'Barang Keluar Hari Ini', value: fmt(stats?.stock_out_today || 0), icon: ArrowUpFromLine, color: 'bg-violet-500', testId: 'stock-out-card' },
+    { title: 'Barang Keluar Hari Ini', value: fmt(stats?.stock_out_today || 0), icon: ArrowUpFromLine, color: 'bg-violet-500', testId: 'stock-out-card', sub: `POS: ${fmt(stats?.stock_out_today_pos || 0)} | Mitra: ${fmt(stats?.stock_out_today_partner || 0)}` },
   ];
 
   const dueThisMonth = stats?.due_this_month || [];
@@ -90,6 +90,20 @@ export const Dashboard = () => {
         <h1 className="text-2xl md:text-3xl lg:text-4xl font-bold tracking-tight">Dashboard</h1>
         <p className="text-sm text-muted-foreground mt-1">Selamat datang di UD. Aqin Tani</p>
       </div>
+
+      {/* Total Assets - TOP */}
+      <Card className="p-4 md:p-6 bg-gradient-to-r from-slate-900 to-slate-800 text-white" data-testid="total-assets-card">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-[10px] md:text-xs font-bold uppercase tracking-wider text-slate-300 mb-1">Nilai Aset Bersih</p>
+            <p className="text-xl md:text-2xl lg:text-3xl font-bold">{fmt(stats?.total_assets || 0)}</p>
+            <p className="text-xs text-slate-400 mt-1">Gudang ({fmt(stats?.inventory_value || 0)}) + Bon Mitra ({fmt(stats?.total_partner_debt || 0)}) + Piutang ({fmt(stats?.total_personal_loans || 0)}) + Hutang Petani ({fmt(stats?.total_farmer_debt || 0)}) - Bon Supplier ({fmt(stats?.total_supplier_debt || 0)})</p>
+          </div>
+          <div className="bg-white/10 p-3 rounded-lg">
+            <Landmark className="w-6 h-6" />
+          </div>
+        </div>
+      </Card>
 
       {/* Stat Cards Row 1 */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
@@ -108,20 +122,7 @@ export const Dashboard = () => {
         ))}
       </div>
 
-      {/* Total Assets + Finance Cards */}
-      <Card className="p-4 md:p-6 bg-gradient-to-r from-slate-900 to-slate-800 text-white" data-testid="total-assets-card">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-[10px] md:text-xs font-bold uppercase tracking-wider text-slate-300 mb-1">Nilai Aset Bersih</p>
-            <p className="text-xl md:text-2xl lg:text-3xl font-bold">{fmt(stats?.total_assets || 0)}</p>
-            <p className="text-xs text-slate-400 mt-1">Gudang ({fmt(stats?.inventory_value || 0)}) + Bon Mitra ({fmt(stats?.total_partner_debt || 0)}) + Piutang ({fmt(stats?.total_personal_loans || 0)}) + Hutang Petani ({fmt(stats?.total_farmer_debt || 0)}) - Bon Supplier ({fmt(stats?.total_supplier_debt || 0)})</p>
-          </div>
-          <div className="bg-white/10 p-3 rounded-lg">
-            <Landmark className="w-6 h-6" />
-          </div>
-        </div>
-      </Card>
-
+      {/* Finance Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
         {financeCards.map((card, index) => (
           <Card key={index} className="p-4 md:p-6 hover:shadow-md transition-shadow" data-testid={card.testId}>
@@ -129,6 +130,7 @@ export const Dashboard = () => {
               <div className="min-w-0 flex-1">
                 <p className="text-[10px] md:text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1 md:mb-2">{card.title}</p>
                 <p className="text-base md:text-xl lg:text-2xl font-bold truncate">{card.value}</p>
+                {card.sub && <p className="text-xs text-muted-foreground mt-1">{card.sub}</p>}
               </div>
               <div className={`${card.color} text-white p-2 md:p-3 rounded-lg shrink-0`}>
                 <card.icon className="w-4 h-4 md:w-5 md:h-5" />
@@ -137,6 +139,24 @@ export const Dashboard = () => {
           </Card>
         ))}
       </div>
+
+      {/* Bon Kios Mitra per Vehicle */}
+      {stats?.partner_debt_vehicles?.length > 0 && (
+        <Card className="p-6" data-testid="partner-debt-by-vehicle">
+          <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
+            <Store className="w-5 h-5 text-amber-600" />
+            Bon Kios Mitra per Armada
+          </h2>
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+            {stats.partner_debt_vehicles.map((v, i) => (
+              <div key={i} className="p-3 rounded-lg bg-amber-50 border border-amber-200" data-testid={`vehicle-debt-${i}`}>
+                <p className="text-sm font-medium text-amber-900">{v.vehicle}</p>
+                <p className="text-lg font-bold text-amber-700 mt-1">{fmt(v.debt)}</p>
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
 
       {/* Charts Row: Sales + Warehouse Pie */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6">

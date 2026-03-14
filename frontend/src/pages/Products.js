@@ -54,9 +54,17 @@ export const Products = () => {
   const [formData, setFormData] = useState({
     name: '', barcode: '', category_id: '', supplier_id: '',
     stock: 0, warehouse_id: 'gudang_utama', price: 0, cost_price: 0,
+    supplier_cost_price: 0,
     box_price: 0, items_per_box: 1, initial_paid: 0, expiry_date: '', batch_number: '',
     description: '', min_stock_alert: 10, invoice_number: '', due_date: ''
   });
+
+  // Form mode: 'new' or 'restock'
+  const [formMode, setFormMode] = useState('new');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState([]);
+  const [selectedProduct, setSelectedProduct] = useState(null);
+  const [searchLoading, setSearchLoading] = useState(false);
 
   useEffect(() => { fetchData(); }, []);
 
@@ -87,6 +95,14 @@ export const Products = () => {
       if (editingProduct) {
         await api.put(`/products/${editingProduct.id}`, formData);
         toast.success('Barang berhasil diperbarui');
+      } else if (formMode === 'restock' && selectedProduct) {
+        await api.post('/products', {
+          ...formData,
+          name: selectedProduct.name,
+          is_restock: true,
+          existing_product_id: selectedProduct.id
+        });
+        toast.success('Restok barang berhasil');
       } else {
         await api.post('/products', formData);
         toast.success('Barang berhasil ditambahkan');
@@ -97,6 +113,39 @@ export const Products = () => {
     } catch (error) {
       toast.error(error.response?.data?.detail || 'Gagal menyimpan produk');
     }
+  };
+
+  const searchProducts = async (q) => {
+    setSearchQuery(q);
+    if (q.length < 1) { setSearchResults([]); return; }
+    setSearchLoading(true);
+    try {
+      const res = await api.get(`/products/search-autocomplete?q=${encodeURIComponent(q)}`);
+      setSearchResults(res.data);
+    } catch { setSearchResults([]); }
+    finally { setSearchLoading(false); }
+  };
+
+  const selectExistingProduct = (product) => {
+    setSelectedProduct(product);
+    setSearchQuery(product.name);
+    setSearchResults([]);
+    setFormData({
+      ...formData,
+      name: product.name,
+      barcode: product.barcode,
+      category_id: product.category_id,
+      supplier_id: product.supplier_id,
+      price: product.price,
+      cost_price: product.cost_price,
+      supplier_cost_price: product.supplier_cost_price || 0,
+      box_price: product.box_price || 0,
+      items_per_box: product.items_per_box || 1,
+      min_stock_alert: product.min_stock_alert,
+      expiry_date: product.expiry_date || '',
+      batch_number: product.batch_number || '',
+      description: product.description || '',
+    });
   };
 
   const handleDelete = async (id) => {
@@ -112,10 +161,12 @@ export const Products = () => {
 
   const handleEdit = (product) => {
     setEditingProduct(product);
+    setFormMode('new');
     setFormData({
       name: product.name, barcode: product.barcode, category_id: product.category_id,
       supplier_id: product.supplier_id, stock: product.stock, warehouse_id: 'gudang_utama',
       price: product.price, cost_price: product.cost_price,
+      supplier_cost_price: product.supplier_cost_price || 0,
       box_price: product.box_price || 0, items_per_box: product.items_per_box || 1,
       expiry_date: product.expiry_date, batch_number: product.batch_number,
       description: product.description, min_stock_alert: product.min_stock_alert
@@ -125,9 +176,14 @@ export const Products = () => {
 
   const resetForm = () => {
     setEditingProduct(null);
+    setFormMode('new');
+    setSearchQuery('');
+    setSearchResults([]);
+    setSelectedProduct(null);
     setFormData({
       name: '', barcode: '', category_id: '', supplier_id: '',
       stock: 0, warehouse_id: 'gudang_utama', price: 0, cost_price: 0,
+      supplier_cost_price: 0,
       box_price: 0, items_per_box: 1, initial_paid: 0, expiry_date: '', batch_number: '',
       description: '', min_stock_alert: 10, invoice_number: '', due_date: ''
     });
@@ -251,19 +307,71 @@ export const Products = () => {
             </DialogTrigger>
           <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle>{editingProduct ? 'Edit Barang' : 'Tambah Barang Baru'}</DialogTitle>
+              <DialogTitle>{editingProduct ? 'Edit Barang' : 'Tambah Barang'}</DialogTitle>
             </DialogHeader>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="name">Nama Barang *</Label>
-                  <Input id="name" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} required data-testid="product-name-input" />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="barcode">Barcode</Label>
-                  <Input id="barcode" value={formData.barcode} onChange={(e) => setFormData({ ...formData, barcode: e.target.value })} data-testid="product-barcode-input" />
-                </div>
+
+            {/* Mode Selector (only when adding new) */}
+            {!editingProduct && (
+              <div className="flex gap-2 mb-4" data-testid="form-mode-selector">
+                <Button type="button" variant={formMode === 'new' ? 'default' : 'outline'} size="sm" onClick={() => { setFormMode('new'); setSelectedProduct(null); setSearchQuery(''); setSearchResults([]); }} data-testid="mode-new-btn">
+                  Barang Baru
+                </Button>
+                <Button type="button" variant={formMode === 'restock' ? 'default' : 'outline'} size="sm" onClick={() => setFormMode('restock')} data-testid="mode-restock-btn">
+                  Restok Barang
+                </Button>
               </div>
+            )}
+
+            <form onSubmit={handleSubmit} className="space-y-4">
+              {/* Product Search (restock mode) */}
+              {!editingProduct && formMode === 'restock' && (
+                <div className="space-y-2 relative">
+                  <Label>Cari Barang *</Label>
+                  <Input
+                    value={searchQuery}
+                    onChange={(e) => searchProducts(e.target.value)}
+                    placeholder="Ketik nama barang..."
+                    data-testid="product-search-input"
+                    autoComplete="off"
+                  />
+                  {searchLoading && <p className="text-xs text-muted-foreground mt-1">Mencari...</p>}
+                  {searchResults.length > 0 && (
+                    <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-white border rounded-lg shadow-lg max-h-64 overflow-y-auto" data-testid="search-dropdown">
+                      {searchResults.map(p => (
+                        <button key={p.id} type="button" className="w-full text-left px-3 py-2 hover:bg-accent border-b last:border-b-0 transition-colors" onClick={() => selectExistingProduct(p)} data-testid={`search-result-${p.id}`}>
+                          <p className="font-medium text-sm">{p.name}</p>
+                          <div className="flex gap-3 text-xs text-muted-foreground">
+                            <span>Stok: {fmtNum(p.stock)} satuan</span>
+                            <span>Supplier: {p.supplier_name}</span>
+                            <span>HPP: {fmt(p.cost_price)}/dus</span>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  {selectedProduct && (
+                    <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg mt-2" data-testid="selected-product-info">
+                      <p className="font-semibold text-emerald-800">{selectedProduct.name}</p>
+                      <p className="text-xs text-emerald-700">Stok saat ini: {fmtNum(selectedProduct.stock)} satuan | Supplier: {selectedProduct.supplier_name}</p>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Name + Barcode (new mode or editing) */}
+              {(formMode === 'new' || editingProduct) && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="name">Nama Barang *</Label>
+                    <Input id="name" value={formData.name} onChange={(e) => setFormData({ ...formData, name: e.target.value })} required data-testid="product-name-input" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="barcode">Barcode</Label>
+                    <Input id="barcode" value={formData.barcode} onChange={(e) => setFormData({ ...formData, barcode: e.target.value })} data-testid="product-barcode-input" />
+                  </div>
+                </div>
+              )}
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Kategori</Label>
@@ -284,7 +392,7 @@ export const Products = () => {
                 {!editingProduct && (
                   <>
                     <div className="space-y-2">
-                      <Label>Stok Awal (dus)</Label>
+                      <Label>Stok {formMode === 'restock' ? 'Tambahan' : 'Awal'} (dus)</Label>
                       <Input type="number" value={formData.stock} onChange={(e) => setFormData({ ...formData, stock: parseInt(e.target.value) || 0 })} data-testid="product-stock-input" />
                     </div>
                     <div className="space-y-2">
@@ -306,8 +414,9 @@ export const Products = () => {
                   <p className="text-sm text-blue-800">{formData.stock} dus x {formData.items_per_box} satuan/dus = <span className="font-bold">{formData.stock * formData.items_per_box} satuan</span> masuk ke {warehouses.find(w => w.id === formData.warehouse_id)?.name || 'gudang'}</p>
                 </div>
               )}
-              {!editingProduct && formData.stock > 0 && formData.supplier_id && formData.cost_price > 0 && (() => {
-                const totalPurchase = formData.cost_price * formData.stock;
+              {!editingProduct && formData.stock > 0 && formData.supplier_id && (formData.supplier_cost_price > 0 || formData.cost_price > 0) && (() => {
+                const supplierPrice = formData.supplier_cost_price || formData.cost_price;
+                const totalPurchase = supplierPrice * formData.stock;
                 const paid = Math.min(formData.initial_paid || 0, totalPurchase);
                 const debt = totalPurchase - paid;
                 return (
@@ -315,7 +424,7 @@ export const Products = () => {
                     <p className="text-sm font-semibold text-amber-900">Pembelian Otomatis ke Supplier</p>
                     <div className="flex items-center justify-between text-sm text-amber-800">
                       <span>Total: {fmt(totalPurchase)}</span>
-                      <span>({formData.stock} dus x {fmt(formData.cost_price)}/dus)</span>
+                      <span>({formData.stock} dus x {fmt(supplierPrice)}/dus)</span>
                     </div>
                     <div className="space-y-2">
                       <Label className="text-amber-900">Bayar di Muka</Label>
@@ -343,11 +452,19 @@ export const Products = () => {
                   </div>
                 );
               })()}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label>Harga Beli/Dus *</Label>
-                  <CurrencyInput value={formData.cost_price} onChange={(v) => setFormData({ ...formData, cost_price: v })} required data-testid="product-cost-input" />
+                  <Label>Harga Pokok Supplier/Dus</Label>
+                  <CurrencyInput value={formData.supplier_cost_price} onChange={(v) => setFormData({ ...formData, supplier_cost_price: v })} data-testid="product-supplier-cost-input" />
+                  <p className="text-xs text-muted-foreground">Harga asli dari supplier (untuk hutang)</p>
                 </div>
+                <div className="space-y-2">
+                  <Label>Harga Pokok Toko/Dus *</Label>
+                  <CurrencyInput value={formData.cost_price} onChange={(v) => setFormData({ ...formData, cost_price: v })} required data-testid="product-cost-input" />
+                  <p className="text-xs text-muted-foreground">HPP yang diset toko (untuk kalkulasi margin)</p>
+                </div>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Harga Jual Satuan *</Label>
                   <CurrencyInput value={formData.price} onChange={(v) => setFormData({ ...formData, price: v })} required data-testid="product-price-input" />

@@ -87,6 +87,7 @@ class ProductCreate(BaseModel):
     warehouse_id: Optional[str] = "gudang_utama"
     price: float
     cost_price: float
+    supplier_cost_price: Optional[float] = 0
     box_price: Optional[float] = 0
     items_per_box: float = 1
     initial_paid: Optional[float] = 0
@@ -97,6 +98,8 @@ class ProductCreate(BaseModel):
     min_stock_alert: int = 10
     invoice_number: Optional[str] = ""
     due_date: Optional[str] = ""
+    is_restock: Optional[bool] = False
+    existing_product_id: Optional[str] = ""
 
 
 class Product(BaseModel):
@@ -109,6 +112,7 @@ class Product(BaseModel):
     stock: int
     price: float
     cost_price: float
+    supplier_cost_price: float = 0
     box_price: float = 0
     items_per_box: float = 1
     expiry_date: str

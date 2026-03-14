@@ -1,0 +1,110 @@
+{
+  "summary": "Iteration 26 - Batch 1 Changes Testing Complete. All 14 backend tests PASSED. All 6 feature areas verified in UI. Dashboard: Nilai Aset Bersih at TOP, stock out POS/Mitra breakdown, partner debt by vehicle section. Products: two-mode form (Barang Baru/Restok), autocomplete search with stock/supplier info, dual price fields (Harga Pokok Supplier/Toko). PartnerStores: vehicle filter with filtered count/piutang. Reports: No column in POS/Partner/Bestseller tables with total rows.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Dialog components", "issues": ["Console warning: Missing Description or aria-describedby for DialogContent - accessibility improvement needed (existing issue)"]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration26_batch1.py",
+    "/app/test_reports/pytest/iteration26_results.xml"
+  ],
+  "passed_tests": [
+    "TestAuthentication::test_admin_login - Admin login successful",
+    "TestDashboardStatsEnhancements::test_dashboard_stats_returns_sales_key - last_7_days uses 'sales' key",
+    "TestDashboardStatsEnhancements::test_dashboard_stats_returns_stock_out_breakdown - stock_out_today_pos & stock_out_today_partner present",
+    "TestDashboardStatsEnhancements::test_dashboard_stats_returns_partner_debt_vehicles - partner_debt_vehicles array present",
+    "TestDashboardStatsEnhancements::test_dashboard_stats_has_total_assets - total_assets for Nilai Aset Bersih",
+    "TestProductSearchAutocomplete::test_search_autocomplete_endpoint - Returns products with stock, supplier_name, cost_price, supplier_cost_price",
+    "TestProductSearchAutocomplete::test_search_autocomplete_empty_query - Empty query returns empty list",
+    "TestProductSupplierCostPrice::test_product_has_supplier_cost_price_field - Product model has supplier_cost_price",
+    "TestReportsTables::test_pos_sales_detail_returns_rows - POS sales has rows with quantity",
+    "TestReportsTables::test_partner_sales_detail_returns_rows - Partner sales has rows",
+    "TestReportsTables::test_bestseller_returns_qty_fields - Bestseller has qty_pos, qty_partner, qty_total",
+    "TestPartnerStoresVehicleFilter::test_partner_stores_returns_vehicle_id_and_debt - Has vehicle_id and current_debt fields",
+    "TestPartnerStoresVehicleFilter::test_vehicles_endpoint - Vehicles endpoint working",
+    "TestSupplierDebtLabel::test_supplier_debt_api - Supplier debt API working",
+    "UI: Dashboard - Nilai Aset Bersih card at TOP (dark gradient card)",
+    "UI: Dashboard - Barang Keluar shows 'POS: Rp 0 | Mitra: Rp 0' sub-text",
+    "UI: Dashboard - Bon Kios Mitra per Armada section with vehicle breakdown",
+    "UI: Dashboard - Sales chart (Penjualan 7 Hari Terakhir) working with bar chart",
+    "UI: Products - Form mode selector with 'Barang Baru' and 'Restok Barang' buttons",
+    "UI: Products - Restok mode shows search autocomplete with stock, supplier info",
+    "UI: Products - Autocomplete shows 2 results for 'aba' query",
+    "UI: Products - Has 'Harga Pokok Supplier/Dus' and 'Harga Pokok Toko/Dus' fields",
+    "UI: PartnerStores - Vehicle filter dropdown present",
+    "UI: PartnerStores - Shows TOTAL KIOS and TOTAL PIUTANG summary cards",
+    "UI: Reports - Has POS, Kios Mitra, Terlaris, Laba/Rugi tabs",
+    "UI: Reports - POS table has 'No' column header",
+    "UI: SupplierDebt - Shows 'Hutang ke Supplier' label (from iteration 25)"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Minor: DialogContent components missing aria-describedby for accessibility (pre-existing)"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration26_batch1.py"
+  ],
+  "success_rate": {
+    "backend": "100% (14/14 tests passed)",
+    "frontend": "100% (All 6 feature areas verified)"
+  },
+  "test_credentials": {
+    "admin": "admin@aqintani.com / admin123",
+    "kasir": "kasir@aqintani.com / kasir123"
+  },
+  "seed_data_created": "None - used existing data for testing",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iteration 26 Batch 1 verified 6 user-requested changes: 1) Dashboard has Nilai Aset Bersih card at TOP (total-assets-card test-id), shows formula: Gudang + Bon Mitra + Piutang + Hutang Petani - Bon Supplier. 2) Dashboard chart fixed: API returns 'sales' key in last_7_days (not 'total'). 3) Dashboard Barang Keluar card shows POS/Mitra breakdown sub-text. 4) Dashboard has Bon Kios Mitra per Armada section with vehicle cards. 5) Products form has two-mode selector (mode-new-btn, mode-restock-btn). Restok mode shows autocomplete search (product-search-input) returning stock/supplier/cost_price. Has separate Harga Pokok Supplier/Dus and Harga Pokok Toko/Dus fields. 6) PartnerStores has vehicle filter (filter-vehicle-select) with filtered count and piutang in summary cards. 7) Reports tables have 'No' column with sequential numbering and total qty in footer rows. 8) SupplierDebt still shows 'Hutang ke Supplier' label. All backend APIs working correctly.",
+  "features_verified": {
+    "dashboard_nilai_aset_bersih_top": {
+      "test_id": "total-assets-card",
+      "position": "Top of dashboard (first card after header)",
+      "content": "Shows Nilai Aset Bersih with breakdown formula"
+    },
+    "dashboard_sales_chart_fix": {
+      "api_key": "sales (not 'total')",
+      "endpoint": "GET /api/dashboard/stats -> last_7_days array"
+    },
+    "dashboard_barang_keluar_breakdown": {
+      "test_id": "stock-out-card",
+      "sub_text": "POS: Rp X | Mitra: Rp Y"
+    },
+    "dashboard_bon_mitra_per_armada": {
+      "test_id": "partner-debt-by-vehicle",
+      "api_field": "partner_debt_vehicles array"
+    },
+    "products_two_mode_form": {
+      "selector_test_id": "form-mode-selector",
+      "new_btn": "mode-new-btn (Barang Baru)",
+      "restock_btn": "mode-restock-btn (Restok Barang)"
+    },
+    "products_autocomplete_search": {
+      "test_id": "product-search-input",
+      "dropdown_test_id": "search-dropdown",
+      "endpoint": "GET /api/products/search-autocomplete?q=aba",
+      "returns": "id, name, stock, supplier_name, cost_price, supplier_cost_price"
+    },
+    "products_dual_price_fields": {
+      "supplier_cost": "product-supplier-cost-input (Harga Pokok Supplier/Dus)",
+      "store_cost": "product-cost-input (Harga Pokok Toko/Dus)"
+    },
+    "partner_stores_vehicle_filter": {
+      "filter_test_id": "filter-vehicle-select",
+      "shows_filtered_count": true,
+      "shows_filtered_piutang": true
+    },
+    "reports_no_column_and_totals": {
+      "pos_table": "Has 'No' column header",
+      "partner_table": "Has 'No' column header",
+      "bestseller_table": "Has '#' column + total qty in footer"
+    }
+  }
+}
