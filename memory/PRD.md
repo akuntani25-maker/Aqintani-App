@@ -33,7 +33,7 @@ Aplikasi web responsif untuk toko farmasi dan pertanian bernama "UD. AQIN TANI" 
 8. Riwayat Perubahan Harga - Auto-logged, viewable per product
 9. Laporan Laba/Rugi - Revenue vs COGS + daily breakdown + chart + Export PDF/CSV
 10. Multi-user POS Shift Management
-11. Local Print Server Solution - Flask + pywin32, supports Windows Service (auto-start on boot)
+11. Local Print Server Solution - Flask + pywin32. Auto-start via Windows Startup folder (VBS script + pythonw.exe, tanpa perlu admin, tanpa console window). User cukup `python print_server.py install` sekali.
 12. **Penomoran Berkelanjutan** - Rincian transaksi harian POS dengan nomor urut item yang berlanjut antar transaksi
 13. **PDF Portrait + Total di Akhir** - Export PDF laporan diubah ke portrait, total hanya muncul di halaman terakhir
 14. **Label Fix** - "Supplier Berhutang" diubah jadi "Hutang ke Supplier"

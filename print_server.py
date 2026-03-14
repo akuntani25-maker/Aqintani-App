@@ -5,27 +5,21 @@ UD. AQIN TANI - Local Print Server
 Server lokal untuk mencetak struk ke printer thermal USB
 menggunakan perintah ESC/POS (font firmware printer).
 
-=== MODE 1: Jalankan langsung ===
+=== Jalankan langsung ===
   python print_server.py
 
-=== MODE 2: Install sebagai Windows Service (auto-start) ===
-  python print_server.py install
-  python print_server.py start
-
-=== Perintah Service Lainnya ===
-  python print_server.py stop       # Hentikan service
-  python print_server.py remove     # Hapus service
-  python print_server.py restart    # Restart service
+=== Auto-start saat Windows boot ===
+  python print_server.py install     (sekali saja)
+  python print_server.py remove      (untuk hapus auto-start)
+  python print_server.py status      (cek apakah auto-start aktif)
 
 Server berjalan di http://localhost:9100
 """
 
 import sys
 import os
-import json
 import platform
 import threading
-import socket
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 
@@ -36,6 +30,7 @@ PRINTER_NAME = None  # None = auto-detect, atau isi nama printer manual
 # ========== FLASK APP ==========
 app = Flask(__name__)
 CORS(app)
+
 
 # ========== PRINTER HANDLER ==========
 
@@ -192,51 +187,132 @@ def run_server():
     app.run(host='0.0.0.0', port=PORT, debug=False, use_reloader=False)
 
 
-# ========== WINDOWS SERVICE ==========
+# ========== AUTO-START SETUP (Windows Startup Folder) ==========
 
-if platform.system() == 'Windows':
+def get_startup_folder():
+    """Path ke folder Startup Windows."""
+    return os.path.join(os.environ.get('APPDATA', ''), 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'Startup')
+
+
+def get_vbs_path():
+    """Path file VBS di folder Startup."""
+    return os.path.join(get_startup_folder(), 'AqinTaniPrintServer.vbs')
+
+
+def get_pythonw_path():
+    """Cari pythonw.exe (Python tanpa console window)."""
+    python_dir = os.path.dirname(sys.executable)
+    pythonw = os.path.join(python_dir, 'pythonw.exe')
+    if os.path.exists(pythonw):
+        return pythonw
+    # Fallback: coba di Scripts
+    pythonw2 = os.path.join(python_dir, 'Scripts', 'pythonw.exe')
+    if os.path.exists(pythonw2):
+        return pythonw2
+    return None
+
+
+def install_autostart():
+    """Install auto-start: buat file VBS di folder Startup Windows."""
+    if platform.system() != 'Windows':
+        print("ERROR: Fitur ini hanya untuk Windows.")
+        return False
+
+    script_path = os.path.abspath(__file__)
+    pythonw = get_pythonw_path()
+    startup_folder = get_startup_folder()
+    vbs_path = get_vbs_path()
+
+    if not os.path.exists(startup_folder):
+        print(f"ERROR: Folder Startup tidak ditemukan: {startup_folder}")
+        return False
+
+    if pythonw:
+        # Gunakan pythonw.exe (tanpa console window)
+        run_cmd = f'"{pythonw}" "{script_path}"'
+    else:
+        # Fallback ke python.exe (akan ada console, tapi tetap jalan)
+        run_cmd = f'"{sys.executable}" "{script_path}"'
+        print("PERINGATAN: pythonw.exe tidak ditemukan, akan menggunakan python.exe")
+        print("  (console window akan terlihat saat startup)")
+
+    # Buat file VBS yang menjalankan print server secara tersembunyi
+    vbs_content = f'''Set WshShell = CreateObject("WScript.Shell")
+WshShell.CurrentDirectory = "{os.path.dirname(script_path)}"
+WshShell.Run {run_cmd}, 0, False
+'''
+
     try:
-        import win32serviceutil
-        import win32service
-        import win32event
-        import servicemanager
+        with open(vbs_path, 'w') as f:
+            f.write(vbs_content)
+        print("=" * 55)
+        print("  AUTO-START BERHASIL DIINSTALL!")
+        print("=" * 55)
+        print(f"  File : {vbs_path}")
+        print(f"  Server akan otomatis jalan saat Windows start")
+        print(f"  (berjalan tersembunyi tanpa console window)")
+        print("")
+        print(f"  Untuk test, restart PC atau jalankan manual:")
+        print(f"    python print_server.py")
+        print("")
+        print(f"  Untuk hapus auto-start:")
+        print(f"    python print_server.py remove")
+        print("=" * 55)
+        return True
+    except Exception as e:
+        print(f"ERROR: Gagal menulis file: {e}")
+        return False
 
-        class AqinTaniPrintService(win32serviceutil.ServiceFramework):
-            _svc_name_ = 'AqinTaniPrintServer'
-            _svc_display_name_ = 'UD. AQIN TANI - Print Server'
-            _svc_description_ = 'Server cetak struk thermal untuk aplikasi UD. AQIN TANI (port 9100)'
 
-            def __init__(self, args):
-                win32serviceutil.ServiceFramework.__init__(self, args)
-                self.hWaitStop = win32event.CreateEvent(None, 0, 0, None)
-                self.server_thread = None
+def remove_autostart():
+    """Hapus auto-start dari folder Startup."""
+    vbs_path = get_vbs_path()
+    if os.path.exists(vbs_path):
+        try:
+            os.remove(vbs_path)
+            print("=" * 55)
+            print("  AUTO-START BERHASIL DIHAPUS!")
+            print("=" * 55)
+            print(f"  File dihapus: {vbs_path}")
+            print(f"  Print server tidak akan jalan otomatis lagi.")
+            print("=" * 55)
+            return True
+        except Exception as e:
+            print(f"ERROR: Gagal menghapus file: {e}")
+            return False
+    else:
+        print("Auto-start belum diinstall (file tidak ditemukan).")
+        return False
 
-            def SvcStop(self):
-                self.ReportServiceStatus(win32service.SERVICE_STOP_PENDING)
-                win32event.SetEvent(self.hWaitStop)
 
-            def SvcDoRun(self):
-                servicemanager.LogMsg(
-                    servicemanager.EVENTLOG_INFORMATION_TYPE,
-                    servicemanager.PYS_SERVICE_STARTED,
-                    (self._svc_name_, '')
-                )
-                self.server_thread = threading.Thread(target=run_server, daemon=True)
-                self.server_thread.start()
-                win32event.WaitForSingleObject(self.hWaitStop, win32event.INFINITE)
-
-    except ImportError:
-        AqinTaniPrintService = None
-else:
-    AqinTaniPrintService = None
+def check_autostart_status():
+    """Cek apakah auto-start sudah aktif."""
+    vbs_path = get_vbs_path()
+    if os.path.exists(vbs_path):
+        print("=" * 55)
+        print("  STATUS: AUTO-START AKTIF")
+        print("=" * 55)
+        print(f"  File: {vbs_path}")
+        print(f"  Print server akan otomatis jalan saat Windows start.")
+        print("")
+        print(f"  Untuk hapus: python print_server.py remove")
+        print("=" * 55)
+    else:
+        print("=" * 55)
+        print("  STATUS: AUTO-START TIDAK AKTIF")
+        print("=" * 55)
+        print(f"  Print server tidak akan jalan otomatis.")
+        print("")
+        print(f"  Untuk install: python print_server.py install")
+        print("=" * 55)
 
 
 # ========== MAIN ==========
 
 def print_banner():
-    print("=" * 50)
+    print("=" * 55)
     print("  UD. AQIN TANI - Local Print Server")
-    print("=" * 50)
+    print("=" * 55)
     print(f"  OS      : {platform.system()}")
     print(f"  Port    : {PORT}")
     printer = get_default_printer()
@@ -248,54 +324,34 @@ def print_banner():
         print("  ! Pastikan printer USB terhubung dan driver terinstall")
     if len(printers) > 1:
         print(f"  Semua   : {', '.join(printers)}")
-    print("=" * 50)
+    print("=" * 55)
     print(f"  Server siap di http://localhost:{PORT}")
-    print("  Tekan Ctrl+C untuk menghentikan")
-    print("=" * 50)
+    print(f"  Tekan Ctrl+C untuk menghentikan")
+    print("=" * 55)
 
 
 if __name__ == '__main__':
-    # Cek apakah dijalankan sebagai Windows Service command
-    if len(sys.argv) > 1 and sys.argv[1] in ('install', 'start', 'stop', 'remove', 'restart', 'update'):
-        if platform.system() != 'Windows':
-            print("ERROR: Windows Service hanya tersedia di Windows.")
-            sys.exit(1)
-
-        if AqinTaniPrintService is None:
-            print("ERROR: pywin32 belum terinstall.")
-            print("Jalankan: pip install pywin32")
-            sys.exit(1)
-
-        cmd = sys.argv[1]
+    if len(sys.argv) > 1:
+        cmd = sys.argv[1].lower()
 
         if cmd == 'install':
-            # Install service dengan path ke script ini
-            win32serviceutil.HandleCommandLine(AqinTaniPrintService)
-            print("\nService berhasil diinstall!")
-            print("Jalankan: python print_server.py start")
-            print("Service akan otomatis jalan saat Windows start.")
+            install_autostart()
 
-        elif cmd == 'start':
-            win32serviceutil.HandleCommandLine(AqinTaniPrintService)
-            print("Service dimulai.")
+        elif cmd == 'remove' or cmd == 'uninstall':
+            remove_autostart()
 
-        elif cmd == 'stop':
-            win32serviceutil.HandleCommandLine(AqinTaniPrintService)
-            print("Service dihentikan.")
+        elif cmd == 'status':
+            check_autostart_status()
 
-        elif cmd == 'remove':
-            win32serviceutil.HandleCommandLine(AqinTaniPrintService)
-            print("Service dihapus.")
-
-        elif cmd == 'restart':
-            win32serviceutil.HandleCommandLine(AqinTaniPrintService)
-            print("Service di-restart.")
-
-        elif cmd == 'update':
-            win32serviceutil.HandleCommandLine(AqinTaniPrintService)
-            print("Service di-update.")
-
+        else:
+            print(f"Perintah tidak dikenal: {cmd}")
+            print("")
+            print("Perintah yang tersedia:")
+            print("  python print_server.py           Jalankan server")
+            print("  python print_server.py install   Install auto-start")
+            print("  python print_server.py remove    Hapus auto-start")
+            print("  python print_server.py status    Cek status auto-start")
     else:
-        # Mode biasa: jalankan langsung
+        # Mode biasa: jalankan server langsung
         print_banner()
         run_server()
