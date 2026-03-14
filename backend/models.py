@@ -222,6 +222,7 @@ class PartnerOrderCreate(BaseModel):
     delivery_date: Optional[str] = ""
     canvasser_id: Optional[str] = ""
     warehouse_id: Optional[str] = ""
+    order_type: Optional[str] = "regular"  # "regular" or "conditional"
 
 
 class PartnerOrder(BaseModel):
@@ -243,6 +244,8 @@ class PartnerOrder(BaseModel):
     created_at: str
     date: str
     has_return: Optional[bool] = False
+    order_type: Optional[str] = "regular"
+    is_settled: Optional[bool] = False
 
 
 class CanvasserCreate(BaseModel):

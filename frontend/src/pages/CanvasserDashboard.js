@@ -28,6 +28,10 @@ export const CanvasserDashboard = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
 
+  // Settlement (partial return)
+  const [settleDialog, setSettleDialog] = useState(null);
+  const [settleItems, setSettleItems] = useState([]);
+
   // Product search
   const [productQuery, setProductQuery] = useState('');
   const [productResults, setProductResults] = useState([]);
@@ -110,6 +114,43 @@ export const CanvasserDashboard = () => {
   const handleLogout = () => {
     logout();
     navigate('/login');
+  };
+
+  const openSettlement = (order) => {
+    setSettleDialog(order);
+    setSettleItems(order.items.map(item => ({
+      product_id: item.product_id,
+      product_name: item.product_name,
+      original_qty: item.quantity,
+      price: item.price,
+      qty_sold: 0,
+      items_per_box: item.items_per_box || 1,
+      warehouse_id: item.warehouse_id || order.warehouse_id || 'gudang_utama'
+    })));
+  };
+
+  const handleSettlement = async () => {
+    if (!settleDialog) return;
+    try {
+      const res = await api.post(`/partner-orders/${settleDialog.id}/settle`, {
+        items: settleItems.map(si => ({
+          product_id: si.product_id,
+          product_name: si.product_name,
+          qty_sold: si.qty_sold,
+          original_qty: si.original_qty,
+          price: si.price
+        }))
+      });
+      const { return_items, new_total, debt_reduced } = res.data;
+      const returnMsg = return_items.length > 0
+        ? ` | Barang kembali: ${return_items.map(r => `${r.product_name} (${r.quantity} ${r.unit})`).join(', ')}`
+        : '';
+      toast.success(`Pesanan diselesaikan. Total baru: ${formatCurrency(new_total)}${returnMsg}`);
+      setSettleDialog(null);
+      fetchMyOrders();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Gagal menyelesaikan pesanan');
+    }
   };
 
   const formatCurrency = (value) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(value);
@@ -416,6 +457,21 @@ export const CanvasserDashboard = () => {
                         <Printer className="w-4 h-4 mr-2" />
                         Cetak Struk
                       </Button>
+
+                      {!order.is_settled && order.status !== 'cancelled' && (
+                        <Button
+                          variant="outline"
+                          onClick={() => openSettlement(order)}
+                          className="w-full border-blue-200 text-blue-700 hover:bg-blue-50"
+                          data-testid={`settle-btn-${order.id}`}
+                        >
+                          <ShoppingBag className="w-4 h-4 mr-2" />
+                          Selesaikan
+                        </Button>
+                      )}
+                      {order.is_settled && (
+                        <span className="text-xs text-center text-green-600 font-semibold">Sudah Diselesaikan</span>
+                      )}
                     </div>
                   </div>
                 </Card>
@@ -490,6 +546,87 @@ export const CanvasserDashboard = () => {
                   data-testid="confirm-canvasser-payment"
                 >
                   {paymentType === 'cash' ? 'Catat Bayar Tunai' : 'Catat Bon'}
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Settlement Dialog */}
+      <Dialog open={!!settleDialog} onOpenChange={(open) => { if (!open) setSettleDialog(null); }}>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Selesaikan Pesanan</DialogTitle>
+          </DialogHeader>
+          {settleDialog && (
+            <div className="space-y-4">
+              <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                <p className="font-semibold">{settleDialog.partner_store_name}</p>
+                <p className="text-sm text-muted-foreground">{settleDialog.order_number}</p>
+              </div>
+
+              <p className="text-sm text-muted-foreground">Pilih jumlah yang laku terjual (dalam satuan):</p>
+
+              <div className="space-y-3">
+                {settleItems.map((item, idx) => {
+                  const remaining = (item.original_qty * (item.items_per_box || 1)) - item.qty_sold;
+                  const fullBoxes = item.items_per_box > 0 ? Math.floor(remaining / item.items_per_box) : 0;
+                  const partialPcs = remaining - (fullBoxes * (item.items_per_box || 1));
+                  const totalPcs = item.original_qty * (item.items_per_box || 1);
+                  return (
+                    <div key={idx} className="p-3 border rounded-lg space-y-2" data-testid={`settle-item-${idx}`}>
+                      <div className="flex justify-between">
+                        <p className="font-medium text-sm">{item.product_name}</p>
+                        <p className="text-xs text-muted-foreground">{item.original_qty} dus ({totalPcs} pcs)</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Label className="text-xs whitespace-nowrap">Laku (satuan):</Label>
+                        <Input
+                          type="number"
+                          min={0}
+                          max={totalPcs}
+                          value={item.qty_sold}
+                          onChange={(e) => {
+                            const val = Math.min(parseInt(e.target.value) || 0, totalPcs);
+                            setSettleItems(settleItems.map((si, i) => i === idx ? { ...si, qty_sold: val } : si));
+                          }}
+                          className="h-8 w-24"
+                          data-testid={`settle-qty-${idx}`}
+                        />
+                        <span className="text-xs text-muted-foreground">/ {totalPcs} pcs</span>
+                      </div>
+                      {remaining > 0 && (
+                        <div className="text-xs text-amber-700 bg-amber-50 p-2 rounded">
+                          Kembali: {fullBoxes > 0 && <span className="font-semibold">{fullBoxes} dus (gudang utama)</span>}
+                          {fullBoxes > 0 && partialPcs > 0 && ' + '}
+                          {partialPcs > 0 && <span className="font-semibold">{partialPcs} pcs (gudang toko)</span>}
+                          {remaining === totalPcs && <span className="font-semibold">{fullBoxes} dus (gudang utama)</span>}
+                        </div>
+                      )}
+                      <p className="text-xs text-right font-semibold">
+                        Total: {formatCurrency(item.qty_sold * item.price)}
+                      </p>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <div className="border-t pt-3 space-y-2">
+                <div className="flex justify-between text-sm">
+                  <span>Total Asli:</span>
+                  <span className="line-through text-muted-foreground">{formatCurrency(settleDialog.total)}</span>
+                </div>
+                <div className="flex justify-between text-lg font-bold">
+                  <span>Total Baru:</span>
+                  <span className="text-primary">{formatCurrency(settleItems.reduce((s, i) => s + (i.qty_sold * i.price), 0))}</span>
+                </div>
+              </div>
+
+              <div className="flex gap-2 justify-end pt-2">
+                <Button variant="outline" onClick={() => setSettleDialog(null)}>Batal</Button>
+                <Button onClick={handleSettlement} data-testid="confirm-settlement-btn">
+                  Selesaikan Pesanan
                 </Button>
               </div>
             </div>

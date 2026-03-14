@@ -36,6 +36,7 @@ export const PartnerOrders = () => {
   const [returnNotes, setReturnNotes] = useState('');
   const [returnWarehouse, setReturnWarehouse] = useState('gudang_toko');
   const [searchOrder, setSearchOrder] = useState('');
+  const [orderType, setOrderType] = useState('regular');
   const [page, setPage] = useState(1);
   const perPage = 15;
 
@@ -108,22 +109,38 @@ export const PartnerOrders = () => {
   const getPriceForWarehouse = (product, warehouseId) => {
     const customPrice = getPartnerPrice(product.id);
     if (customPrice !== null) return customPrice;
-    const unit = getWarehouseUnit(warehouseId);
-    return unit === 'dus' ? (product.box_price || product.price) : product.price;
+    // Always use unit price (harga satuan)
+    return product.price;
+  };
+
+  const getSubtotalForItem = (item) => {
+    const unit = getWarehouseUnit(item.warehouse_id);
+    const product = products.find(p => p.id === item.product_id);
+    const ipb = product?.items_per_box || 1;
+    // If warehouse is dus, subtotal = price_per_unit * items_per_box * qty_dus
+    if (unit === 'dus') {
+      return item.price * ipb * item.quantity;
+    }
+    return item.price * item.quantity;
   };
 
   const addToCart = (product) => {
     const whId = defaultWarehouse;
     const price = getPriceForWarehouse(product, whId);
+    const unit = getWarehouseUnit(whId);
+    const ipb = product.items_per_box || 1;
+    const subtotal = unit === 'dus' ? price * ipb * 1 : price * 1;
     const existing = cart.find(item => item.product_id === product.id && item.warehouse_id === whId);
     if (existing) {
+      const newQty = existing.quantity + 1;
+      const newSub = unit === 'dus' ? price * ipb * newQty : price * newQty;
       setCart(cart.map(item =>
         (item.product_id === product.id && item.warehouse_id === whId)
-          ? { ...item, quantity: item.quantity + 1, subtotal: (item.quantity + 1) * item.price }
+          ? { ...item, quantity: newQty, subtotal: newSub }
           : item
       ));
     } else {
-      setCart([...cart, { product_id: product.id, product_name: product.name, quantity: 1, price, subtotal: price, warehouse_id: whId }]);
+      setCart([...cart, { product_id: product.id, product_name: product.name, quantity: 1, price, subtotal, warehouse_id: whId }]);
     }
   };
 
@@ -131,12 +148,18 @@ export const PartnerOrders = () => {
     if (newQuantity <= 0) {
       setCart(cart.filter((_, i) => i !== idx));
     } else {
-      setCart(cart.map((item, i) => i === idx ? { ...item, quantity: newQuantity, subtotal: newQuantity * item.price } : item));
+      setCart(cart.map((item, i) => {
+        if (i !== idx) return item;
+        return { ...item, quantity: newQuantity, subtotal: getSubtotalForItem({ ...item, quantity: newQuantity }) };
+      }));
     }
   };
 
   const updateItemPrice = (idx, newPrice) => {
-    setCart(cart.map((item, i) => i === idx ? { ...item, price: newPrice, subtotal: item.quantity * newPrice } : item));
+    setCart(cart.map((item, i) => {
+      if (i !== idx) return item;
+      return { ...item, price: newPrice, subtotal: getSubtotalForItem({ ...item, price: newPrice }) };
+    }));
   };
 
   const changeItemWarehouse = (idx, newWhId) => {
@@ -145,11 +168,14 @@ export const PartnerOrders = () => {
     const product = products.find(p => p.id === item.product_id);
     if (!product) return;
     const newPrice = getPriceForWarehouse(product, newWhId);
-    setCart(cart.map((it, i) => i === idx ? { ...it, warehouse_id: newWhId, price: newPrice, subtotal: it.quantity * newPrice } : it));
+    const unit = getWarehouseUnit(newWhId);
+    const ipb = product.items_per_box || 1;
+    const newSub = unit === 'dus' ? newPrice * ipb * item.quantity : newPrice * item.quantity;
+    setCart(cart.map((it, i) => i === idx ? { ...it, warehouse_id: newWhId, price: newPrice, subtotal: newSub } : it));
   };
 
   const calculateTotal = () => {
-    const subtotal = cart.reduce((sum, item) => sum + item.subtotal, 0);
+    const subtotal = cart.reduce((sum, item) => sum + getSubtotalForItem(item), 0);
     return { subtotal, total: subtotal - discount };
   };
 
@@ -162,7 +188,8 @@ export const PartnerOrders = () => {
         partner_store_id: selectedPartner,
         items: cart, subtotal, discount, total,
         paid: 0, delivery_date: deliveryDate,
-        canvasser_id: selectedCanvasser, warehouse_id: defaultWarehouse
+        canvasser_id: selectedCanvasser, warehouse_id: defaultWarehouse,
+        order_type: orderType
       });
       toast.success('Pesanan berhasil dibuat');
       const orderId = res.data?.id;
@@ -222,6 +249,7 @@ export const PartnerOrders = () => {
     setCart([]);
     setDiscount(0);
     setDeliveryDate(new Date().toISOString().split('T')[0]);
+    setOrderType('regular');
   };
 
   const updateOrderStatus = async (orderId, newStatus) => {
@@ -300,6 +328,17 @@ export const PartnerOrders = () => {
                   </Select>
                 </div>
                 <div className="space-y-2">
+                  <Label>Tipe Pesanan</Label>
+                  <Select value={orderType} onValueChange={setOrderType}>
+                    <SelectTrigger data-testid="order-type-select"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="regular">Pesanan Langsung</SelectItem>
+                      <SelectItem value="conditional">Kondisional (Barang Pegangan)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  {orderType === 'conditional' && <p className="text-xs text-amber-600">Barang yang dibawa kanvaser untuk ditawarkan langsung ke kios.</p>}
+                </div>
+                <div className="space-y-2">
                   <Label>Cari Barang</Label>
                   <div className="relative">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -316,10 +355,11 @@ export const PartnerOrders = () => {
                       <div key={product.id} className="p-3 hover:bg-accent cursor-pointer border-b last:border-b-0 flex justify-between items-center" onClick={() => addToCart(product)} data-testid={`product-item-${product.id}`}>
                         <div>
                           <p className="font-medium text-sm">{product.name}</p>
-                          <p className="text-xs text-muted-foreground">Stok: {whStock} {unit}</p>
+                          <p className="text-xs text-muted-foreground">Stok: {whStock} {unit} | Isi/dus: {product.items_per_box || 1}</p>
                         </div>
                         <div className="text-right">
-                          <p className="font-semibold">{fmt(displayPrice)}<span className="text-xs font-normal text-muted-foreground">/{unit}</span></p>
+                          <p className="font-semibold">{fmt(displayPrice)}<span className="text-xs font-normal text-muted-foreground">/satuan</span></p>
+                          {unit === 'dus' && <p className="text-xs text-muted-foreground">{fmt(displayPrice * (product.items_per_box || 1))}/dus</p>}
                           {customPrice !== null && <p className="text-xs text-green-600">Harga mitra</p>}
                         </div>
                       </div>
@@ -359,7 +399,7 @@ export const PartnerOrders = () => {
                           <CurrencyInput value={item.price} className="h-7 text-xs font-medium w-28"
                             onChange={(v) => updateItemPrice(idx, v)}
                             data-testid={`cart-price-${idx}`} />
-                          <span className="text-xs text-muted-foreground">/{unit}</span>
+                          <span className="text-xs text-muted-foreground">/satuan</span>
                         </div>
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2">
@@ -369,7 +409,8 @@ export const PartnerOrders = () => {
                             <span className="text-xs text-muted-foreground">{unit}</span>
                           </div>
                           <div className="text-right">
-                            <span className="text-sm font-semibold">{fmt(item.subtotal)}</span>
+                            <span className="text-sm font-semibold">{fmt(getSubtotalForItem(item))}</span>
+                            {unit === 'dus' && <p className="text-[10px] text-muted-foreground">{item.quantity} dus x {products.find(p => p.id === item.product_id)?.items_per_box || 1} pcs x {fmt(item.price)}</p>}
                           </div>
                         </div>
                         {item.quantity > stock && <p className="text-xs text-red-600">Stok tidak cukup! ({stock} {unit})</p>}
@@ -504,6 +545,8 @@ export const PartnerOrders = () => {
                   <TableCell className="font-mono text-sm">
                     {order.order_number}
                     {order.has_return && <span className="ml-2 text-xs bg-red-100 text-red-700 px-1.5 py-0.5 rounded font-semibold">RETUR</span>}
+                    {order.order_type === 'conditional' && <span className="ml-2 text-xs bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded font-semibold">KONDISIONAL</span>}
+                    {order.is_settled && <span className="ml-2 text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded font-semibold">SELESAI</span>}
                   </TableCell>
                   <TableCell>{new Date(order.created_at).toLocaleDateString('id-ID')}</TableCell>
                   <TableCell>{order.partner_store_name}</TableCell>

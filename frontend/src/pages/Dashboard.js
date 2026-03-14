@@ -97,7 +97,21 @@ export const Dashboard = () => {
           <div>
             <p className="text-[10px] md:text-xs font-bold uppercase tracking-wider text-slate-300 mb-1">Nilai Aset Bersih</p>
             <p className="text-xl md:text-2xl lg:text-3xl font-bold">{fmt(stats?.total_assets || 0)}</p>
-            <p className="text-xs text-slate-400 mt-1">Gudang ({fmt(stats?.inventory_value || 0)}) + Bon Mitra ({fmt(stats?.total_partner_debt || 0)}) + Piutang ({fmt(stats?.total_personal_loans || 0)}) + Hutang Petani ({fmt(stats?.total_farmer_debt || 0)}) - Bon Supplier ({fmt(stats?.total_supplier_debt || 0)})</p>
+            <p className="text-xs text-slate-400 mt-1">
+              Gudang ({fmt(stats?.inventory_value || 0)}) + Piutang ({fmt(stats?.total_personal_loans || 0)}) + Hutang Petani ({fmt(stats?.total_farmer_debt || 0)}) - Bon Supplier ({fmt(stats?.total_supplier_debt || 0)})
+            </p>
+            {/* Bon Mitra per Armada breakdown */}
+            <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1">
+              {stats?.partner_debt_vehicles?.length > 0 ? (
+                stats.partner_debt_vehicles.map((v, i) => (
+                  <span key={i} className="text-xs text-slate-300">
+                    + Bon {v.vehicle} ({fmt(v.debt)})
+                  </span>
+                ))
+              ) : (
+                <span className="text-xs text-slate-400">+ Bon Mitra ({fmt(stats?.total_partner_debt || 0)})</span>
+              )}
+            </div>
           </div>
           <div className="bg-white/10 p-3 rounded-lg">
             <Landmark className="w-6 h-6" />
@@ -139,24 +153,6 @@ export const Dashboard = () => {
           </Card>
         ))}
       </div>
-
-      {/* Bon Kios Mitra per Vehicle */}
-      {stats?.partner_debt_vehicles?.length > 0 && (
-        <Card className="p-6" data-testid="partner-debt-by-vehicle">
-          <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
-            <Store className="w-5 h-5 text-amber-600" />
-            Bon Kios Mitra per Armada
-          </h2>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
-            {stats.partner_debt_vehicles.map((v, i) => (
-              <div key={i} className="p-3 rounded-lg bg-amber-50 border border-amber-200" data-testid={`vehicle-debt-${i}`}>
-                <p className="text-sm font-medium text-amber-900">{v.vehicle}</p>
-                <p className="text-lg font-bold text-amber-700 mt-1">{fmt(v.debt)}</p>
-              </div>
-            ))}
-          </div>
-        </Card>
-      )}
 
       {/* Charts Row: Sales + Warehouse Pie */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 md:gap-6">

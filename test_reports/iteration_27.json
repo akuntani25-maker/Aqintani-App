@@ -1,0 +1,91 @@
+{
+  "summary": "Iteration 27 - Batch 2 Changes Testing Complete. All 13 backend tests PASSED. All 4 feature areas verified in UI. Dashboard: per-vehicle debt breakdown inside 'Nilai Aset Bersih' card (no separate section). Partner Orders: harga satuan universal with /satuan and calculated /dus prices, order type selector (Pesanan Langsung/Kondisional), KONDISIONAL badge in table. Canvasser Dashboard: settlement dialog with qty_sold input, return preview (full boxes→gudang_utama, partial→gudang_toko), 'Sudah Diselesaikan' label.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Dialog components", "issues": ["Minor: DialogContent missing aria-describedby for accessibility (pre-existing)"]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration27_batch2.py",
+    "/app/test_reports/pytest/iteration27_results.xml"
+  ],
+  "passed_tests": [
+    "TestAuthentication::test_admin_login - Admin login successful",
+    "TestAuthentication::test_canvasser_login - Canvasser login successful (sahidin@aqintani.com)",
+    "TestDashboardBatch2::test_dashboard_stats_has_partner_debt_vehicles - partner_debt_vehicles field exists",
+    "TestDashboardBatch2::test_dashboard_has_total_assets - total_assets calculation working",
+    "TestPartnerOrdersHargaSatuan::test_get_products_has_items_per_box - Products have items_per_box field",
+    "TestPartnerOrdersHargaSatuan::test_get_warehouses_has_unit - Warehouses have unit field (satuan/dus)",
+    "TestPartnerOrdersConditional::test_get_partner_orders_has_order_type - Orders have order_type field",
+    "TestPartnerOrdersConditional::test_get_partner_orders_has_is_settled - Orders have is_settled field",
+    "TestPartnerOrderSettlement::test_settle_endpoint_exists - POST /api/partner-orders/{id}/settle endpoint exists",
+    "TestPartnerOrderSettlement::test_settle_with_real_order - Settlement with real order successful",
+    "TestCanvasserDashboard::test_canvasser_my_orders_endpoint - /api/canvassers/my-orders returns orders",
+    "TestCanvasserDashboard::test_canvasser_notifications_endpoint - /api/canvassers/notifications working",
+    "TestPartnerStores::test_partner_stores_have_vehicle_id - Partner stores have vehicle_id for debt breakdown",
+    "UI: Dashboard - Nilai Aset Bersih card shows '+ Bon [vehicle] (Rp X)' per-vehicle breakdown",
+    "UI: Dashboard - No separate 'Bon Kios Mitra per Armada' section (integrated into Nilai Aset Bersih)",
+    "UI: Partner Orders - Product list shows price /satuan (e.g., Rp 110.000/satuan)",
+    "UI: Partner Orders - Shows calculated /dus price (e.g., Rp 1.100.000/dus)",
+    "UI: Partner Orders - Order type selector with 'Pesanan Langsung' and 'Kondisional' options",
+    "UI: Partner Orders - 'Kondisional (Barang Pegangan)' has helper text",
+    "UI: Partner Orders - Cart subtotal for dus: qty × items_per_box × unit_price",
+    "UI: Partner Orders - KONDISIONAL badge visible in orders table",
+    "UI: Partner Orders - SELESAI badge visible for settled orders",
+    "UI: Canvasser Dashboard - 'Selesaikan' button on unsettled orders",
+    "UI: Canvasser Dashboard - Settlement dialog shows qty_sold input fields",
+    "UI: Canvasser Dashboard - Return preview: 'Kembali: X dus (gudang utama)'",
+    "UI: Canvasser Dashboard - Shows Total Asli (crossed) and Total Baru",
+    "UI: Canvasser Dashboard - 'Sudah Diselesaikan' label on settled orders"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Code quality is good - all Batch 2 features implemented correctly",
+    "Settlement endpoint correctly handles partial returns (full boxes to gudang_utama, partial pcs to gudang_toko)"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration27_batch2.py"
+  ],
+  "success_rate": {
+    "backend": "100% (13/13 tests passed)",
+    "frontend": "100% (All 4 feature areas verified)"
+  },
+  "test_credentials": {
+    "admin": "admin@aqintani.com / admin123",
+    "kasir": "kasir@aqintani.com / kasir123",
+    "canvasser": "sahidin@aqintani.com / 123456 (NOTE: canvasser@gmail.com does not exist)"
+  },
+  "seed_data_created": "Created conditional order PO20260314072755 for testing",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iteration 27 Batch 2 verified 4 user-requested changes: 1) Dashboard revision - per-vehicle debt breakdown ('+ Bon [vehicle] (Rp X)') integrated inside 'Nilai Aset Bersih' card (total-assets-card), no separate Bon Kios Mitra per Armada section. 2) Partner orders harga satuan universal - price always shows /satuan, subtotal for dus = price × items_per_box × qty. Product list shows both '/satuan' and calculated '/dus' price. 3) Partner orders conditional type - order_type selector with 'Pesanan Langsung' (regular) and 'Kondisional (Barang Pegangan)' options. KONDISIONAL badge shown in table. 4) Canvasser settlement - 'Selesaikan' button on unsettled orders, settlement dialog shows qty_sold input in satuan, return preview shows split (full boxes→gudang_utama, partial pcs→gudang_toko), settled orders show 'Sudah Diselesaikan' label. Canvasser account is sahidin@aqintani.com/123456 (NOT canvasser@gmail.com as in original request).",
+  "features_verified": {
+    "dashboard_per_vehicle_debt": {
+      "test_id": "total-assets-card",
+      "format": "+ Bon [vehicle name] (Rp X)",
+      "location": "Inside Nilai Aset Bersih card (no separate section)"
+    },
+    "partner_orders_harga_satuan": {
+      "product_list_format": "Rp X/satuan + Rp Y/dus",
+      "subtotal_calculation": "unit_price × items_per_box × qty_dus"
+    },
+    "partner_orders_order_type": {
+      "selector_test_id": "order-type-select",
+      "options": ["Pesanan Langsung (regular)", "Kondisional (conditional)"],
+      "badges": ["KONDISIONAL", "SELESAI"]
+    },
+    "canvasser_settlement": {
+      "button_test_id": "settle-btn-{order_id}",
+      "dialog_title": "Selesaikan Pesanan",
+      "qty_input_test_id": "settle-qty-{idx}",
+      "confirm_test_id": "confirm-settlement-btn",
+      "settled_label": "Sudah Diselesaikan"
+    }
+  }
+}
