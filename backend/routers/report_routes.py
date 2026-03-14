@@ -601,3 +601,91 @@ Jika barang tidak pernah terjual, tandai sebagai "safe" dengan catatan tidak ada
             },
             "raw_stats": product_summaries, "period": f"{date_30_ago} s/d {today}"
         }
+
+
+
+@router.get("/reports/canvasser-recap")
+async def get_canvasser_recap(date: str, canvasser_id: str = "", current_user: dict = Depends(get_current_user)):
+    """Rekap harian kanvaser: pesanan, settlement, pembayaran, barang kembali."""
+    # Get all partner orders for this date
+    query = {"date": date}
+    if canvasser_id:
+        query["canvasser_id"] = canvasser_id
+
+    orders = await db.partner_orders.find(query, {"_id": 0}).to_list(10000)
+
+    # Group by canvasser
+    canvasser_data = {}
+    for order in orders:
+        cid = order.get("canvasser_id", "")
+        cname = order.get("canvasser_name", "Tanpa Kanvaser")
+        if not cid:
+            continue
+        if cid not in canvasser_data:
+            canvasser_data[cid] = {
+                "canvasser_id": cid,
+                "canvasser_name": cname,
+                "total_orders": 0,
+                "total_delivered": 0,
+                "total_settled": 0,
+                "total_cancelled": 0,
+                "total_order_value": 0,
+                "total_settled_value": 0,
+                "total_payment_received": 0,
+                "return_items": [],
+                "stores_visited": [],
+                "orders": []
+            }
+
+        cd = canvasser_data[cid]
+        cd["total_orders"] += 1
+        cd["total_order_value"] += order.get("total", 0)
+
+        if order.get("status") == "delivered":
+            cd["total_delivered"] += 1
+        elif order.get("status") == "cancelled":
+            cd["total_cancelled"] += 1
+
+        if order.get("is_settled"):
+            cd["total_settled"] += 1
+            cd["total_settled_value"] += order.get("total", 0)
+            for ri in order.get("return_items", []):
+                cd["return_items"].append(ri)
+
+        cd["total_payment_received"] += order.get("paid", 0)
+
+        store_name = order.get("partner_store_name", "")
+        if store_name and store_name not in cd["stores_visited"]:
+            cd["stores_visited"].append(store_name)
+
+        cd["orders"].append({
+            "order_number": order.get("order_number"),
+            "partner_store_name": store_name,
+            "total": order.get("total", 0),
+            "paid": order.get("paid", 0),
+            "remaining": order.get("remaining", 0),
+            "status": order.get("status", ""),
+            "order_type": order.get("order_type", "regular"),
+            "is_settled": order.get("is_settled", False),
+            "items": order.get("items", []),
+        })
+
+    result = list(canvasser_data.values())
+
+    # Get canvasser list for filter dropdown
+    canvassers = await db.canvassers.find({}, {"_id": 0, "id": 1, "name": 1}).to_list(100)
+
+    return {
+        "date": date,
+        "canvassers": canvassers,
+        "data": result,
+        "summary": {
+            "total_canvassers": len(result),
+            "total_orders": sum(c["total_orders"] for c in result),
+            "total_delivered": sum(c["total_delivered"] for c in result),
+            "total_settled": sum(c["total_settled"] for c in result),
+            "total_order_value": sum(c["total_order_value"] for c in result),
+            "total_payment": sum(c["total_payment_received"] for c in result),
+            "total_return_items": sum(len(c["return_items"]) for c in result),
+        }
+    }

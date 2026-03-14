@@ -8,7 +8,7 @@ import { Label } from '../components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../components/ui/dialog';
 import { toast } from 'sonner';
-import { Package, MapPin, DollarSign, CheckCircle, Truck, LogOut, Search, Bell, Filter, X, ShoppingBag, Warehouse, Printer } from 'lucide-react';
+import { Package, MapPin, DollarSign, CheckCircle, Truck, LogOut, Search, Bell, Filter, X, ShoppingBag, Warehouse, Printer, BarChart2 } from 'lucide-react';
 import { Pagination } from '../components/Pagination';
 
 const fmtCurrency = (v) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(v);
@@ -32,6 +32,9 @@ export const CanvasserDashboard = () => {
   const [settleDialog, setSettleDialog] = useState(null);
   const [settleItems, setSettleItems] = useState([]);
 
+  // My Recap
+  const [myRecap, setMyRecap] = useState(null);
+
   // Product search
   const [productQuery, setProductQuery] = useState('');
   const [productResults, setProductResults] = useState([]);
@@ -42,6 +45,7 @@ export const CanvasserDashboard = () => {
   useEffect(() => {
     fetchMyOrders();
     fetchNotifications();
+    fetchMyRecap();
     const interval = setInterval(fetchNotifications, 30000);
     return () => clearInterval(interval);
   }, []);
@@ -61,6 +65,14 @@ export const CanvasserDashboard = () => {
     try {
       const res = await api.get('/canvassers/notifications');
       setNotifications(res.data);
+    } catch {}
+  };
+
+  const fetchMyRecap = async () => {
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      const res = await api.get(`/canvassers/my-recap?date=${today}`);
+      setMyRecap(res.data);
     } catch {}
   };
 
@@ -148,6 +160,7 @@ export const CanvasserDashboard = () => {
       toast.success(`Pesanan diselesaikan. Total baru: ${formatCurrency(new_total)}${returnMsg}`);
       setSettleDialog(null);
       fetchMyOrders();
+      fetchMyRecap();
     } catch (error) {
       toast.error(error.response?.data?.detail || 'Gagal menyelesaikan pesanan');
     }
@@ -264,6 +277,47 @@ export const CanvasserDashboard = () => {
             </div>
           </Card>
         </div>
+
+        {/* Rekap Hari Ini */}
+        {myRecap && myRecap.total_orders > 0 && (
+          <Card className="p-4 md:p-6" data-testid="my-recap-section">
+            <h2 className="text-lg font-bold mb-3 flex items-center gap-2">
+              <BarChart2 className="w-5 h-5 text-primary" />
+              Rekap Hari Ini
+            </h2>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+              <div className="p-3 bg-muted/50 rounded-lg text-center">
+                <p className="text-xs text-muted-foreground">Pesanan</p>
+                <p className="text-xl font-bold">{myRecap.total_orders}</p>
+              </div>
+              <div className="p-3 bg-green-50 rounded-lg text-center">
+                <p className="text-xs text-green-700">Diselesaikan</p>
+                <p className="text-xl font-bold text-green-700">{myRecap.total_settled}</p>
+              </div>
+              <div className="p-3 bg-blue-50 rounded-lg text-center">
+                <p className="text-xs text-blue-700">Nilai Total</p>
+                <p className="text-lg font-bold text-blue-700">{formatCurrency(myRecap.total_value)}</p>
+              </div>
+              <div className="p-3 bg-amber-50 rounded-lg text-center">
+                <p className="text-xs text-amber-700">Dibayar</p>
+                <p className="text-lg font-bold text-amber-700">{formatCurrency(myRecap.total_paid)}</p>
+              </div>
+            </div>
+            {myRecap.stores_visited.length > 0 && (
+              <p className="text-xs text-muted-foreground">Kios dikunjungi: <span className="font-medium text-foreground">{myRecap.stores_visited.join(', ')}</span></p>
+            )}
+            {myRecap.return_items.length > 0 && (
+              <div className="mt-2">
+                <p className="text-xs text-muted-foreground mb-1">Barang kembali:</p>
+                <div className="flex flex-wrap gap-1">
+                  {myRecap.return_items.map((ri, i) => (
+                    <span key={i} className="text-xs bg-amber-50 border border-amber-200 px-2 py-0.5 rounded">{ri.product_name}: {ri.quantity} {ri.unit}</span>
+                  ))}
+                </div>
+              </div>
+            )}
+          </Card>
+        )}
 
         {/* Product Search */}
         <Card className="p-4 md:p-6" data-testid="product-search-section">

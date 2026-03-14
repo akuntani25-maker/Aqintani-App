@@ -6,10 +6,11 @@ import { Label } from '../components/ui/label';
 import { Card } from '../components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
 import { toast } from 'sonner';
-import { FileText, Download, TrendingUp, TrendingDown, DollarSign, ShoppingCart, Store, Award, FileDown, BarChart3 } from 'lucide-react';
+import { FileText, Download, TrendingUp, TrendingDown, DollarSign, ShoppingCart, Store, Award, FileDown, BarChart3, Users } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 
 export const Reports = () => {
   const [activeTab, setActiveTab] = useState('pos');
@@ -17,6 +18,8 @@ export const Reports = () => {
   const [dateTo, setDateTo] = useState(new Date().toISOString().split('T')[0]);
   const [reportData, setReportData] = useState(null);
   const [profitLoss, setProfitLoss] = useState(null);
+  const [canvasserRecap, setCanvasserRecap] = useState(null);
+  const [canvasserFilter, setCanvasserFilter] = useState('all');
   const [loading, setLoading] = useState(false);
   const [storeSettings, setStoreSettings] = useState(null);
 
@@ -28,10 +31,15 @@ export const Reports = () => {
     setLoading(true);
     setReportData(null);
     setProfitLoss(null);
+    setCanvasserRecap(null);
     try {
       if (activeTab === 'profit_loss') {
         const res = await api.get(`/reports/profit-loss?date_from=${dateFrom}&date_to=${dateTo}`);
         setProfitLoss(res.data);
+      } else if (activeTab === 'canvasser') {
+        const cParam = canvasserFilter !== 'all' ? `&canvasser_id=${canvasserFilter}` : '';
+        const res = await api.get(`/reports/canvasser-recap?date=${dateFrom}${cParam}`);
+        setCanvasserRecap(res.data);
       } else {
         const endpoints = {
           pos: '/reports/sales-detail',
@@ -343,8 +351,11 @@ export const Reports = () => {
           <Button variant={activeTab === 'bestseller' ? 'default' : 'outline'} size="sm" onClick={() => { setActiveTab('bestseller'); setReportData(null); setProfitLoss(null); }} data-testid="tab-bestseller">
             <Award className="w-4 h-4 mr-1" />Terlaris
           </Button>
-          <Button variant={activeTab === 'profit_loss' ? 'default' : 'outline'} size="sm" onClick={() => { setActiveTab('profit_loss'); setReportData(null); setProfitLoss(null); }} data-testid="tab-profit-loss">
+          <Button variant={activeTab === 'profit_loss' ? 'default' : 'outline'} size="sm" onClick={() => { setActiveTab('profit_loss'); setReportData(null); setProfitLoss(null); setCanvasserRecap(null); }} data-testid="tab-profit-loss">
             <BarChart3 className="w-4 h-4 mr-1" />Laba/Rugi
+          </Button>
+          <Button variant={activeTab === 'canvasser' ? 'default' : 'outline'} size="sm" onClick={() => { setActiveTab('canvasser'); setReportData(null); setProfitLoss(null); setCanvasserRecap(null); }} data-testid="tab-canvasser">
+            <Users className="w-4 h-4 mr-1" />Rekap Kanvaser
           </Button>
         </div>
         <div className="flex flex-col md:flex-row gap-4 items-end">
@@ -352,10 +363,26 @@ export const Reports = () => {
             <Label>Dari Tanggal</Label>
             <Input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} data-testid="date-from" />
           </div>
-          <div className="space-y-2 flex-1">
-            <Label>Sampai Tanggal</Label>
-            <Input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} data-testid="date-to" />
-          </div>
+          {activeTab !== 'canvasser' && (
+            <div className="space-y-2 flex-1">
+              <Label>Sampai Tanggal</Label>
+              <Input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} data-testid="date-to" />
+            </div>
+          )}
+          {activeTab === 'canvasser' && (
+            <div className="space-y-2 flex-1">
+              <Label>Kanvaser</Label>
+              <Select value={canvasserFilter} onValueChange={setCanvasserFilter}>
+                <SelectTrigger data-testid="canvasser-filter"><SelectValue placeholder="Semua Kanvaser" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Semua Kanvaser</SelectItem>
+                  {canvasserRecap?.canvassers?.map(c => (
+                    <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
           <Button onClick={fetchReport} disabled={loading} data-testid="generate-report-button">
             <FileText className="w-4 h-4 mr-2" />{loading ? 'Memuat...' : 'Generate Laporan'}
           </Button>
@@ -758,6 +785,142 @@ export const Reports = () => {
                   </tfoot>
                 </Table>
               </div>
+            </Card>
+          )}
+        </div>
+      )}
+
+      {/* Canvasser Recap */}
+      {canvasserRecap && (
+        <div className="space-y-6" data-testid="canvasser-recap-result">
+          {/* Summary Cards */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <Card className="p-5">
+              <p className="text-xs text-muted-foreground uppercase tracking-wider">Total Pesanan</p>
+              <p className="text-lg md:text-xl font-bold mt-1" data-testid="cr-total-orders">{canvasserRecap.summary.total_orders}</p>
+            </Card>
+            <Card className="p-5">
+              <p className="text-xs text-muted-foreground uppercase tracking-wider">Diselesaikan</p>
+              <p className="text-lg md:text-xl font-bold text-green-600 mt-1">{canvasserRecap.summary.total_settled}</p>
+            </Card>
+            <Card className="p-5">
+              <p className="text-xs text-muted-foreground uppercase tracking-wider">Nilai Pesanan</p>
+              <p className="text-lg md:text-xl font-bold mt-1">{fmt(canvasserRecap.summary.total_order_value)}</p>
+            </Card>
+            <Card className="p-5">
+              <p className="text-xs text-muted-foreground uppercase tracking-wider">Pembayaran Diterima</p>
+              <p className="text-lg md:text-xl font-bold text-blue-600 mt-1">{fmt(canvasserRecap.summary.total_payment)}</p>
+            </Card>
+          </div>
+
+          {/* Per Canvasser Detail */}
+          {canvasserRecap.data.map((cv, ci) => (
+            <Card key={ci} className="p-6" data-testid={`canvasser-card-${ci}`}>
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-primary/10 rounded-full flex items-center justify-center">
+                    <Users className="w-5 h-5 text-primary" />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold text-lg">{cv.canvasser_name}</h3>
+                    <p className="text-xs text-muted-foreground">{cv.stores_visited.length} kios dikunjungi | {cv.total_orders} pesanan | {cv.total_settled} diselesaikan</p>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <p className="text-sm text-muted-foreground">Total Nilai</p>
+                  <p className="text-lg font-bold">{fmt(cv.total_order_value)}</p>
+                </div>
+              </div>
+
+              {/* Stats row */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
+                <div className="p-2 bg-muted/50 rounded text-center">
+                  <p className="text-xs text-muted-foreground">Dikirim</p>
+                  <p className="font-bold">{cv.total_delivered}</p>
+                </div>
+                <div className="p-2 bg-green-50 border border-green-200 rounded text-center">
+                  <p className="text-xs text-green-700">Settlement</p>
+                  <p className="font-bold text-green-700">{cv.total_settled}</p>
+                </div>
+                <div className="p-2 bg-blue-50 border border-blue-200 rounded text-center">
+                  <p className="text-xs text-blue-700">Pembayaran</p>
+                  <p className="font-bold text-blue-700">{fmt(cv.total_payment_received)}</p>
+                </div>
+                <div className="p-2 bg-amber-50 border border-amber-200 rounded text-center">
+                  <p className="text-xs text-amber-700">Barang Kembali</p>
+                  <p className="font-bold text-amber-700">{cv.return_items.length} item</p>
+                </div>
+              </div>
+
+              {/* Orders Table */}
+              <div className="rounded-lg border overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow className="bg-muted/50 text-xs">
+                      <TableHead className="w-12 text-center">No</TableHead>
+                      <TableHead>No. Pesanan</TableHead>
+                      <TableHead>Kios Mitra</TableHead>
+                      <TableHead className="text-center">Tipe</TableHead>
+                      <TableHead className="text-center">Status</TableHead>
+                      <TableHead className="text-right">Total</TableHead>
+                      <TableHead className="text-right">Dibayar</TableHead>
+                      <TableHead className="text-right">Sisa</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {cv.orders.map((order, oi) => (
+                      <TableRow key={oi}>
+                        <TableCell className="text-center text-muted-foreground font-mono">{oi + 1}</TableCell>
+                        <TableCell className="font-mono text-sm">{order.order_number}</TableCell>
+                        <TableCell>{order.partner_store_name}</TableCell>
+                        <TableCell className="text-center">
+                          <span className={`text-xs px-1.5 py-0.5 rounded ${order.order_type === 'conditional' ? 'bg-amber-100 text-amber-700' : 'bg-slate-100 text-slate-700'}`}>
+                            {order.order_type === 'conditional' ? 'Kondisional' : 'Langsung'}
+                          </span>
+                        </TableCell>
+                        <TableCell className="text-center">
+                          {order.is_settled ? (
+                            <span className="text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded">Selesai</span>
+                          ) : (
+                            <span className="text-xs bg-gray-100 text-gray-700 px-1.5 py-0.5 rounded">{order.status}</span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right font-medium">{fmt(order.total)}</TableCell>
+                        <TableCell className="text-right text-green-600">{fmt(order.paid)}</TableCell>
+                        <TableCell className="text-right text-red-600">{fmt(order.remaining)}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                  <tfoot>
+                    <tr className="border-t-2 bg-muted/30 font-bold">
+                      <td className="p-3" colSpan={5}>TOTAL</td>
+                      <td className="p-3 text-right">{fmt(cv.total_order_value)}</td>
+                      <td className="p-3 text-right text-green-600">{fmt(cv.total_payment_received)}</td>
+                      <td className="p-3 text-right text-red-600">{fmt(cv.total_order_value - cv.total_payment_received)}</td>
+                    </tr>
+                  </tfoot>
+                </Table>
+              </div>
+
+              {/* Return Items */}
+              {cv.return_items.length > 0 && (
+                <div className="mt-4">
+                  <p className="text-sm font-semibold mb-2">Barang Kembali:</p>
+                  <div className="flex flex-wrap gap-2">
+                    {cv.return_items.map((ri, ri_idx) => (
+                      <span key={ri_idx} className="text-xs bg-amber-50 border border-amber-200 px-2 py-1 rounded">
+                        {ri.product_name}: {ri.quantity} {ri.unit} ({ri.warehouse_id === 'gudang_utama' ? 'Gudang Utama' : 'Gudang Toko'})
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </Card>
+          ))}
+
+          {canvasserRecap.data.length === 0 && (
+            <Card className="p-8 text-center text-muted-foreground">
+              Tidak ada data kanvaser untuk tanggal ini
             </Card>
           )}
         </div>

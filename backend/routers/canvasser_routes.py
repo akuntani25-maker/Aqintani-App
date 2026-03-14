@@ -42,6 +42,58 @@ async def get_canvasser_notifications(current_user: dict = Depends(get_current_u
     return {"new_orders": new_today, "pending_orders": pending, "total_remaining": total_remaining}
 
 
+@router.get("/canvassers/my-recap")
+async def get_my_recap(date: str = "", current_user: dict = Depends(get_current_user)):
+    """Rekap harian untuk kanvaser sendiri."""
+    if current_user.get("role") != "canvasser":
+        raise HTTPException(status_code=403, detail="Canvasser access only")
+    canvasser_id = current_user.get("canvasser_id")
+    if not canvasser_id:
+        raise HTTPException(status_code=400, detail="Canvasser ID not found")
+    if not date:
+        date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+
+    orders = await db.partner_orders.find({"canvasser_id": canvasser_id, "date": date}, {"_id": 0}).to_list(1000)
+
+    total_orders = len(orders)
+    total_settled = sum(1 for o in orders if o.get("is_settled"))
+    total_value = sum(o.get("total", 0) for o in orders)
+    total_paid = sum(o.get("paid", 0) for o in orders)
+    stores_visited = list(set(o.get("partner_store_name", "") for o in orders if o.get("partner_store_name")))
+    return_items = []
+    for o in orders:
+        for ri in o.get("return_items", []):
+            return_items.append(ri)
+
+    store_details = []
+    for o in orders:
+        store_details.append({
+            "order_number": o.get("order_number"),
+            "partner_store_name": o.get("partner_store_name"),
+            "total": o.get("total", 0),
+            "paid": o.get("paid", 0),
+            "remaining": o.get("remaining", 0),
+            "status": o.get("status", ""),
+            "order_type": o.get("order_type", "regular"),
+            "is_settled": o.get("is_settled", False),
+            "items_count": len(o.get("items", [])),
+        })
+
+    return {
+        "date": date,
+        "total_orders": total_orders,
+        "total_settled": total_settled,
+        "total_value": total_value,
+        "total_paid": total_paid,
+        "total_remaining": total_value - total_paid,
+        "stores_visited": stores_visited,
+        "return_items": return_items,
+        "store_details": store_details,
+    }
+
+
+
+
 @router.get("/canvassers/product-search")
 async def canvasser_product_search(q: str = "", current_user: dict = Depends(get_current_user)):
     if not q or len(q) < 1:
