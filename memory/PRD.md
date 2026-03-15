@@ -44,6 +44,7 @@ Aplikasi web responsif untuk toko farmasi dan pertanian "UD. AQIN TANI" dengan s
 26. VBScript Auto-Start - Fixed path escaping for Windows Startup
 27. Canvasser Dashboard - Store debt history (Sisa Bon) shown per order card
 28. Canvasser Settlement Form - Correct max limit based on items_per_box and warehouse_unit
+29. Partner Orders - Search autocomplete untuk memilih kios mitra (dengan info hutang)
 
 ## Credentials
 - Admin: admin@aqintani.com / admin123

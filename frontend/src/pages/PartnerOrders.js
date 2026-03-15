@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
 import { toast } from 'sonner';
-import { Plus, Search, Package, Trash2, ShoppingCart, Warehouse, FileText, DollarSign, TrendingUp, RotateCcw, Pencil, Trash } from 'lucide-react';
+import { Plus, Search, Package, Trash2, ShoppingCart, Warehouse, FileText, DollarSign, TrendingUp, RotateCcw, Pencil, Trash, X, Store } from 'lucide-react';
 import { CurrencyInput } from '../components/CurrencyInput';
 import { Pagination } from '../components/Pagination';
 
@@ -37,6 +37,8 @@ export const PartnerOrders = () => {
   const [returnWarehouse, setReturnWarehouse] = useState('gudang_toko');
   const [searchOrder, setSearchOrder] = useState('');
   const [orderType, setOrderType] = useState('regular');
+  const [partnerSearch, setPartnerSearch] = useState('');
+  const [partnerSearchFocused, setPartnerSearchFocused] = useState(false);
   const [page, setPage] = useState(1);
   const perPage = 15;
 
@@ -242,6 +244,25 @@ export const PartnerOrders = () => {
   };
 
 
+  const selectedPartnerStore = partnerStores.find(s => s.id === selectedPartner);
+
+  const filteredPartnerStores = partnerStores.filter(s =>
+    !partnerSearch || s.name?.toLowerCase().includes(partnerSearch.toLowerCase()) ||
+    s.owner_name?.toLowerCase().includes(partnerSearch.toLowerCase()) ||
+    s.address?.toLowerCase().includes(partnerSearch.toLowerCase())
+  );
+
+  const selectPartnerStore = (store) => {
+    setSelectedPartner(store.id);
+    setPartnerSearch('');
+    setPartnerSearchFocused(false);
+  };
+
+  const clearPartnerSelection = () => {
+    setSelectedPartner('');
+    setPartnerSearch('');
+  };
+
   const resetForm = () => {
     setSelectedPartner('');
     setSelectedCanvasser('');
@@ -250,6 +271,8 @@ export const PartnerOrders = () => {
     setDiscount(0);
     setDeliveryDate(new Date().toISOString().split('T')[0]);
     setOrderType('regular');
+    setPartnerSearch('');
+    setPartnerSearchFocused(false);
   };
 
   const updateOrderStatus = async (orderId, newStatus) => {
@@ -301,11 +324,68 @@ export const PartnerOrders = () => {
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               <div className="lg:col-span-2 space-y-4">
                 <div className="space-y-2">
-                  <Label>Pilih Kios Mitra *</Label>
-                  <Select value={selectedPartner} onValueChange={setSelectedPartner}>
-                    <SelectTrigger data-testid="order-partner-select"><SelectValue placeholder="Pilih kios mitra" /></SelectTrigger>
-                    <SelectContent>{partnerStores.map(store => <SelectItem key={store.id} value={store.id}>{store.name} - {store.owner_name}</SelectItem>)}</SelectContent>
-                  </Select>
+                  <Label>Cari Kios Mitra *</Label>
+                  {selectedPartnerStore ? (
+                    <div className="flex items-center gap-2 p-3 bg-emerald-50 border border-emerald-200 rounded-lg" data-testid="selected-partner-info">
+                      <Store className="w-5 h-5 text-emerald-600 shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <p className="font-semibold text-sm text-emerald-900 truncate">{selectedPartnerStore.name}</p>
+                        <div className="flex items-center gap-3 text-xs text-emerald-700">
+                          <span>{selectedPartnerStore.owner_name}</span>
+                          {selectedPartnerStore.current_debt > 0 && (
+                            <span className="font-semibold text-orange-600">Hutang: {fmt(selectedPartnerStore.current_debt)}</span>
+                          )}
+                        </div>
+                      </div>
+                      <Button size="sm" variant="ghost" onClick={clearPartnerSelection} className="shrink-0 h-7 w-7 p-0" data-testid="clear-partner-btn">
+                        <X className="w-4 h-4 text-muted-foreground" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                      <Input
+                        placeholder="Ketik nama kios mitra..."
+                        value={partnerSearch}
+                        onChange={(e) => setPartnerSearch(e.target.value)}
+                        onFocus={() => setPartnerSearchFocused(true)}
+                        onBlur={() => setTimeout(() => setPartnerSearchFocused(false), 200)}
+                        className="pl-10"
+                        data-testid="order-partner-search"
+                      />
+                      {partnerSearchFocused && filteredPartnerStores.length > 0 && (
+                        <div className="absolute z-20 w-full bg-white border rounded-md shadow-lg mt-1 max-h-56 overflow-y-auto" data-testid="partner-search-results">
+                          {filteredPartnerStores.map(store => (
+                            <div
+                              key={store.id}
+                              className="p-3 hover:bg-accent cursor-pointer border-b last:border-b-0 transition-colors"
+                              onClick={() => selectPartnerStore(store)}
+                              data-testid={`partner-option-${store.id}`}
+                            >
+                              <div className="flex justify-between items-start">
+                                <div className="min-w-0 flex-1">
+                                  <p className="font-medium text-sm truncate">{store.name}</p>
+                                  <p className="text-xs text-muted-foreground truncate">{store.owner_name}{store.address ? ` - ${store.address}` : ''}</p>
+                                </div>
+                                <div className="text-right shrink-0 ml-2">
+                                  {store.current_debt > 0 ? (
+                                    <span className="text-xs font-semibold text-orange-600 bg-orange-50 px-2 py-0.5 rounded">{fmt(store.current_debt)}</span>
+                                  ) : (
+                                    <span className="text-xs text-green-600 bg-green-50 px-2 py-0.5 rounded">Lunas</span>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {partnerSearchFocused && partnerSearch && filteredPartnerStores.length === 0 && (
+                        <div className="absolute z-20 w-full bg-white border rounded-md shadow-lg mt-1 p-3 text-center text-sm text-muted-foreground">
+                          Kios mitra tidak ditemukan
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
