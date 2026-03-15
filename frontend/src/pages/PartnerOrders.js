@@ -404,7 +404,11 @@ export const PartnerOrders = () => {
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2">
                             <Button size="sm" variant="outline" onClick={() => updateQuantity(idx, item.quantity - 1)}>-</Button>
-                            <span className="w-8 text-center text-sm">{item.quantity}</span>
+                            <Input type="number" min={1} value={item.quantity}
+                              onChange={(e) => updateQuantity(idx, parseInt(e.target.value) || 1)}
+                              className="w-16 h-8 text-center text-sm font-medium"
+                              data-testid={`cart-qty-${idx}`}
+                            />
                             <Button size="sm" variant="outline" onClick={() => updateQuantity(idx, item.quantity + 1)}>+</Button>
                             <span className="text-xs text-muted-foreground">{unit}</span>
                           </div>

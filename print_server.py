@@ -227,20 +227,16 @@ def install_autostart():
         print(f"ERROR: Folder Startup tidak ditemukan: {startup_folder}")
         return False
 
-    if pythonw:
-        # Gunakan pythonw.exe (tanpa console window)
-        run_cmd = f'"{pythonw}" "{script_path}"'
-    else:
-        # Fallback ke python.exe (akan ada console, tapi tetap jalan)
-        run_cmd = f'"{sys.executable}" "{script_path}"'
+    exe_path = pythonw if pythonw else sys.executable
+    if not pythonw:
         print("PERINGATAN: pythonw.exe tidak ditemukan, akan menggunakan python.exe")
         print("  (console window akan terlihat saat startup)")
 
     # Buat file VBS yang menjalankan print server secara tersembunyi
-    vbs_content = f'''Set WshShell = CreateObject("WScript.Shell")
-WshShell.CurrentDirectory = "{os.path.dirname(script_path)}"
-WshShell.Run {run_cmd}, 0, False
-'''
+    # VBScript tidak memerlukan escape backslash - path ditulis apa adanya
+    vbs_content = 'Set WshShell = CreateObject("WScript.Shell")\r\n'
+    vbs_content += 'WshShell.CurrentDirectory = "' + os.path.dirname(script_path) + '"\r\n'
+    vbs_content += 'WshShell.Run """' + exe_path + '""" """' + script_path + '""", 0, False\r\n'
 
     try:
         with open(vbs_path, 'w') as f:

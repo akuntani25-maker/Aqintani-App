@@ -6,7 +6,7 @@ import pytest
 import requests
 import os
 
-BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://aqin-tani-print.preview.emergentagent.com').rstrip('/')
+BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', 'https://farm-commerce-app.preview.emergentagent.com').rstrip('/')
 
 class TestPaginationBackend:
     """Backend API pagination tests"""

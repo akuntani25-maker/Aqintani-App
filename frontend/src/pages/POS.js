@@ -357,6 +357,20 @@ export const POS = () => {
     }));
   };
 
+  const setQuantityDirect = (productId, newQty) => {
+    if (newQty < 1) newQty = 1;
+    setCart(cart.map(item => {
+      if (item.product_id === productId) {
+        if (newQty > item.max_stock) {
+          toast.error('Stok tidak mencukupi');
+          return item;
+        }
+        return { ...item, quantity: newQty, subtotal: newQty * item.price };
+      }
+      return item;
+    }));
+  };
+
   const updateItemPrice = (productId, newPrice) => {
     setCart(cart.map(item =>
       item.product_id === productId
@@ -603,7 +617,15 @@ export const POS = () => {
                     >
                       <Minus className="w-3 h-3" />
                     </Button>
-                    <span className="w-8 text-center font-medium">{item.quantity}</span>
+                    <Input
+                      type="number"
+                      min={1}
+                      max={item.max_stock}
+                      value={item.quantity}
+                      onChange={(e) => setQuantityDirect(item.product_id, parseInt(e.target.value) || 1)}
+                      className="w-16 h-8 text-center font-medium"
+                      data-testid={`qty-input-${item.product_id}`}
+                    />
                     <Button
                       size="sm"
                       variant="outline"

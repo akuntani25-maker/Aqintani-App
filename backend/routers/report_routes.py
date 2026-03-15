@@ -191,11 +191,13 @@ async def get_sales_detail_report(date_from: str, date_to: str, admin: dict = De
     total_sales = total_cost = total_margin = 0
     for t in transactions:
         for item in t.get("items", []):
+            qty = item["quantity"]
+            if qty <= 0:
+                continue
             product = products.get(item["product_id"], {})
             ipb = product.get("items_per_box", 1) or 1
             cost_per_unit = (product.get("cost_price", 0) or 0) / ipb
             sell_price = item["price"]
-            qty = item["quantity"]
             total_sell = sell_price * qty
             total_cost_item = cost_per_unit * qty
             margin = total_sell - total_cost_item
@@ -230,6 +232,8 @@ async def get_partner_sales_detail_report(date_from: str, date_to: str, admin: d
     total_sales = total_cost = total_margin = 0
     for o in orders:
         for item in o.get("items", []):
+            if item["quantity"] <= 0:
+                continue
             product = products.get(item["product_id"], {})
             ipb = product.get("items_per_box", 1) or 1
             item_wh_id = item.get("warehouse_id") or o.get("warehouse_id", "gudang_utama")
@@ -278,6 +282,8 @@ async def get_best_sellers_report(date_from: str, date_to: str, admin: dict = De
     agg = {}
     for t in transactions:
         for item in t.get("items", []):
+            if item["quantity"] <= 0:
+                continue
             pid = item["product_id"]
             if pid not in agg:
                 agg[pid] = {"product_name": item["product_name"], "qty_pos": 0, "qty_partner": 0, "revenue_pos": 0, "revenue_partner": 0, "cost_total": 0}
@@ -289,6 +295,8 @@ async def get_best_sellers_report(date_from: str, date_to: str, admin: dict = De
             agg[pid]["cost_total"] += cost_per_unit * item["quantity"]
     for o in orders:
         for item in o.get("items", []):
+            if item["quantity"] <= 0:
+                continue
             pid = item["product_id"]
             if pid not in agg:
                 agg[pid] = {"product_name": item["product_name"], "qty_pos": 0, "qty_partner": 0, "revenue_pos": 0, "revenue_partner": 0, "cost_total": 0}

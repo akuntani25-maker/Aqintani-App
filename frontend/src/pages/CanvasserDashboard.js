@@ -137,7 +137,8 @@ export const CanvasserDashboard = () => {
       price: item.price,
       qty_sold: 0,
       items_per_box: item.items_per_box || 1,
-      warehouse_id: item.warehouse_id || order.warehouse_id || 'gudang_utama'
+      warehouse_id: item.warehouse_id || order.warehouse_id || 'gudang_utama',
+      warehouse_unit: item.warehouse_unit || 'satuan'
     })));
   };
 
@@ -457,6 +458,17 @@ export const CanvasserDashboard = () => {
                         </div>
                       </div>
 
+                      {/* Debt info */}
+                      {order.store_current_debt > 0 && (
+                        <div className="p-2 bg-amber-50 border border-amber-200 rounded-lg text-xs" data-testid={`debt-info-${order.id}`}>
+                          <p className="font-semibold text-amber-800">Sisa Bon {order.partner_store_name}:</p>
+                          <p className="text-amber-700">Total bon saat ini: <span className="font-bold">{formatCurrency(order.store_current_debt)}</span></p>
+                        </div>
+                      )}
+                      {order.order_type === 'conditional' && (
+                        <span className="text-xs bg-amber-100 text-amber-700 px-2 py-0.5 rounded font-semibold">KONDISIONAL</span>
+                      )}
+
                       <details className="mt-3">
                         <summary className="cursor-pointer text-sm font-medium text-primary hover:underline">
                           Lihat Detail Barang ({order.items.length} item)
@@ -624,15 +636,19 @@ export const CanvasserDashboard = () => {
 
               <div className="space-y-3">
                 {settleItems.map((item, idx) => {
-                  const remaining = (item.original_qty * (item.items_per_box || 1)) - item.qty_sold;
-                  const fullBoxes = item.items_per_box > 0 ? Math.floor(remaining / item.items_per_box) : 0;
-                  const partialPcs = remaining - (fullBoxes * (item.items_per_box || 1));
-                  const totalPcs = item.original_qty * (item.items_per_box || 1);
+                  const isDus = item.warehouse_unit === 'dus';
+                  const ipb = item.items_per_box || 1;
+                  const totalPcs = isDus ? item.original_qty * ipb : item.original_qty;
+                  const remaining = totalPcs - item.qty_sold;
+                  const fullBoxes = ipb > 1 ? Math.floor(remaining / ipb) : 0;
+                  const partialPcs = remaining - (fullBoxes * ipb);
                   return (
                     <div key={idx} className="p-3 border rounded-lg space-y-2" data-testid={`settle-item-${idx}`}>
                       <div className="flex justify-between">
                         <p className="font-medium text-sm">{item.product_name}</p>
-                        <p className="text-xs text-muted-foreground">{item.original_qty} dus ({totalPcs} pcs)</p>
+                        <p className="text-xs text-muted-foreground">
+                          {isDus ? `${item.original_qty} dus (${totalPcs} pcs)` : `${item.original_qty} pcs`}
+                        </p>
                       </div>
                       <div className="flex items-center gap-2">
                         <Label className="text-xs whitespace-nowrap">Laku (satuan):</Label>
@@ -642,7 +658,7 @@ export const CanvasserDashboard = () => {
                           max={totalPcs}
                           value={item.qty_sold}
                           onChange={(e) => {
-                            const val = Math.min(parseInt(e.target.value) || 0, totalPcs);
+                            const val = Math.min(Math.max(parseInt(e.target.value) || 0, 0), totalPcs);
                             setSettleItems(settleItems.map((si, i) => i === idx ? { ...si, qty_sold: val } : si));
                           }}
                           className="h-8 w-24"
@@ -655,7 +671,7 @@ export const CanvasserDashboard = () => {
                           Kembali: {fullBoxes > 0 && <span className="font-semibold">{fullBoxes} dus (gudang utama)</span>}
                           {fullBoxes > 0 && partialPcs > 0 && ' + '}
                           {partialPcs > 0 && <span className="font-semibold">{partialPcs} pcs (gudang toko)</span>}
-                          {remaining === totalPcs && <span className="font-semibold">{fullBoxes} dus (gudang utama)</span>}
+                          {remaining > 0 && fullBoxes === 0 && partialPcs === 0 && <span className="font-semibold">{remaining} pcs</span>}
                         </div>
                       )}
                       <p className="text-xs text-right font-semibold">

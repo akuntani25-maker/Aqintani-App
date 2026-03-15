@@ -1,0 +1,88 @@
+{
+  "summary": "Iteration 28 - Testing 6 User-Requested Fixes. 10/10 backend tests PASSED. All 6 fixes verified. Fix #1: POS qty input editable (type=number). Fix #2: Partner Orders qty input editable (absolute value). Fix #3: Reports exclude qty=0 items. Fix #4: VBScript auto-start reviewed (cannot test in Linux). Fix #5: Canvasser Dashboard shows store debt ('Sisa Bon'). Fix #6: Settlement items enriched with items_per_box and warehouse_unit.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration28_fixes.py",
+    "/app/test_reports/pytest/iteration28_fixes_results.xml"
+  ],
+  "passed_tests": [
+    "TestFix3ReportsExcludeZeroQty::test_sales_detail_report_structure - All rows have qty > 0",
+    "TestFix3ReportsExcludeZeroQty::test_partner_sales_detail_report_excludes_zero_qty - All rows have qty > 0",
+    "TestFix3ReportsExcludeZeroQty::test_best_sellers_report_excludes_zero_qty - All products have qty_total > 0",
+    "TestFix5CanvasserDashboardStoreDebt::test_my_orders_has_store_current_debt - Orders have store_current_debt field",
+    "TestFix6CanvasserSettlementEnrichment::test_my_orders_items_have_items_per_box - Items have items_per_box field",
+    "TestFix6CanvasserSettlementEnrichment::test_my_orders_items_have_warehouse_unit - Items have warehouse_unit (satuan/dus)",
+    "TestFix6CanvasserSettlementEnrichment::test_settlement_max_limit_calculation - totalPcs = qty * ipb for dus, qty for satuan",
+    "TestAuthentication::test_admin_login - Admin login works (admin@aqintani.com)",
+    "TestAuthentication::test_kasir_login - Kasir login works (kasir@aqintani.com)",
+    "TestAuthentication::test_canvasser_login - Canvasser login works (sahidin@aqintani.com)",
+    "UI: Fix #1 - POS cart qty input is type=number and editable (tested typing '5' directly)",
+    "UI: Fix #2 - Partner Orders cart qty input is type=number and editable (tested typing '7' directly, subtotal calculates correctly)",
+    "UI: Fix #5 - Canvasser Dashboard shows 'Sisa Bon [partner name]: Total bon saat ini: Rp X'"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Fix #1 (POS.js lines 620-628): Correct - Input type=number with setQuantityDirect handler",
+    "Fix #2 (PartnerOrders.js lines 407-410): Correct - onChange passes parseInt(e.target.value) directly to updateQuantity",
+    "Fix #3 (report_routes.py lines 195-196, 235, 285-286, 298-299): Correct - qty<=0 filters prevent zero qty items",
+    "Fix #4 (print_server.py lines 237-239): VBScript correctly generates auto-start without backslash escape issues",
+    "Fix #5 (canvasser_routes.py lines 29-31, 51): Correct - store_current_debt enriched from partner_stores",
+    "Fix #6 (canvasser_routes.py lines 42-58): Correct - items enriched with items_per_box from products and warehouse_unit from warehouses"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration28_fixes.py"
+  ],
+  "success_rate": {
+    "backend": "100% (10/10 tests passed)",
+    "frontend": "100% (3/3 UI fixes verified)"
+  },
+  "test_credentials": {
+    "admin": "admin@aqintani.com / admin123",
+    "kasir": "kasir@aqintani.com / kasir123",
+    "canvasser": "sahidin@aqintani.com / 123456"
+  },
+  "seed_data_created": "None - used existing data",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iteration 28 verified 6 user-requested fixes: (1) POS cart qty input now type=number with setQuantityDirect handler - typing directly works. (2) Partner Orders cart qty input now passes absolute value (not delta) to updateQuantity - typing directly works. (3) Reports exclude qty<=0 items - /api/reports/sales-detail, /api/reports/partner-sales-detail, /api/reports/best-sellers all filter qty<=0. (4) VBScript auto-start code reviewed - uses correct VBScript syntax without Python backslash escaping. (5) Canvasser Dashboard shows store debt - data-testid=debt-info-* shows 'Sisa Bon [store]: Total bon saat ini: Rp X'. (6) Settlement form items enriched with items_per_box and warehouse_unit from backend - /api/canvassers/my-orders returns {items_per_box, warehouse_unit} for each item enabling correct totalPcs calculation (qty * items_per_box for dus, qty for satuan).",
+  "features_verified": {
+    "fix_1_pos_qty_editable": {
+      "location": "POS.js lines 620-628",
+      "test_id": "qty-input-{product_id}",
+      "input_type": "number",
+      "handler": "setQuantityDirect(productId, parseInt(value))"
+    },
+    "fix_2_partner_orders_qty_editable": {
+      "location": "PartnerOrders.js lines 407-410",
+      "test_id": "cart-qty-{idx}",
+      "input_type": "number",
+      "handler": "updateQuantity(idx, parseInt(e.target.value))"
+    },
+    "fix_3_reports_exclude_zero_qty": {
+      "endpoints": ["/api/reports/sales-detail", "/api/reports/partner-sales-detail", "/api/reports/best-sellers"],
+      "filter": "qty > 0 (lines 195-196, 235, 285-286, 298-299 in report_routes.py)"
+    },
+    "fix_4_vbscript_autostart": {
+      "location": "print_server.py lines 237-239",
+      "note": "VBScript syntax correct - no Python backslash escaping needed"
+    },
+    "fix_5_canvasser_store_debt": {
+      "location": "canvasser_routes.py lines 29-31, 51",
+      "test_id": "debt-info-{order_id}",
+      "format": "Sisa Bon [store]: Total bon saat ini: Rp X"
+    },
+    "fix_6_settlement_enrichment": {
+      "location": "canvasser_routes.py lines 42-58",
+      "fields_added": ["items_per_box", "warehouse_unit"],
+      "max_limit_calc": "totalPcs = original_qty * items_per_box (for dus) or original_qty (for satuan)"
+    }
+  }
+}

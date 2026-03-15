@@ -16,7 +16,7 @@ async def get_canvassers(current_user: dict = Depends(get_current_user)):
     return canvassers
 
 
-@router.get("/canvassers/my-orders", response_model=List[PartnerOrder])
+@router.get("/canvassers/my-orders")
 async def get_my_orders(current_user: dict = Depends(get_current_user)):
     if current_user.get("role") != "canvasser":
         raise HTTPException(status_code=403, detail="Canvasser access only")
@@ -24,7 +24,42 @@ async def get_my_orders(current_user: dict = Depends(get_current_user)):
     if not canvasser_id:
         raise HTTPException(status_code=400, detail="Canvasser ID not found")
     orders = await db.partner_orders.find({"canvasser_id": canvasser_id}, {"_id": 0}).sort("created_at", -1).to_list(1000)
-    return orders
+
+    # Enrich with partner store debt info
+    store_ids = list(set(o.get("partner_store_id", "") for o in orders if o.get("partner_store_id")))
+    stores = await db.partner_stores.find({"id": {"$in": store_ids}}, {"_id": 0, "id": 1, "current_debt": 1}).to_list(500)
+    store_debt_map = {s["id"]: s.get("current_debt", 0) for s in stores}
+
+    # Collect all product IDs and warehouse IDs for enrichment
+    product_ids = set()
+    warehouse_ids = set()
+    for o in orders:
+        for item in o.get("items", []):
+            product_ids.add(item.get("product_id", ""))
+            wh_id = item.get("warehouse_id") or o.get("warehouse_id", "gudang_utama")
+            warehouse_ids.add(wh_id)
+
+    products = await db.products.find({"id": {"$in": list(product_ids)}}, {"_id": 0, "id": 1, "items_per_box": 1}).to_list(10000)
+    prod_ipb_map = {p["id"]: p.get("items_per_box", 1) or 1 for p in products}
+
+    warehouses = await db.warehouses.find({"id": {"$in": list(warehouse_ids)}}, {"_id": 0, "id": 1, "unit": 1}).to_list(100)
+    wh_unit_map = {w["id"]: w.get("unit", "satuan") for w in warehouses}
+
+    result = []
+    for o in orders:
+        od = {k: v for k, v in o.items() if k != "_id"}
+        od["store_current_debt"] = store_debt_map.get(o.get("partner_store_id", ""), 0)
+        # Enrich items with items_per_box and warehouse_unit
+        enriched_items = []
+        for item in od.get("items", []):
+            ei = {**item}
+            ei["items_per_box"] = prod_ipb_map.get(item.get("product_id", ""), 1)
+            wh_id = item.get("warehouse_id") or o.get("warehouse_id", "gudang_utama")
+            ei["warehouse_unit"] = wh_unit_map.get(wh_id, "satuan")
+            enriched_items.append(ei)
+        od["items"] = enriched_items
+        result.append(od)
+    return result
 
 
 @router.get("/canvassers/notifications")
