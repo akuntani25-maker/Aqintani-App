@@ -11,11 +11,11 @@ Aplikasi web responsif untuk toko farmasi dan pertanian "UD. AQIN TANI" dengan s
 - **Kanvaser**: Dashboard kanvaser, cetak struk, settlement pesanan, rekap harian, profil
 
 ## Printing Architecture
-- **Cetak Struk (PC)** - Local Print Server (ESC/POS raw via localhost:9100) → Fallback: browser print
+- **Cetak Struk (PC)** - Local Print Server (ESC/POS raw via localhost:9100) -> Fallback: browser print
 - **Cetak Bluetooth** - Web Bluetooth API. Untuk mobile/tablet.
 - **Local Print Server** - `print_server.py`. Auto-start via Windows Startup folder (VBS + pythonw.exe).
 
-## What's Been Implemented (Complete) - 22 Features
+## What's Been Implemented (Complete) - 28 Features
 1. Full RBAC (5 roles, correct permissions)
 2. Browser-based thermal printing + Bluetooth ESC/POS
 3. Local Print Server (auto-start Windows Startup folder)
@@ -36,8 +36,14 @@ Aplikasi web responsif untuk toko farmasi dan pertanian "UD. AQIN TANI" dengan s
 18. Label - "Hutang ke Supplier"
 19. Harga Satuan Universal - Pesanan kios selalu pakai harga satuan, kalkulasi otomatis per dus
 20. Pesanan Kondisional - Tipe pesanan baru: barang pegangan kanvaser
-21. Settlement / Partial Return - Kanvaser pilih qty laku, sisa kembali: satuan→gudang toko, utuh dus→gudang utama
+21. Settlement / Partial Return - Kanvaser pilih qty laku, sisa kembali: satuan->gudang toko, utuh dus->gudang utama
 22. Rekap Harian Kanvaser - Admin (tab Rekap Kanvaser di Reports) + Kanvaser (Rekap Hari Ini di dashboard)
+23. POS Cart - Editable quantity input (direct typing)
+24. Partner Orders Cart - Editable quantity input (direct typing)
+25. Reports - Exclude zero-quantity transactions from all reports
+26. VBScript Auto-Start - Fixed path escaping for Windows Startup
+27. Canvasser Dashboard - Store debt history (Sisa Bon) shown per order card
+28. Canvasser Settlement Form - Correct max limit based on items_per_box and warehouse_unit
 
 ## Credentials
 - Admin: admin@aqintani.com / admin123
@@ -46,19 +52,22 @@ Aplikasi web responsif untuk toko farmasi dan pertanian "UD. AQIN TANI" dengan s
 - Canvasser: sahidin@aqintani.com / 123456
 
 ## Test Reports
-- iteration_28: Rekap Kanvaser (9/9 backend + all UI passed)
+- iteration_28: Batch 6 fixes (10/10 backend + 3/3 UI passed)
 - iteration_27: Batch 2 - settlement, kondisional, harga satuan (13/13 passed)
 - iteration_26: Batch 1 - form 2 mode, dashboard, reports (14/14 passed)
 - iteration_25: Print server + minor changes (17/17 passed)
 
+## Upcoming Tasks (P1)
+1. Halaman baru untuk kelola "barang retur" dari canvasser
+2. Fitur di halaman laporan admin untuk melihat & kelola retur tersebut
+
 ## Key Files
 - `/app/print_server.py` - Local print server with auto-start
-- `/app/frontend/src/pages/Products.js` - Two-mode form, autocomplete, supplier_cost_price
-- `/app/frontend/src/pages/Dashboard.js` - Enhanced layout, per-vehicle debt
-- `/app/frontend/src/pages/PartnerOrders.js` - Harga satuan universal, order_type
-- `/app/frontend/src/pages/CanvasserDashboard.js` - Settlement, rekap hari ini
+- `/app/frontend/src/pages/POS.js` - POS with editable qty, shift, retur/tukar
+- `/app/frontend/src/pages/PartnerOrders.js` - Partner orders with editable qty, harga satuan
+- `/app/frontend/src/pages/CanvasserDashboard.js` - Settlement, rekap, sisa bon
 - `/app/frontend/src/pages/Reports.js` - All reports + Rekap Kanvaser tab
 - `/app/backend/routers/partner_routes.py` - Settle endpoint, order_type
 - `/app/backend/routers/report_routes.py` - Dashboard stats, canvasser recap
-- `/app/backend/routers/canvasser_routes.py` - My recap endpoint
+- `/app/backend/routers/canvasser_routes.py` - My recap, enriched my-orders
 - `/app/backend/models.py` - supplier_cost_price, order_type, is_settled
