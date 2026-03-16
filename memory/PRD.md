@@ -45,6 +45,10 @@ Aplikasi web responsif untuk toko farmasi dan pertanian "UD. AQIN TANI" dengan s
 27. Canvasser Dashboard - Store debt history (Sisa Bon) shown per order card
 28. Canvasser Settlement Form - Correct max limit based on items_per_box and warehouse_unit
 29. Partner Orders - Search autocomplete untuk memilih kios mitra (dengan info hutang)
+30. POS - Timezone WITA (UTC+8) dengan business day reset jam 20:00
+31. Rincian Transaksi - Urutan ascending (terbaru di bawah)
+32. Rincian Transaksi - Tombol Salin ke clipboard (format spreadsheet)
+33. Edit Transaksi - Koreksi harga jual tanpa perlu retur
 
 ## Credentials
 - Admin: admin@aqintani.com / admin123
