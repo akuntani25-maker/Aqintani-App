@@ -13,10 +13,25 @@ from services import recalculate_product_stock
 
 router = APIRouter()
 
+# WITA timezone (UTC+8) with business day reset at 20:00
+WITA = timezone(timedelta(hours=8))
+BUSINESS_RESET_HOUR = 20
+
+def get_business_date(dt=None):
+    """Get business date in WITA. Resets at 20:00 WITA - transactions after 20:00 count as next day."""
+    now_wita = dt or datetime.now(WITA)
+    if now_wita.hour >= BUSINESS_RESET_HOUR:
+        return (now_wita + timedelta(days=1)).strftime("%Y-%m-%d")
+    return now_wita.strftime("%Y-%m-%d")
+
+def get_wita_today():
+    """Get today's date in WITA (without business reset logic, for default date picker)."""
+    return datetime.now(WITA).strftime("%Y-%m-%d")
+
 
 @router.get("/pos/daily-summary")
 async def get_pos_daily_summary(current_user: dict = Depends(get_current_user)):
-    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    today = get_business_date()
     transactions = await db.transactions.find({"date": today}, {"_id": 0}).to_list(10000)
     total_sales = sum(t.get("total", 0) for t in transactions)
     total_cost = 0
@@ -29,11 +44,17 @@ async def get_pos_daily_summary(current_user: dict = Depends(get_current_user)):
     }
 
 
+@router.get("/pos/business-date")
+async def get_current_business_date():
+    """Return current business date in WITA timezone (resets at 20:00)."""
+    return {"date": get_business_date(), "wita_today": get_wita_today()}
+
+
 @router.get("/pos/daily-transactions")
 async def get_pos_daily_transactions(date: Optional[str] = None, current_user: dict = Depends(get_current_user)):
-    target_date = date or datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    transactions = await db.transactions.find({"date": target_date}, {"_id": 0}).sort("created_at", -1).to_list(10000)
-    farmer_txns = await db.farmer_transactions.find({"date": target_date}, {"_id": 0}).sort("created_at", -1).to_list(10000)
+    target_date = date or get_business_date()
+    transactions = await db.transactions.find({"date": target_date}, {"_id": 0}).sort("created_at", 1).to_list(10000)
+    farmer_txns = await db.farmer_transactions.find({"date": target_date}, {"_id": 0}).sort("created_at", 1).to_list(10000)
     total_sales = sum(t.get("total", 0) for t in transactions)
     total_farmer = sum(t.get("total", 0) for t in farmer_txns)
     return {
@@ -50,7 +71,8 @@ async def get_pos_daily_transactions(date: Optional[str] = None, current_user: d
 
 @router.post("/transactions", response_model=Transaction)
 async def create_transaction(data: TransactionCreate, current_user: dict = Depends(get_current_user)):
-    now = datetime.now(timezone.utc)
+    now = datetime.now(WITA)
+    business_date = get_business_date(now)
     transaction_number = f"TRX{now.strftime('%Y%m%d%H%M%S')}"
     for item in data.items:
         product = await db.products.find_one({"id": item.product_id})
@@ -72,7 +94,7 @@ async def create_transaction(data: TransactionCreate, current_user: dict = Depen
         "subtotal": data.subtotal, "tax": data.tax, "discount": data.discount,
         "total": data.total, "payment_method": data.payment_method,
         "payment_amount": data.payment_amount, "change": data.change,
-        "created_at": now.isoformat(), "date": now.strftime("%Y-%m-%d")
+        "created_at": now.isoformat(), "date": business_date
     }
     await db.transactions.insert_one(transaction_doc)
     return transaction_doc
@@ -108,6 +130,42 @@ async def get_transaction(transaction_id: str, current_user: dict = Depends(get_
     if not transaction:
         raise HTTPException(status_code=404, detail="Transaction not found")
     return transaction
+
+
+@router.put("/transactions/{transaction_id}/edit-prices")
+async def edit_transaction_prices(transaction_id: str, req: FastAPIRequest, current_user: dict = Depends(get_current_user)):
+    """Edit harga jual item dalam transaksi (untuk koreksi kasir yang salah input harga)."""
+    body = await req.json()
+    updated_items = body.get("items", [])
+    txn = await db.transactions.find_one({"id": transaction_id}, {"_id": 0})
+    if not txn:
+        raise HTTPException(status_code=404, detail="Transaksi tidak ditemukan")
+
+    new_items = []
+    for existing_item in txn.get("items", []):
+        match = next((u for u in updated_items if u["product_id"] == existing_item["product_id"]), None)
+        if match:
+            new_price = float(match["price"])
+            qty = existing_item["quantity"]
+            new_items.append({**existing_item, "price": new_price, "subtotal": new_price * qty})
+        else:
+            new_items.append(existing_item)
+
+    new_subtotal = sum(it.get("subtotal", 0) for it in new_items)
+    new_total = new_subtotal - txn.get("discount", 0) + txn.get("tax", 0)
+
+    now = datetime.now(WITA)
+    edit_note = f"[EDIT HARGA {now.strftime('%d/%m/%Y %H:%M')} oleh {current_user.get('name', '')}]"
+    edit_notes = txn.get("edit_notes", [])
+    edit_notes.append(edit_note)
+
+    await db.transactions.update_one(
+        {"id": transaction_id},
+        {"$set": {"items": new_items, "subtotal": new_subtotal, "total": new_total, "edit_notes": edit_notes}}
+    )
+
+    updated_txn = await db.transactions.find_one({"id": transaction_id}, {"_id": 0})
+    return updated_txn
 
 
 # ============= RETURNS =============

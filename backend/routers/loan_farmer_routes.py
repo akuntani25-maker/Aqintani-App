@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, Depends, Request as FastAPIRequest
 from typing import Optional
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 from database import db
 from auth import get_current_user, require_admin, require_admin_or_manager
@@ -227,7 +227,7 @@ async def create_farmer_debt_transaction(
                 status_code=400,
                 detail=f"Melebihi limit hutang ({new_debt:,.0f} > {farmer['debt_limit']:,.0f})"
             )
-    now = datetime.now(timezone.utc)
+    now = datetime.now(timezone(timedelta(hours=8)))
     from services import recalculate_product_stock
     for item in items:
         product_id = item.get("product_id")
@@ -253,7 +253,7 @@ async def create_farmer_debt_transaction(
         "notes": notes,
         "cashier_name": current_user.get("name", ""),
         "created_at": now.isoformat(),
-        "date": now.strftime("%Y-%m-%d")
+        "date": now.strftime("%Y-%m-%d") if now.hour < 20 else (now + timedelta(days=1)).strftime("%Y-%m-%d")
     }
     await db.farmer_transactions.insert_one(txn_doc)
     await db.farmers.update_one(

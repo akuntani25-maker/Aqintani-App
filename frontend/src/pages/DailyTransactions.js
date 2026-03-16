@@ -1,52 +1,123 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api, useAuth } from '../context/AuthContext';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
+import { Label } from '../components/ui/label';
 import { Card } from '../components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
-import { ArrowLeft, ShoppingCart, DollarSign, TrendingUp, Printer } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../components/ui/dialog';
+import { ArrowLeft, ShoppingCart, DollarSign, Copy, Pencil, Check, X } from 'lucide-react';
 import { toast } from 'sonner';
 
 const fmt = (v) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(v);
+const fmtNum = (v) => new Intl.NumberFormat('id-ID').format(v);
 
 export const DailyTransactions = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
+  const [date, setDate] = useState('');
+  const [editDialog, setEditDialog] = useState(null);
+  const [editItems, setEditItems] = useState([]);
+  const [saving, setSaving] = useState(false);
 
+  // Fetch business date on mount
   useEffect(() => {
-    const fetchData = async () => {
-      setLoading(true);
+    const fetchBusinessDate = async () => {
       try {
-        const res = await api.get(`/pos/daily-transactions?date=${date}`);
-        setData(res.data);
-      } catch { toast.error('Gagal memuat data transaksi'); }
-      finally { setLoading(false); }
+        const res = await api.get('/pos/business-date');
+        setDate(res.data.date);
+      } catch {
+        setDate(new Date().toISOString().split('T')[0]);
+      }
     };
-    fetchData();
+    fetchBusinessDate();
+  }, []);
+
+  const fetchData = useCallback(async () => {
+    if (!date) return;
+    setLoading(true);
+    try {
+      const res = await api.get(`/pos/daily-transactions?date=${date}`);
+      setData(res.data);
+    } catch { toast.error('Gagal memuat data transaksi'); }
+    finally { setLoading(false); }
   }, [date]);
+
+  useEffect(() => { fetchData(); }, [fetchData]);
+
+  const copyToClipboard = () => {
+    const transactions = data?.transactions || [];
+    const farmerTxns = data?.farmer_transactions || [];
+    let rows = [];
+    let no = 1;
+
+    // Header
+    rows.push(['No', 'Nama Barang', 'Qty', 'Harga Jual'].join('\t'));
+
+    for (const txn of transactions) {
+      for (const item of txn.items) {
+        if (item.quantity <= 0) continue;
+        rows.push([no, item.product_name, item.quantity, item.price].join('\t'));
+        no++;
+      }
+    }
+    for (const txn of farmerTxns) {
+      for (const item of txn.items) {
+        if (item.quantity <= 0) continue;
+        rows.push([no, item.product_name, item.quantity, item.price].join('\t'));
+        no++;
+      }
+    }
+
+    navigator.clipboard.writeText(rows.join('\n')).then(() => {
+      toast.success(`${no - 1} item berhasil disalin ke clipboard`);
+    }).catch(() => {
+      toast.error('Gagal menyalin ke clipboard');
+    });
+  };
+
+  const openEditDialog = (txn) => {
+    setEditDialog(txn);
+    setEditItems(txn.items.map(item => ({ ...item, new_price: item.price })));
+  };
+
+  const handleSaveEdit = async () => {
+    setSaving(true);
+    try {
+      const payload = {
+        items: editItems.map(item => ({ product_id: item.product_id, price: item.new_price }))
+      };
+      await api.put(`/transactions/${editDialog.id}/edit-prices`, payload);
+      toast.success('Harga transaksi berhasil diperbarui');
+      setEditDialog(null);
+      fetchData();
+    } catch (err) {
+      toast.error(err?.response?.data?.detail || 'Gagal menyimpan perubahan');
+    } finally { setSaving(false); }
+  };
 
   if (loading) return <div className="flex items-center justify-center min-h-screen"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div></div>;
 
   const transactions = data?.transactions || [];
   const farmerTxns = data?.farmer_transactions || [];
 
-  // Hitung running number berkelanjutan untuk semua item
+  // Running number berkelanjutan (ascending order)
   let runningNo = 0;
   const txnStartNos = transactions.map(txn => {
     const start = runningNo + 1;
     runningNo += txn.items.length;
     return start;
   });
-  const farmerStartNo = runningNo;
   const farmerTxnStartNos = farmerTxns.map(txn => {
     const start = runningNo + 1;
     runningNo += txn.items.length;
     return start;
   });
+
+  const totalItems = runningNo;
 
   return (
     <div className="min-h-screen bg-background p-4 md:p-6 lg:p-8" data-testid="daily-transactions-page">
@@ -60,7 +131,12 @@ export const DailyTransactions = () => {
               <p className="text-sm text-muted-foreground">Kasir: {user?.name}</p>
             </div>
           </div>
-          <Input type="date" value={date} onChange={e => setDate(e.target.value)} className="w-44" data-testid="date-picker" />
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={copyToClipboard} disabled={totalItems === 0} data-testid="copy-transactions-btn">
+              <Copy className="w-4 h-4 mr-1.5" /> Salin ({totalItems})
+            </Button>
+            <Input type="date" value={date} onChange={e => setDate(e.target.value)} className="w-44" data-testid="date-picker" />
+          </div>
         </div>
 
         {/* Summary Cards */}
@@ -99,8 +175,12 @@ export const DailyTransactions = () => {
                       <span className="font-mono text-sm font-medium">{txn.transaction_number}</span>
                       <span className="text-xs text-muted-foreground ml-3">{new Date(txn.created_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}</span>
                       <span className="text-xs text-muted-foreground ml-2">Kasir: {txn.cashier_name}</span>
+                      {txn.edit_notes?.length > 0 && <span className="text-xs bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded ml-2">Diedit</span>}
                     </div>
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-center gap-2">
+                      <Button variant="ghost" size="sm" className="h-7 px-2" onClick={() => openEditDialog(txn)} data-testid={`edit-txn-${txn.id}`}>
+                        <Pencil className="w-3.5 h-3.5 mr-1" /> Edit
+                      </Button>
                       <span className={`text-xs px-2 py-0.5 rounded-full ${txn.payment_method === 'cash' ? 'bg-green-100 text-green-700' : txn.payment_method === 'card' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'}`}>
                         {txn.payment_method === 'cash' ? 'Tunai' : txn.payment_method === 'card' ? 'Kartu' : 'E-Wallet'}
                       </span>
@@ -179,6 +259,60 @@ export const DailyTransactions = () => {
           </Card>
         )}
       </div>
+
+      {/* Edit Transaction Dialog */}
+      <Dialog open={!!editDialog} onOpenChange={(o) => !o && setEditDialog(null)}>
+        <DialogContent className="max-w-lg" data-testid="edit-txn-dialog">
+          <DialogHeader>
+            <DialogTitle>Edit Harga Transaksi</DialogTitle>
+          </DialogHeader>
+          {editDialog && (
+            <div className="space-y-3">
+              <p className="text-sm text-muted-foreground">
+                {editDialog.transaction_number} - {new Date(editDialog.created_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' })}
+              </p>
+              <div className="space-y-2 max-h-[50vh] overflow-y-auto">
+                {editItems.map((item, idx) => (
+                  <div key={idx} className="flex items-center gap-3 p-3 border rounded-lg" data-testid={`edit-item-${idx}`}>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate">{item.product_name}</p>
+                      <p className="text-xs text-muted-foreground">Qty: {item.quantity} | Harga lama: {fmt(item.price)}</p>
+                    </div>
+                    <div className="shrink-0 w-36">
+                      <Label className="text-xs">Harga Baru</Label>
+                      <Input
+                        type="number"
+                        min={0}
+                        value={item.new_price}
+                        onChange={(e) => {
+                          const val = parseFloat(e.target.value) || 0;
+                          setEditItems(editItems.map((ei, i) => i === idx ? { ...ei, new_price: val } : ei));
+                        }}
+                        className="h-8"
+                        data-testid={`edit-price-${idx}`}
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="flex justify-between items-center pt-2 border-t">
+                <div>
+                  <p className="text-xs text-muted-foreground">Total lama: {fmt(editDialog.total)}</p>
+                  <p className="text-sm font-bold">Total baru: {fmt(editItems.reduce((s, i) => s + (i.new_price * i.quantity), 0) - (editDialog.discount || 0) + (editDialog.tax || 0))}</p>
+                </div>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditDialog(null)} data-testid="cancel-edit-btn">
+              <X className="w-4 h-4 mr-1" /> Batal
+            </Button>
+            <Button onClick={handleSaveEdit} disabled={saving} data-testid="save-edit-btn">
+              <Check className="w-4 h-4 mr-1" /> {saving ? 'Menyimpan...' : 'Simpan'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
