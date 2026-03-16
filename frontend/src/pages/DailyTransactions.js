@@ -81,14 +81,14 @@ export const DailyTransactions = () => {
 
   const openEditDialog = (txn) => {
     setEditDialog(txn);
-    setEditItems(txn.items.map(item => ({ ...item, new_price: item.price })));
+    setEditItems(txn.items.map(item => ({ ...item, new_price: item.price, new_qty: item.quantity })));
   };
 
   const handleSaveEdit = async () => {
     setSaving(true);
     try {
       const payload = {
-        items: editItems.map(item => ({ product_id: item.product_id, price: item.new_price }))
+        items: editItems.map(item => ({ product_id: item.product_id, price: item.new_price, quantity: item.new_qty }))
       };
       await api.put(`/transactions/${editDialog.id}/edit-prices`, payload);
       toast.success('Harga transaksi berhasil diperbarui');
@@ -276,10 +276,24 @@ export const DailyTransactions = () => {
                   <div key={idx} className="flex items-center gap-3 p-3 border rounded-lg" data-testid={`edit-item-${idx}`}>
                     <div className="flex-1 min-w-0">
                       <p className="text-sm font-medium truncate">{item.product_name}</p>
-                      <p className="text-xs text-muted-foreground">Qty: {item.quantity} | Harga lama: {fmt(item.price)}</p>
+                      <p className="text-xs text-muted-foreground">Lama: {item.quantity} x {fmt(item.price)} = {fmt(item.subtotal)}</p>
                     </div>
-                    <div className="shrink-0 w-36">
-                      <Label className="text-xs">Harga Baru</Label>
+                    <div className="shrink-0 w-20">
+                      <Label className="text-xs">Qty</Label>
+                      <Input
+                        type="number"
+                        min={1}
+                        value={item.new_qty}
+                        onChange={(e) => {
+                          const val = parseInt(e.target.value) || 1;
+                          setEditItems(editItems.map((ei, i) => i === idx ? { ...ei, new_qty: val } : ei));
+                        }}
+                        className="h-8"
+                        data-testid={`edit-qty-${idx}`}
+                      />
+                    </div>
+                    <div className="shrink-0 w-32">
+                      <Label className="text-xs">Harga</Label>
                       <Input
                         type="number"
                         min={0}
@@ -298,7 +312,7 @@ export const DailyTransactions = () => {
               <div className="flex justify-between items-center pt-2 border-t">
                 <div>
                   <p className="text-xs text-muted-foreground">Total lama: {fmt(editDialog.total)}</p>
-                  <p className="text-sm font-bold">Total baru: {fmt(editItems.reduce((s, i) => s + (i.new_price * i.quantity), 0) - (editDialog.discount || 0) + (editDialog.tax || 0))}</p>
+                  <p className="text-sm font-bold">Total baru: {fmt(editItems.reduce((s, i) => s + (i.new_price * i.new_qty), 0) - (editDialog.discount || 0) + (editDialog.tax || 0))}</p>
                 </div>
               </div>
             </div>

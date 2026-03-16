@@ -134,7 +134,7 @@ async def get_transaction(transaction_id: str, current_user: dict = Depends(get_
 
 @router.put("/transactions/{transaction_id}/edit-prices")
 async def edit_transaction_prices(transaction_id: str, req: FastAPIRequest, current_user: dict = Depends(get_current_user)):
-    """Edit harga jual item dalam transaksi (untuk koreksi kasir yang salah input harga)."""
+    """Edit harga jual dan qty item dalam transaksi (untuk koreksi kasir)."""
     body = await req.json()
     updated_items = body.get("items", [])
     txn = await db.transactions.find_one({"id": transaction_id}, {"_id": 0})
@@ -142,20 +142,42 @@ async def edit_transaction_prices(transaction_id: str, req: FastAPIRequest, curr
         raise HTTPException(status_code=404, detail="Transaksi tidak ditemukan")
 
     new_items = []
+    stock_adjustments = []
     for existing_item in txn.get("items", []):
         match = next((u for u in updated_items if u["product_id"] == existing_item["product_id"]), None)
         if match:
             new_price = float(match["price"])
-            qty = existing_item["quantity"]
-            new_items.append({**existing_item, "price": new_price, "subtotal": new_price * qty})
+            new_qty = int(match.get("quantity", existing_item["quantity"]))
+            old_qty = existing_item["quantity"]
+            qty_diff = old_qty - new_qty  # positive = return stock, negative = take more stock
+            if qty_diff != 0:
+                stock_adjustments.append({"product_id": existing_item["product_id"], "diff": qty_diff, "name": existing_item.get("product_name", "")})
+            new_items.append({**existing_item, "price": new_price, "quantity": new_qty, "subtotal": new_price * new_qty})
         else:
             new_items.append(existing_item)
+
+    # Validate stock for items that need MORE stock
+    for adj in stock_adjustments:
+        if adj["diff"] < 0:  # need more stock
+            toko_stock = await db.warehouse_stock.find_one({"product_id": adj["product_id"], "warehouse_id": "gudang_toko"})
+            available = toko_stock["stock"] if toko_stock else 0
+            needed = abs(adj["diff"])
+            if available < needed:
+                raise HTTPException(status_code=400, detail=f"Stok tidak cukup untuk {adj['name']} (perlu {needed}, tersedia {available})")
+
+    # Apply stock adjustments
+    for adj in stock_adjustments:
+        await db.warehouse_stock.update_one(
+            {"product_id": adj["product_id"], "warehouse_id": "gudang_toko"},
+            {"$inc": {"stock": adj["diff"]}}, upsert=True
+        )
+        await recalculate_product_stock(adj["product_id"])
 
     new_subtotal = sum(it.get("subtotal", 0) for it in new_items)
     new_total = new_subtotal - txn.get("discount", 0) + txn.get("tax", 0)
 
     now = datetime.now(WITA)
-    edit_note = f"[EDIT HARGA {now.strftime('%d/%m/%Y %H:%M')} oleh {current_user.get('name', '')}]"
+    edit_note = f"[EDIT {now.strftime('%d/%m/%Y %H:%M')} oleh {current_user.get('name', '')}]"
     edit_notes = txn.get("edit_notes", [])
     edit_notes.append(edit_note)
 
