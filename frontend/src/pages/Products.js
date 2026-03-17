@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { toast } from 'sonner';
-import { Plus, Search, Pencil, Trash2, Package, ArrowRightLeft, Filter, AlertTriangle, ClipboardEdit, History } from 'lucide-react';
+import { Plus, Search, Pencil, Trash2, Package, ArrowRightLeft, Filter, AlertTriangle, ClipboardEdit, History, ImagePlus, X } from 'lucide-react';
 import { CurrencyInput } from '../components/CurrencyInput';
 import { Pagination } from '../components/Pagination';
 
@@ -172,6 +172,30 @@ export const Products = () => {
       description: product.description, min_stock_alert: product.min_stock_alert
     });
     setIsDialogOpen(true);
+  };
+
+  const handleImageUpload = async (productId, file) => {
+    const formPayload = new FormData();
+    formPayload.append('file', file);
+    try {
+      const res = await api.post(`/products/upload-image/${productId}`, formPayload, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      toast.success('Gambar berhasil diupload');
+      fetchData();
+      return res.data.image_url;
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Gagal upload gambar');
+      return null;
+    }
+  };
+
+  const handleDeleteImage = async (productId) => {
+    try {
+      await api.delete(`/products/image/${productId}`);
+      toast.success('Gambar berhasil dihapus');
+      fetchData();
+    } catch { toast.error('Gagal menghapus gambar'); }
   };
 
   const resetForm = () => {
@@ -488,6 +512,49 @@ export const Products = () => {
                   <Input type="number" value={formData.min_stock_alert} onChange={(e) => setFormData({ ...formData, min_stock_alert: parseInt(e.target.value) || 10 })} />
                 </div>
               </div>
+              {/* Image Upload - only for edit mode */}
+              {editingProduct && (
+                <div className="space-y-2 border-t pt-4">
+                  <Label>Gambar Produk</Label>
+                  <div className="flex items-center gap-4">
+                    {editingProduct.image_url ? (
+                      <div className="relative w-24 h-24 rounded-lg overflow-hidden border">
+                        <img src={`${process.env.REACT_APP_BACKEND_URL}${editingProduct.image_url}`} alt={editingProduct.name} className="w-full h-full object-cover" />
+                        <button type="button" onClick={() => handleDeleteImage(editingProduct.id)} className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-0.5 hover:bg-red-600">
+                          <X className="w-3 h-3" />
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="w-24 h-24 rounded-lg border-2 border-dashed border-muted-foreground/30 flex items-center justify-center">
+                        <ImagePlus className="w-8 h-8 text-muted-foreground/40" />
+                      </div>
+                    )}
+                    <div>
+                      <input
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp"
+                        id="product-image-upload"
+                        className="hidden"
+                        onChange={async (e) => {
+                          const file = e.target.files?.[0];
+                          if (file) {
+                            const url = await handleImageUpload(editingProduct.id, file);
+                            if (url) setEditingProduct({ ...editingProduct, image_url: url });
+                          }
+                          e.target.value = '';
+                        }}
+                        data-testid="product-image-input"
+                      />
+                      <label htmlFor="product-image-upload">
+                        <Button type="button" variant="outline" size="sm" asChild>
+                          <span><ImagePlus className="w-4 h-4 mr-1.5" /> Upload Gambar</span>
+                        </Button>
+                      </label>
+                      <p className="text-xs text-muted-foreground mt-1">JPG, PNG, WebP (maks 5MB)</p>
+                    </div>
+                  </div>
+                </div>
+              )}
               <div className="flex gap-2 justify-end pt-4">
                 <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>Batal</Button>
                 <Button type="submit" data-testid="product-submit-button">{editingProduct ? 'Perbarui' : 'Simpan'}</Button>

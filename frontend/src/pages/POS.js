@@ -6,7 +6,7 @@ import { Input } from '../components/ui/input';
 import { Card } from '../components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { toast } from 'sonner';
-import { Search, Plus, Minus, Trash2, ShoppingCart, LogOut, CreditCard, Banknote, Smartphone, Printer, Pencil, ArrowRightLeft, BarChart3, FileText, Users, RotateCcw, Clock } from 'lucide-react';
+import { Search, Plus, Minus, Trash2, ShoppingCart, LogOut, CreditCard, Banknote, Smartphone, Printer, Pencil, ArrowRightLeft, BarChart3, FileText, Users, RotateCcw, Clock, Package } from 'lucide-react';
 import { CurrencyInput } from '../components/CurrencyInput';
 import { Pagination } from '../components/Pagination';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../components/ui/dialog';
@@ -284,7 +284,7 @@ export const POS = () => {
       return;
     }
     try {
-      const notes = `${transferForm.notes}${transferForm.notes ? ' - ' : ''}Oleh: ${user?.name || 'Kasir'}`;
+      const notes = `${transferForm.notes}${transferForm.notes ? ' - ' : ''}Oleh: ${user?.name || 'Kasir'} (POS)`;
       await api.post('/stock-transfers', { ...transferForm, notes });
       toast.success('Transfer stok berhasil');
       setShowTransfer(false);
@@ -551,8 +551,12 @@ export const POS = () => {
               onClick={() => addToCart(product)}
               data-testid={`product-card-${product.id}`}
             >
-              <div className="aspect-square bg-accent rounded-lg mb-3 flex items-center justify-center">
-                <span className="text-4xl">📦</span>
+              <div className="aspect-square bg-accent rounded-lg mb-3 flex items-center justify-center overflow-hidden">
+                {product.image_url ? (
+                  <img src={`${process.env.REACT_APP_BACKEND_URL}${product.image_url}`} alt={product.name} className="w-full h-full object-cover" />
+                ) : (
+                  <Package className="w-10 h-10 text-muted-foreground/30" />
+                )}
               </div>
               <h3 className="font-semibold text-sm mb-1 line-clamp-2">{product.name}</h3>
               <p className="text-lg font-bold text-primary">{formatCurrency(product.price)}</p>

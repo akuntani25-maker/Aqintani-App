@@ -1,5 +1,6 @@
 from fastapi import FastAPI, APIRouter
 from fastapi.responses import PlainTextResponse
+from fastapi.staticfiles import StaticFiles
 from starlette.middleware.cors import CORSMiddleware
 import os
 import logging
@@ -41,6 +42,10 @@ api_router.include_router(loan_farmer_routes.router)
 api_router.include_router(shift_routes.router)
 
 app.include_router(api_router)
+
+# Serve uploaded product images
+os.makedirs("uploads/products", exist_ok=True)
+app.mount("/api/uploads", StaticFiles(directory="uploads"), name="uploads")
 
 app.add_middleware(
     CORSMiddleware,

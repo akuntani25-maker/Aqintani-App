@@ -1,6 +1,8 @@
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, UploadFile, File
 from typing import List, Optional
 import uuid
+import os
+import shutil
 from datetime import datetime, timezone
 
 from database import db
@@ -11,6 +13,50 @@ from models import (
 from services import ensure_warehouse_stock, recalculate_product_stock, log_audit
 
 router = APIRouter()
+
+UPLOAD_DIR = "uploads/products"
+
+
+@router.post("/products/upload-image/{product_id}")
+async def upload_product_image(product_id: str, file: UploadFile = File(...), admin: dict = Depends(require_admin_panel_access)):
+    product = await db.products.find_one({"id": product_id}, {"_id": 0})
+    if not product:
+        raise HTTPException(status_code=404, detail="Produk tidak ditemukan")
+
+    ext = file.filename.rsplit(".", 1)[-1].lower() if "." in file.filename else "jpg"
+    if ext not in ("jpg", "jpeg", "png", "webp"):
+        raise HTTPException(status_code=400, detail="Format gambar tidak didukung (jpg/png/webp)")
+
+    filename = f"{product_id}.{ext}"
+    filepath = os.path.join(UPLOAD_DIR, filename)
+
+    # Remove old image if exists
+    for old_ext in ("jpg", "jpeg", "png", "webp"):
+        old_path = os.path.join(UPLOAD_DIR, f"{product_id}.{old_ext}")
+        if os.path.exists(old_path):
+            os.remove(old_path)
+
+    with open(filepath, "wb") as f:
+        shutil.copyfileobj(file.file, f)
+
+    image_url = f"/api/uploads/products/{filename}"
+    await db.products.update_one({"id": product_id}, {"$set": {"image_url": image_url}})
+    return {"image_url": image_url}
+
+
+@router.delete("/products/image/{product_id}")
+async def delete_product_image(product_id: str, admin: dict = Depends(require_admin_panel_access)):
+    product = await db.products.find_one({"id": product_id}, {"_id": 0})
+    if not product:
+        raise HTTPException(status_code=404, detail="Produk tidak ditemukan")
+
+    for ext in ("jpg", "jpeg", "png", "webp"):
+        path = os.path.join(UPLOAD_DIR, f"{product_id}.{ext}")
+        if os.path.exists(path):
+            os.remove(path)
+
+    await db.products.update_one({"id": product_id}, {"$set": {"image_url": ""}})
+    return {"message": "Gambar berhasil dihapus"}
 
 
 @router.get("/categories", response_model=List[Category])

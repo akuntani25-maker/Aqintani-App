@@ -6,7 +6,7 @@ from datetime import datetime, timezone
 from database import db
 from auth import get_current_user, require_admin_panel_access, require_pos_access
 from models import StockAdjustmentCreate, StockTransferCreate
-from services import recalculate_product_stock, ensure_warehouse_stock
+from services import recalculate_product_stock, ensure_warehouse_stock, log_audit
 
 router = APIRouter()
 
@@ -138,4 +138,29 @@ async def create_stock_transfer(data: StockTransferCreate, admin: dict = Depends
     }
     await db.stock_transfers.insert_one(transfer_doc)
     await recalculate_product_stock(data.product_id)
+
+    # Detect source page from notes
+    source_page = "Admin"
+    notes_lower = (data.notes or "").lower()
+    if "kasir" in notes_lower or "pos" in notes_lower or "oleh:" in notes_lower:
+        source_page = "POS"
+    await log_audit(
+        user=admin,
+        action="TRANSFER_STOK",
+        entity_type="stock_transfer",
+        entity_id=transfer_doc["id"],
+        details={
+            "product_name": product["name"],
+            "product_id": data.product_id,
+            "from_warehouse": from_wh["name"],
+            "to_warehouse": to_wh["name"],
+            "quantity": data.quantity,
+            "from_unit": from_unit,
+            "converted_quantity": converted_qty,
+            "to_unit": to_unit,
+            "notes": data.notes,
+            "source_page": source_page
+        }
+    )
+
     return {k: v for k, v in transfer_doc.items() if k != "_id"}

@@ -12,7 +12,9 @@ router = APIRouter()
 
 @router.get("/dashboard/stats")
 async def get_dashboard_stats(admin: dict = Depends(require_admin_panel_access)):
-    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    WITA = timezone(timedelta(hours=8))
+    now_wita = datetime.now(WITA)
+    today = now_wita.strftime("%Y-%m-%d") if now_wita.hour < 20 else (now_wita + timedelta(days=1)).strftime("%Y-%m-%d")
     today_transactions = await db.transactions.find({"date": today}, {"_id": 0}).to_list(10000)
     today_sales = sum(t.get("total", 0) for t in today_transactions)
     total_products = await db.products.count_documents({})
@@ -20,7 +22,7 @@ async def get_dashboard_stats(admin: dict = Depends(require_admin_panel_access))
 
     last_7_days = []
     for i in range(6, -1, -1):
-        d = (datetime.now(timezone.utc) - timedelta(days=i)).strftime("%Y-%m-%d")
+        d = (now_wita - timedelta(days=i)).strftime("%Y-%m-%d")
         day_txns = await db.transactions.find({"date": d}, {"_id": 0}).to_list(10000)
         day_total = sum(t.get("total", 0) for t in day_txns)
         last_7_days.append({"date": d, "sales": day_total, "count": len(day_txns)})
@@ -65,17 +67,23 @@ async def get_dashboard_stats(admin: dict = Depends(require_admin_panel_access))
         for p in today_purchases
     )
     stock_out_today = sum(
-        sum(item.get("cost_price", 0) * item.get("quantity", 0) for item in t.get("items", []))
+        sum((item.get("cost_price") or item.get("price", 0)) * item.get("quantity", 0) for item in t.get("items", []))
         for t in today_transactions
     )
 
     # Partner orders today (barang keluar via kios mitra)
     today_partner_orders = await db.partner_orders.find({"date": today}, {"_id": 0}).to_list(10000)
     partner_stock_out_today = sum(
-        sum(item.get("cost_price", 0) * item.get("quantity", 0) for item in o.get("items", []))
+        sum((item.get("cost_price") or item.get("price", 0)) * item.get("quantity", 0) for item in o.get("items", []))
         for o in today_partner_orders
     )
-    stock_out_today_pos = stock_out_today
+    # Also count farmer debt transactions
+    today_farmer_txns = await db.farmer_transactions.find({"date": today}, {"_id": 0}).to_list(10000)
+    farmer_stock_out = sum(
+        sum((item.get("cost_price") or item.get("price", 0)) * item.get("quantity", 0) for item in t.get("items", []))
+        for t in today_farmer_txns
+    )
+    stock_out_today_pos = stock_out_today + farmer_stock_out
     stock_out_today_partner = partner_stock_out_today
     stock_out_today_total = stock_out_today + partner_stock_out_today
 
