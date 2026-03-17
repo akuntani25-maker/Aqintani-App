@@ -53,6 +53,8 @@ Aplikasi web responsif untuk toko farmasi dan pertanian "UD. AQIN TANI" dengan s
 35. Modal Lock - Dialog tidak bisa ditutup klik area luar, hanya via Batal/X
 36. Fix Barang Keluar Dashboard - Timezone WITA + fallback cost_price||price
 37. Audit Log Transfer Stok - Catat siapa, gudang mana, halaman apa (Admin/POS)
+38. Edit Piutang Kios Mitra - Pembayaran (kurangi hutang) dan Koreksi Manual (set nilai baru)
+39. Fix Barang Keluar Dashboard - Kalkulasi pakai harga pokok toko (cost_price/items_per_box) dari produk
 
 ## Credentials
 - Admin: admin@aqintani.com / admin123
