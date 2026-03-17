@@ -49,6 +49,10 @@ Aplikasi web responsif untuk toko farmasi dan pertanian "UD. AQIN TANI" dengan s
 31. Rincian Transaksi - Urutan ascending (terbaru di bawah)
 32. Rincian Transaksi - Tombol Salin ke clipboard (format spreadsheet)
 33. Edit Transaksi - Koreksi harga jual tanpa perlu retur
+34. Gambar Produk - Upload gambar di halaman Produk, tampil di POS
+35. Modal Lock - Dialog tidak bisa ditutup klik area luar, hanya via Batal/X
+36. Fix Barang Keluar Dashboard - Timezone WITA + fallback cost_price||price
+37. Audit Log Transfer Stok - Catat siapa, gudang mana, halaman apa (Admin/POS)
 
 ## Credentials
 - Admin: admin@aqintani.com / admin123
