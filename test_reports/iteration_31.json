@@ -1,0 +1,95 @@
+{
+  "summary": "Iteration 31 - Testing 2 New Features: Edit Piutang Kios Mitra and Dashboard Stock Out with Cost Price. All 16 backend tests PASSED. Frontend tests verified both features working correctly via UI automation.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Edit Debt Dialog", "issues": ["Console warning: Missing `Description` or `aria-describedby={undefined}` for DialogContent - accessibility improvement recommended"]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration31_features.py",
+    "/app/test_reports/pytest/iteration31_results.xml"
+  ],
+  "passed_tests": [
+    "TestAuthentication::test_admin_login - Admin login returns token",
+    "TestEditDebtEndpoint::test_edit_debt_endpoint_exists - PUT /api/partner-stores/{store_id}/edit-debt endpoint exists",
+    "TestEditDebtEndpoint::test_edit_debt_payment_mode - Payment mode reduces debt correctly",
+    "TestEditDebtEndpoint::test_edit_debt_correction_mode - Correction mode sets debt to new value",
+    "TestEditDebtEndpoint::test_edit_debt_payment_validation - Payment amount must be > 0",
+    "TestEditDebtEndpoint::test_edit_debt_correction_validation - Correction amount must be >= 0",
+    "TestEditDebtEndpoint::test_edit_debt_invalid_type - Invalid type returns 400",
+    "TestEditDebtEndpoint::test_edit_debt_nonexistent_store - Non-existent store returns 404",
+    "TestEditDebtAuditLog::test_edit_debt_creates_audit_log - Creates audit_log entry with action=EDIT_PIUTANG_MITRA",
+    "TestDashboardStockOutCostPrice::test_dashboard_stats_returns_stock_out_fields - Returns stock_out_today, stock_out_today_pos, stock_out_today_partner",
+    "TestDashboardStockOutCostPrice::test_stock_out_total_equals_pos_plus_partner - Total equals POS + Partner",
+    "TestStockOutCalculationWithCostPrice::test_get_products_have_cost_price - Products have cost_price field",
+    "TestStockOutCalculationWithCostPrice::test_verify_cost_price_calculation_logic - Calculation uses cost_price/items_per_box",
+    "TestPartnerOrderStockOutCalculation::test_partner_orders_exist - Partner orders endpoint works",
+    "TestPartnerOrderStockOutCalculation::test_warehouses_have_unit_field - Warehouses have unit field (dus/satuan)",
+    "TestPartnerStoresUIElements::test_partner_stores_page_loads - Partner stores data available",
+    "UI: Partner Stores page - Edit Debt button (CreditCard icon) visible on each store row",
+    "UI: Edit Debt Dialog - Opens with data-testid='edit-debt-dialog'",
+    "UI: Edit Debt Dialog - Type select (Pembayaran/Koreksi Manual) works",
+    "UI: Edit Debt Dialog - Shows 'Piutang saat ini' current debt display",
+    "UI: Edit Debt Dialog - Shows real-time 'Sisa piutang' calculation for payment mode",
+    "UI: Edit Debt Dialog - Payment submission works and shows success toast 'Pembayaran berhasil dicatat'",
+    "UI: Edit Debt Dialog - Debt updated in table after payment",
+    "UI: Dashboard - 'BARANG KELUAR HARI INI' card shows 'POS: Rp X | Mitra: Rp Y' breakdown"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Feature 1 (Edit Piutang): partner_routes.py lines 77-124 - PUT /api/partner-stores/{store_id}/edit-debt implemented correctly",
+    "Feature 1 - Payment mode (lines 93-104): Validates amount > 0, reduces debt by amount (max 0), creates payment_history entry",
+    "Feature 1 - Correction mode (lines 105-108): Validates amount >= 0, sets debt to exact value",
+    "Feature 1 - Audit logging (lines 114-122): Calls log_audit() with action='EDIT_PIUTANG_MITRA' and detailed info",
+    "Feature 1 - Frontend (PartnerStores.js lines 130-155): openDebtDialog and handleDebtSubmit functions handle API call",
+    "Feature 1 - UI (PartnerStores.js lines 555-613): Edit debt dialog with type select, amount input, notes input, submit button",
+    "Feature 2 (Stock Out Calculation): report_routes.py lines 71-77 - get_unit_cost() helper returns cost_price / items_per_box",
+    "Feature 2 - POS calculation (lines 80-83): Uses get_unit_cost() * quantity for all POS items (satuan from gudang_toko)",
+    "Feature 2 - Partner calculation (lines 86-102): Checks warehouse_unit - uses cost_price for dus, cost_price/items_per_box for satuan",
+    "Feature 2 - Returns three fields: stock_out_today (total), stock_out_today_pos, stock_out_today_partner"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration31_features.py"
+  ],
+  "success_rate": {
+    "backend": "100% (16/16 tests passed)",
+    "frontend": "100% (Both features verified via UI testing)"
+  },
+  "test_credentials": {
+    "admin": "admin@aqintani.com / admin123",
+    "kasir": "kasir@aqintani.com / kasir123"
+  },
+  "seed_data_created": "Test payment of Rp 10,000 made to Toko Subur (old_debt: Rp 100,000 -> new_debt: Rp 90,000)",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iteration 31 verified 2 new features: (1) Edit Piutang Kios Mitra - PUT /api/partner-stores/{store_id}/edit-debt with {type:'payment'/'correction', amount:X, notes:''}. Payment mode reduces debt by amount. Correction mode sets debt to exact value. Creates audit_log with action='EDIT_PIUTANG_MITRA'. Frontend has CreditCard icon button (data-testid='debt-store-{id}') that opens dialog (data-testid='edit-debt-dialog'). Dialog shows current debt, type select, amount input with real-time remaining calculation, notes input, and submit button. (2) Dashboard Stock Out with Cost Price - GET /api/dashboard/stats returns stock_out_today, stock_out_today_pos, stock_out_today_partner. Calculation uses product's cost_price/items_per_box (not item-level price). POS always uses per-unit cost. Partner orders check warehouse_unit: dus uses full cost_price, satuan uses cost_price/items_per_box. Dashboard card shows 'POS: Rp X | Mitra: Rp Y' breakdown.",
+  "features_verified": {
+    "feature_1_edit_piutang": {
+      "endpoint": "PUT /api/partner-stores/{store_id}/edit-debt",
+      "request_body": "{type: 'payment'|'correction', amount: number, notes: string}",
+      "response": "{message, old_debt, new_debt}",
+      "payment_mode": "amount > 0, new_debt = max(0, old_debt - amount), creates payment_history",
+      "correction_mode": "amount >= 0, new_debt = amount",
+      "audit_log": "action='EDIT_PIUTANG_MITRA', entity_type='partner_store'",
+      "frontend_button": "data-testid='debt-store-{id}' CreditCard icon",
+      "frontend_dialog": "data-testid='edit-debt-dialog'",
+      "dialog_elements": ["debt-type-select", "debt-amount-input", "debt-notes-input", "debt-submit-btn"],
+      "implementation": "partner_routes.py lines 77-124, PartnerStores.js lines 130-155 and 555-613"
+    },
+    "feature_2_stock_out_cost_price": {
+      "endpoint": "GET /api/dashboard/stats",
+      "fields_returned": ["stock_out_today", "stock_out_today_pos", "stock_out_today_partner"],
+      "calculation_helper": "get_unit_cost(product_id) = cost_price / items_per_box",
+      "pos_calculation": "sum(get_unit_cost(item.product_id) * item.quantity) for all POS transactions",
+      "partner_calculation": "For each item: if warehouse_unit == 'dus' then qty * cost_price, else qty * (cost_price / items_per_box)",
+      "dashboard_display": "'BARANG KELUAR HARI INI' card shows 'POS: Rp X | Mitra: Rp Y'",
+      "implementation": "report_routes.py lines 71-112"
+    }
+  }
+}

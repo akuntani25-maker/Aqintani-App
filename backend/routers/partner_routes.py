@@ -1,7 +1,7 @@
-from fastapi import APIRouter, HTTPException, Depends, Query
+from fastapi import APIRouter, HTTPException, Depends, Query, Request as FastAPIRequest
 from typing import List, Optional
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 from database import db
 from auth import get_current_user, require_admin_panel_access
@@ -9,7 +9,7 @@ from models import (
     PartnerStoreCreate, PartnerStore,
     PartnerOrderCreate, PartnerOrder
 )
-from services import recalculate_product_stock
+from services import recalculate_product_stock, log_audit
 
 router = APIRouter()
 
@@ -72,6 +72,56 @@ async def get_partner_store_payments(store_id: str, current_user: dict = Depends
         {"type": "partner_store", "reference_id": store_id}, {"_id": 0}
     ).sort("created_at", -1).to_list(1000)
     return payments
+
+
+@router.put("/partner-stores/{store_id}/edit-debt")
+async def edit_partner_store_debt(store_id: str, req: FastAPIRequest, admin: dict = Depends(require_admin_panel_access)):
+    """Edit piutang kios mitra: koreksi manual atau pembayaran."""
+    req_body = await req.json()
+    store = await db.partner_stores.find_one({"id": store_id}, {"_id": 0})
+    if not store:
+        raise HTTPException(status_code=404, detail="Kios mitra tidak ditemukan")
+
+    edit_type = req_body.get("type", "correction")  # "correction" or "payment"
+    amount = float(req_body.get("amount", 0))
+    notes = req_body.get("notes", "")
+    old_debt = store.get("current_debt", 0)
+
+    WITA = timezone(timedelta(hours=8))
+    now = datetime.now(WITA)
+
+    if edit_type == "payment":
+        if amount <= 0:
+            raise HTTPException(status_code=400, detail="Jumlah pembayaran harus lebih dari 0")
+        new_debt = max(0, old_debt - amount)
+        # Record payment in payment_history
+        payment_doc = {
+            "id": str(uuid.uuid4()), "type": "partner_store", "reference_id": store_id,
+            "partner_store_name": store["name"], "amount": amount,
+            "notes": notes or f"Pembayaran piutang {store['name']}",
+            "created_at": now.isoformat(), "date": now.strftime("%Y-%m-%d")
+        }
+        await db.payment_history.insert_one(payment_doc)
+    elif edit_type == "correction":
+        if amount < 0:
+            raise HTTPException(status_code=400, detail="Nilai piutang tidak boleh negatif")
+        new_debt = amount
+    else:
+        raise HTTPException(status_code=400, detail="Tipe edit tidak valid")
+
+    await db.partner_stores.update_one({"id": store_id}, {"$set": {"current_debt": new_debt}})
+
+    await log_audit(
+        user=admin, action="EDIT_PIUTANG_MITRA", entity_type="partner_store",
+        entity_id=store_id,
+        details={
+            "store_name": store["name"], "type": edit_type,
+            "old_debt": old_debt, "new_debt": new_debt,
+            "amount": amount, "notes": notes
+        }
+    )
+
+    return {"message": "Piutang berhasil diperbarui", "old_debt": old_debt, "new_debt": new_debt}
 
 
 # ============= PARTNER ORDERS =============

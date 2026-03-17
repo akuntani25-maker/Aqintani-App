@@ -4,10 +4,10 @@ import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Card } from '../components/ui/card';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '../components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '../components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
 import { toast } from 'sonner';
-import { Plus, Pencil, Trash2, MapPin, DollarSign, Eye, Search, Truck } from 'lucide-react';
+import { Plus, Pencil, Trash2, MapPin, DollarSign, Eye, Search, Truck, CreditCard } from 'lucide-react';
 import { Pagination } from '../components/Pagination';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { GoogleMap, LoadScript, Marker, InfoWindow } from '@react-google-maps/api';
@@ -28,6 +28,9 @@ export const PartnerStores = () => {
   const [vehicles, setVehicles] = useState([]);
   const [page, setPage] = useState(1);
   const perPage = 15;
+  const [debtDialog, setDebtDialog] = useState(null);
+  const [debtForm, setDebtForm] = useState({ type: 'payment', amount: 0, notes: '' });
+  const [debtSaving, setDebtSaving] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
     owner_name: '',
@@ -124,6 +127,31 @@ export const PartnerStores = () => {
       credit_limit: 0,
       vehicle_id: ''
     });
+  };
+
+  const openDebtDialog = (store) => {
+    setDebtDialog(store);
+    setDebtForm({ type: 'payment', amount: 0, notes: '' });
+  };
+
+  const handleDebtSubmit = async () => {
+    if (debtForm.type === 'payment' && debtForm.amount <= 0) {
+      toast.error('Jumlah pembayaran harus lebih dari 0');
+      return;
+    }
+    if (debtForm.type === 'correction' && debtForm.amount < 0) {
+      toast.error('Nilai piutang tidak boleh negatif');
+      return;
+    }
+    setDebtSaving(true);
+    try {
+      await api.put(`/partner-stores/${debtDialog.id}/edit-debt`, debtForm);
+      toast.success(debtForm.type === 'payment' ? 'Pembayaran berhasil dicatat' : 'Piutang berhasil dikoreksi');
+      setDebtDialog(null);
+      fetchStores();
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Gagal memperbarui piutang');
+    } finally { setDebtSaving(false); }
   };
 
   const handleMapClick = useCallback((e) => {
@@ -479,7 +507,16 @@ export const PartnerStores = () => {
                       </span>
                     </TableCell>
                     <TableCell>
-                      <div className="flex items-center justify-center gap-2">
+                      <div className="flex items-center justify-center gap-1">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => openDebtDialog(store)}
+                          data-testid={`debt-store-${store.id}`}
+                          title="Edit Piutang"
+                        >
+                          <CreditCard className="w-4 h-4 text-amber-600" />
+                        </Button>
                         <Button
                           size="sm"
                           variant="ghost"
@@ -514,6 +551,66 @@ export const PartnerStores = () => {
         </div>
         <Pagination page={page} totalPages={totalPages} total={filteredStores.length} perPage={perPage} onChange={setPage} />
       </Card>
+
+      {/* Edit Debt Dialog */}
+      <Dialog open={!!debtDialog} onOpenChange={(o) => !o && setDebtDialog(null)}>
+        <DialogContent className="max-w-md" data-testid="edit-debt-dialog">
+          <DialogHeader>
+            <DialogTitle>Edit Piutang - {debtDialog?.name}</DialogTitle>
+          </DialogHeader>
+          {debtDialog && (
+            <div className="space-y-4">
+              <div className="p-3 bg-muted rounded-lg">
+                <p className="text-sm text-muted-foreground">Piutang saat ini</p>
+                <p className="text-2xl font-bold">{formatCurrency(debtDialog.current_debt || 0)}</p>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Tipe</Label>
+                <Select value={debtForm.type} onValueChange={(v) => setDebtForm({ ...debtForm, type: v, amount: 0 })}>
+                  <SelectTrigger data-testid="debt-type-select"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="payment">Pembayaran</SelectItem>
+                    <SelectItem value="correction">Koreksi Manual</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label>{debtForm.type === 'payment' ? 'Jumlah Bayar' : 'Nilai Piutang Baru'}</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  value={debtForm.amount}
+                  onChange={(e) => setDebtForm({ ...debtForm, amount: parseFloat(e.target.value) || 0 })}
+                  data-testid="debt-amount-input"
+                />
+                {debtForm.type === 'payment' && debtForm.amount > 0 && (
+                  <p className="text-xs text-muted-foreground">
+                    Sisa piutang: {formatCurrency(Math.max(0, (debtDialog.current_debt || 0) - debtForm.amount))}
+                  </p>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <Label>Catatan (opsional)</Label>
+                <Input
+                  value={debtForm.notes}
+                  onChange={(e) => setDebtForm({ ...debtForm, notes: e.target.value })}
+                  placeholder={debtForm.type === 'payment' ? 'Contoh: Setoran tanggal 15' : 'Contoh: Koreksi data lama'}
+                  data-testid="debt-notes-input"
+                />
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDebtDialog(null)}>Batal</Button>
+            <Button onClick={handleDebtSubmit} disabled={debtSaving} data-testid="debt-submit-btn">
+              {debtSaving ? 'Menyimpan...' : 'Simpan'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

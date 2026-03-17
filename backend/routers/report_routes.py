@@ -66,21 +66,45 @@ async def get_dashboard_stats(admin: dict = Depends(require_admin_panel_access))
         sum(item.get("subtotal", 0) for item in p.get("items", []))
         for p in today_purchases
     )
+
+    # Helper: get cost value per unit for a product
+    def get_unit_cost(product_id):
+        prod = prod_map.get(product_id)
+        if not prod:
+            return 0
+        cp = prod.get("cost_price", 0) or 0
+        ipb = prod.get("items_per_box", 1) or 1
+        return cp / ipb  # cost_price is per box, divide by items_per_box for per-unit
+
+    # POS transactions (always satuan/unit from gudang_toko)
     stock_out_today = sum(
-        sum((item.get("cost_price") or item.get("price", 0)) * item.get("quantity", 0) for item in t.get("items", []))
+        sum(get_unit_cost(item.get("product_id", "")) * item.get("quantity", 0) for item in t.get("items", []))
         for t in today_transactions
     )
 
     # Partner orders today (barang keluar via kios mitra)
     today_partner_orders = await db.partner_orders.find({"date": today}, {"_id": 0}).to_list(10000)
-    partner_stock_out_today = sum(
-        sum((item.get("cost_price") or item.get("price", 0)) * item.get("quantity", 0) for item in o.get("items", []))
-        for o in today_partner_orders
-    )
-    # Also count farmer debt transactions
+    partner_stock_out_today = 0
+    for o in today_partner_orders:
+        for item in o.get("items", []):
+            pid = item.get("product_id", "")
+            qty = item.get("quantity", 0)
+            prod = prod_map.get(pid)
+            if not prod:
+                continue
+            cp = prod.get("cost_price", 0) or 0
+            ipb = prod.get("items_per_box", 1) or 1
+            wh_id = item.get("warehouse_id") or o.get("warehouse_id", "gudang_toko")
+            wh_unit = wh_unit_map.get(wh_id, "satuan")
+            if wh_unit == "dus":
+                partner_stock_out_today += qty * cp  # cost_price per box
+            else:
+                partner_stock_out_today += qty * (cp / ipb)  # cost_price per unit
+
+    # Farmer debt transactions (always satuan from gudang_toko)
     today_farmer_txns = await db.farmer_transactions.find({"date": today}, {"_id": 0}).to_list(10000)
     farmer_stock_out = sum(
-        sum((item.get("cost_price") or item.get("price", 0)) * item.get("quantity", 0) for item in t.get("items", []))
+        sum(get_unit_cost(item.get("product_id", "")) * item.get("quantity", 0) for item in t.get("items", []))
         for t in today_farmer_txns
     )
     stock_out_today_pos = stock_out_today + farmer_stock_out
