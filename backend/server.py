@@ -62,6 +62,11 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+@app.get("/api/health")
+async def health_check():
+    return {"status": "ok"}
+
+
 @app.on_event("startup")
 async def startup_db():
     admin_exists = await db.users.find_one({"role": "admin"})
