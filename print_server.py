@@ -233,10 +233,11 @@ def install_autostart():
         print("  (console window akan terlihat saat startup)")
 
     # Buat file VBS yang menjalankan print server secara tersembunyi
-    # VBScript tidak memerlukan escape backslash - path ditulis apa adanya
-    vbs_content = 'Set WshShell = CreateObject("WScript.Shell")\r\n'
-    vbs_content += 'WshShell.CurrentDirectory = "' + os.path.dirname(script_path) + '"\r\n'
-    vbs_content += 'WshShell.Run """' + exe_path + '""" """' + script_path + '""", 0, False\r\n'
+    # VBScript: "" = escaped double quote dalam string literal
+    # Gunakan \n saja, Python text mode di Windows akan konversi ke \r\n
+    vbs_content = 'Set WshShell = CreateObject("WScript.Shell")\n'
+    vbs_content += 'WshShell.CurrentDirectory = "' + os.path.dirname(script_path) + '"\n'
+    vbs_content += 'WshShell.Run """' + exe_path + '"" ""' + script_path + '""", 0, False\n'
 
     try:
         with open(vbs_path, 'w') as f:
