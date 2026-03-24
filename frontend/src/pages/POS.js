@@ -6,7 +6,7 @@ import { Input } from '../components/ui/input';
 import { Card } from '../components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { toast } from 'sonner';
-import { Search, Plus, Minus, Trash2, ShoppingCart, LogOut, CreditCard, Banknote, Smartphone, Printer, Pencil, ArrowRightLeft, BarChart3, FileText, Users, RotateCcw, Clock, Package } from 'lucide-react';
+import { Search, Plus, Minus, Trash2, ShoppingCart, LogOut, CreditCard, Banknote, Smartphone, Printer, Pencil, ArrowRightLeft, BarChart3, FileText, Users, RotateCcw, Clock, Package, Moon, Sun } from 'lucide-react';
 import { CurrencyInput } from '../components/CurrencyInput';
 import { Pagination } from '../components/Pagination';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../components/ui/dialog';
@@ -88,6 +88,14 @@ const Receipt = React.forwardRef(({ transaction }, ref) => {
 export const POS = () => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+
+  // Init dark mode from localStorage
+  useEffect(() => {
+    if (localStorage.getItem('theme') === 'dark') {
+      document.documentElement.classList.add('dark');
+    }
+  }, []);
+
   const [products, setProducts] = useState([]);
   const [warehouseStock, setWarehouseStock] = useState([]);
   const [cart, setCart] = useState([]);
@@ -495,6 +503,12 @@ export const POS = () => {
               </Button>
               <Button variant="outline" onClick={() => setShowTransfer(true)} data-testid="pos-transfer-button">
                 <ArrowRightLeft className="w-4 h-4 mr-2" />Transfer Stok
+              </Button>
+              <Button variant="outline" onClick={() => {
+                const isDark = document.documentElement.classList.toggle('dark');
+                localStorage.setItem('theme', isDark ? 'dark' : 'light');
+              }} data-testid="pos-dark-mode-toggle">
+                <Moon className="w-4 h-4" />
               </Button>
               <Button variant="outline" onClick={handleLogout} data-testid="pos-logout-button">
                 <LogOut className="w-4 h-4 mr-2" />Keluar

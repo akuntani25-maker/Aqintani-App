@@ -55,6 +55,9 @@ Aplikasi web responsif untuk toko farmasi dan pertanian "UD. AQIN TANI" dengan s
 37. Audit Log Transfer Stok - Catat siapa, gudang mana, halaman apa (Admin/POS)
 38. Edit Piutang Kios Mitra - Pembayaran (kurangi hutang) dan Koreksi Manual (set nilai baru)
 39. Fix Barang Keluar Dashboard - Kalkulasi pakai harga pokok toko (cost_price/items_per_box) dari produk
+40. Dark Mode - Toggle di topbar admin + POS, tersimpan di localStorage
+41. Password Visibility - Icon mata di halaman login untuk show/hide password
+42. Security - Hapus kredensial demo dari frontend code
 
 ## Credentials
 - Admin: admin@aqintani.com / admin123

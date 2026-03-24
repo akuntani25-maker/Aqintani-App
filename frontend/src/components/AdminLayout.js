@@ -6,7 +6,7 @@ import { Button } from './ui/button';
 import { 
   LayoutDashboard, Package, Users, Layers, FileText, Settings, LogOut,
   Sprout, UserCog, Printer, Store, ShoppingCart, Truck, TrendingUp,
-  Menu, X, Banknote, PanelLeftClose, PanelLeft, Database, ClipboardList, Car, HandCoins
+  Menu, X, Banknote, PanelLeftClose, PanelLeft, Database, ClipboardList, Car, HandCoins, Moon, Sun
 } from 'lucide-react';
 
 const ROLE_MENU_MAP = {
@@ -36,6 +36,15 @@ export const AdminLayout = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [permissions, setPermissions] = useState([]);
   const [lowStockCount, setLowStockCount] = useState(0);
+  const [darkMode, setDarkMode] = useState(() => {
+    if (typeof window !== 'undefined') return localStorage.getItem('theme') === 'dark';
+    return false;
+  });
+
+  useEffect(() => {
+    document.documentElement.classList.toggle('dark', darkMode);
+    localStorage.setItem('theme', darkMode ? 'dark' : 'light');
+  }, [darkMode]);
 
   useEffect(() => {
     const fetchPerms = async () => {
@@ -102,6 +111,14 @@ export const AdminLayout = () => {
         </div>
         <div className="flex items-center gap-3">
           <span className="text-xs text-white/70 hidden sm:inline">{user?.name}</span>
+          <button
+            onClick={() => setDarkMode(!darkMode)}
+            className="p-1.5 rounded-lg hover:bg-white/10 transition-colors text-white/70 hover:text-white"
+            data-testid="dark-mode-toggle"
+            title={darkMode ? 'Light Mode' : 'Dark Mode'}
+          >
+            {darkMode ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+          </button>
           <Button
             variant="ghost"
             size="sm"
@@ -163,7 +180,7 @@ export const AdminLayout = () => {
       </aside>
 
       {/* Main content */}
-      <main className="flex-1 bg-gradient-mesh overflow-auto w-full pt-12">
+      <main className="flex-1 bg-background overflow-auto w-full pt-12">
         <Outlet />
       </main>
     </div>

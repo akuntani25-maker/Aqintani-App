@@ -5,11 +5,12 @@ import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { toast } from 'sonner';
-import { LogIn, Pill, Sprout } from 'lucide-react';
+import { LogIn, Sprout, Eye, EyeOff } from 'lucide-react';
 
 export const Login = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const { login } = useAuth();
   const navigate = useNavigate();
@@ -17,11 +18,9 @@ export const Login = () => {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
-
     try {
       const user = await login(email, password);
       toast.success('Login berhasil!');
-      
       if (['admin', 'manager', 'office_staff'].includes(user.role)) {
         navigate('/admin/dashboard');
       } else if (user.role === 'canvasser') {
@@ -40,9 +39,7 @@ export const Login = () => {
     <div className="min-h-screen flex">
       <div 
         className="hidden lg:flex lg:w-1/2 bg-cover bg-center relative"
-        style={{ 
-          backgroundImage: 'url(https://images.unsplash.com/photo-1625246333195-78d9c38ad449?q=85&w=1920&auto=format&fit=crop)'
-        }}
+        style={{ backgroundImage: 'url(https://images.unsplash.com/photo-1625246333195-78d9c38ad449?q=85&w=1920&auto=format&fit=crop)' }}
       >
         <div className="absolute inset-0 bg-gradient-to-br from-primary/95 via-primary/90 to-primary/85"></div>
         <div className="relative z-10 p-12 flex flex-col justify-center text-white max-w-xl">
@@ -59,33 +56,21 @@ export const Login = () => {
             Kelola toko obat & alat pertanian Anda dengan mudah, cepat, dan profesional
           </p>
           <div className="space-y-5">
-            <div className="flex items-start gap-4 group">
-              <div className="w-12 h-12 rounded-xl bg-secondary/20 flex items-center justify-center flex-shrink-0 group-hover:bg-secondary/30 transition-colors">
-                <div className="w-3 h-3 bg-secondary rounded-full"></div>
+            {[
+              ['Manajemen Inventori Cerdas', 'Tracking stok real-time dengan alert otomatis'],
+              ['Transaksi Super Cepat', 'POS dengan barcode scanner & multiple payment'],
+              ['Laporan Komprehensif', 'Analisis penjualan harian & bulanan otomatis'],
+            ].map(([title, desc], i) => (
+              <div key={i} className="flex items-start gap-4 group">
+                <div className="w-12 h-12 rounded-xl bg-secondary/20 flex items-center justify-center flex-shrink-0 group-hover:bg-secondary/30 transition-colors">
+                  <div className="w-3 h-3 bg-secondary rounded-full"></div>
+                </div>
+                <div>
+                  <p className="text-lg font-medium mb-1">{title}</p>
+                  <p className="text-sm opacity-75">{desc}</p>
+                </div>
               </div>
-              <div>
-                <p className="text-lg font-medium mb-1">Manajemen Inventori Cerdas</p>
-                <p className="text-sm opacity-75">Tracking stok real-time dengan alert otomatis</p>
-              </div>
-            </div>
-            <div className="flex items-start gap-4 group">
-              <div className="w-12 h-12 rounded-xl bg-secondary/20 flex items-center justify-center flex-shrink-0 group-hover:bg-secondary/30 transition-colors">
-                <div className="w-3 h-3 bg-secondary rounded-full"></div>
-              </div>
-              <div>
-                <p className="text-lg font-medium mb-1">Transaksi Super Cepat</p>
-                <p className="text-sm opacity-75">POS dengan barcode scanner & multiple payment</p>
-              </div>
-            </div>
-            <div className="flex items-start gap-4 group">
-              <div className="w-12 h-12 rounded-xl bg-secondary/20 flex items-center justify-center flex-shrink-0 group-hover:bg-secondary/30 transition-colors">
-                <div className="w-3 h-3 bg-secondary rounded-full"></div>
-              </div>
-              <div>
-                <p className="text-lg font-medium mb-1">Laporan Komprehensif</p>
-                <p className="text-sm opacity-75">Analisis penjualan harian & bulanan otomatis</p>
-              </div>
-            </div>
+            ))}
           </div>
         </div>
       </div>
@@ -108,29 +93,29 @@ export const Login = () => {
             <div className="space-y-2">
               <Label htmlFor="email" className="text-sm font-medium">Email</Label>
               <Input
-                id="email"
-                type="email"
-                placeholder="nama@contoh.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                required
-                data-testid="login-email-input"
-                className="h-12 text-base rounded-xl border-2"
+                id="email" type="email" placeholder="nama@contoh.com"
+                value={email} onChange={(e) => setEmail(e.target.value)} required
+                data-testid="login-email-input" className="h-12 text-base rounded-xl border-2"
               />
             </div>
 
             <div className="space-y-2">
               <Label htmlFor="password" className="text-sm font-medium">Password</Label>
-              <Input
-                id="password"
-                type="password"
-                placeholder="••••••••"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                required
-                data-testid="login-password-input"
-                className="h-12 text-base rounded-xl border-2"
-              />
+              <div className="relative">
+                <Input
+                  id="password" type={showPassword ? 'text' : 'password'} placeholder="••••••••"
+                  value={password} onChange={(e) => setPassword(e.target.value)} required
+                  data-testid="login-password-input" className="h-12 text-base rounded-xl border-2 pr-12"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                  data-testid="toggle-password-visibility"
+                >
+                  {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                </button>
+              </div>
             </div>
 
             <Button
@@ -145,14 +130,10 @@ export const Login = () => {
                   Memproses...
                 </span>
               ) : (
-                <span className="flex items-center gap-2">
-                  <LogIn className="w-5 h-5" />
-                  Masuk
-                </span>
+                <span className="flex items-center gap-2"><LogIn className="w-5 h-5" /> Masuk</span>
               )}
             </Button>
           </form>
-
         </div>
       </div>
     </div>

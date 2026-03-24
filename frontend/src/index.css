@@ -26,6 +26,53 @@
     --ring: 183 86% 30%;
     --radius: 0.75rem;
   }
+
+  .dark {
+    --background: 222 47% 8%;
+    --foreground: 210 40% 96%;
+    --card: 222 47% 11%;
+    --card-foreground: 210 40% 96%;
+    --popover: 222 47% 11%;
+    --popover-foreground: 210 40% 96%;
+    --primary: 183 70% 45%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 45 80% 50%;
+    --secondary-foreground: 26 83% 14%;
+    --muted: 217 33% 17%;
+    --muted-foreground: 215 20% 60%;
+    --accent: 183 50% 15%;
+    --accent-foreground: 183 70% 75%;
+    --destructive: 0 63% 50%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 217 33% 20%;
+    --input: 217 33% 20%;
+    --ring: 183 70% 45%;
+  }
+}
+
+/* Dark mode overrides for hardcoded Tailwind colors */
+.dark .bg-white { background-color: hsl(222 47% 11%) !important; }
+.dark .bg-emerald-50 { background-color: hsl(160 30% 12%) !important; }
+.dark .bg-blue-50 { background-color: hsl(210 30% 12%) !important; }
+.dark .bg-amber-50 { background-color: hsl(40 30% 12%) !important; }
+.dark .bg-violet-50 { background-color: hsl(260 30% 12%) !important; }
+.dark .bg-red-50 { background-color: hsl(0 30% 12%) !important; }
+.dark .bg-green-50 { background-color: hsl(140 30% 12%) !important; }
+.dark .bg-orange-50 { background-color: hsl(25 30% 12%) !important; }
+.dark .bg-purple-50 { background-color: hsl(270 30% 12%) !important; }
+.dark .bg-gray-50 { background-color: hsl(220 20% 12%) !important; }
+.dark .text-emerald-800, .dark .text-blue-800, .dark .text-amber-800,
+.dark .text-violet-800, .dark .text-red-800, .dark .text-green-800 {
+  color: hsl(var(--foreground)) !important;
+}
+.dark .text-emerald-700, .dark .text-blue-700, .dark .text-amber-700,
+.dark .text-violet-700, .dark .text-red-700, .dark .text-green-700,
+.dark .text-orange-700, .dark .text-purple-700 {
+  color: hsl(var(--muted-foreground)) !important;
+}
+.dark .border-emerald-200, .dark .border-blue-200, .dark .border-amber-200,
+.dark .border-violet-200, .dark .border-red-200, .dark .border-green-200 {
+  border-color: hsl(var(--border)) !important;
 }
 
 @layer base {
