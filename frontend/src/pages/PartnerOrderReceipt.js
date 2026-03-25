@@ -65,7 +65,6 @@ export const PartnerOrderReceipt = () => {
     const tgl = new Date(order.created_at).toLocaleString('id-ID', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' });
     const storeName = storeSettings?.store_name || 'UD. AQIN TANI';
     const previousDebt = Math.max(0, (order.partner_debt_total || 0) - (order.remaining || 0));
-    const gTotal = previousDebt + order.total;
     const lines = [];
     lines.push(`##${storeName}`);
     if (storeSettings?.address) lines.push(`#${storeSettings.address}`);
@@ -75,7 +74,6 @@ export const PartnerOrderReceipt = () => {
     lines.push(`No   : ${order.order_number}`);
     lines.push(`Tgl  : ${tgl}`);
     lines.push(`Kios : ${order.partner_store_name}`);
-    if (order.partner_phone) lines.push(`Telp : ${order.partner_phone}`);
     if (order.canvasser_name) lines.push(`Sales: ${order.canvasser_name}`);
     lines.push(SEP);
     order.items.forEach(item => {
@@ -83,22 +81,13 @@ export const PartnerOrderReceipt = () => {
       lines.push(rightAlign(`  ${item.quantity} x ${fmtN(item.price)}`, fmtN(item.subtotal)));
     });
     lines.push(SEP);
-    lines.push(rightAlign('Subtotal', fmtN(order.subtotal)));
-    if (order.discount > 0) lines.push(rightAlign('Diskon', '-' + fmtN(order.discount)));
+    lines.push(rightAlign('**TOTAL PESANAN', fmtN(order.total)));
+    if (previousDebt > 0) lines.push(rightAlign('Bon Sebelumnya', fmtN(previousDebt)));
     lines.push(SEP);
-    lines.push(rightAlign('**TOTAL', fmtN(order.total)));
-    if (order.paid > 0) lines.push(rightAlign('Dibayar', fmtN(order.paid)));
-    if (order.remaining > 0) lines.push(rightAlign('Sisa Bon', fmtN(order.remaining)));
-    if (previousDebt > 0 || order.remaining > 0) {
-      lines.push(SEP);
-      lines.push(`**REKAP BON / HUTANG`);
-      if (previousDebt > 0) lines.push(rightAlign('Bon Sebelumnya', fmtN(previousDebt)));
-      lines.push(rightAlign('Bon Pesanan Ini', fmtN(order.remaining)));
-      lines.push(SEP);
-      lines.push(rightAlign('**TOTAL HUTANG', fmtN(order.partner_debt_total || 0)));
-    }
+    lines.push(rightAlign('Total Bon', fmtN(previousDebt + order.total)));
+    if (order.paid > 0) lines.push(rightAlign('Dibayar', '-' + fmtN(order.paid)));
     lines.push(SEP);
-    lines.push(rightAlign('**GRAND TOTAL', fmtN(gTotal)));
+    lines.push(rightAlign('**SISA HUTANG', fmtN(order.partner_debt_total || 0)));
     lines.push(SEP);
     lines.push(`#Terima kasih!`);
     lines.push(`#Simpan struk sebagai bukti`);
@@ -144,7 +133,6 @@ export const PartnerOrderReceipt = () => {
   if (!order) return null;
 
   const previousDebt = Math.max(0, (order.partner_debt_total || 0) - (order.remaining || 0));
-  const grandTotal = previousDebt + order.total;
   const backUrl = searchParams.get('from') === 'canvasser' ? '/canvasser' : '/admin/partner-orders';
 
   return (
@@ -179,6 +167,7 @@ export const PartnerOrderReceipt = () => {
             <div className="flex justify-between"><span>No</span><span className="font-semibold">{order.order_number}</span></div>
             <div className="flex justify-between"><span>Tgl</span><span>{new Date(order.created_at).toLocaleString('id-ID', { day: '2-digit', month: '2-digit', year: '2-digit', hour: '2-digit', minute: '2-digit' })}</span></div>
             <div className="flex justify-between"><span>Kios</span><span className="font-semibold">{order.partner_store_name}</span></div>
+            {order.canvasser_name && <div className="flex justify-between"><span>Sales</span><span>{order.canvasser_name}</span></div>}
           </div>
           <div className="border-t border-gray-300 my-2"></div>
           {order.items.map((item, i) => (
@@ -187,27 +176,14 @@ export const PartnerOrderReceipt = () => {
               <div className="flex justify-between"><span>{item.quantity} x {fmt(item.price)}</span><span className="font-semibold">{fmt(item.subtotal)}</span></div>
             </div>
           ))}
+          <div className="border-t border-gray-800 my-2"></div>
+          <div className="flex justify-between font-bold text-sm"><span>TOTAL PESANAN</span><span>{fmt(order.total)}</span></div>
+          {previousDebt > 0 && <div className="flex justify-between text-xs"><span>Bon Sebelumnya</span><span>{fmt(previousDebt)}</span></div>}
           <div className="border-t border-gray-300 my-2"></div>
-          <div className="space-y-0.5 text-xs">
-            <div className="flex justify-between"><span>Subtotal</span><span>{fmt(order.subtotal)}</span></div>
-            {order.discount > 0 && <div className="flex justify-between text-red-600"><span>Diskon</span><span>-{fmt(order.discount)}</span></div>}
-          </div>
+          <div className="flex justify-between text-xs"><span>Total Bon</span><span>{fmt(previousDebt + order.total)}</span></div>
+          {order.paid > 0 && <div className="flex justify-between text-xs"><span>Dibayar</span><span className="text-green-600">-{fmt(order.paid)}</span></div>}
           <div className="border-t border-gray-800 my-2"></div>
-          <div className="flex justify-between font-bold text-sm"><span>TOTAL</span><span>{fmt(order.total)}</span></div>
-          {order.paid > 0 && <div className="flex justify-between text-xs"><span>Dibayar</span><span className="text-green-600">{fmt(order.paid)}</span></div>}
-          {order.remaining > 0 && <div className="flex justify-between text-xs"><span>Sisa Bon</span><span className="text-orange-600">{fmt(order.remaining)}</span></div>}
-          {(previousDebt > 0 || order.remaining > 0) && (
-            <>
-              <div className="border-t border-gray-800 my-2"></div>
-              <p className="font-bold text-xs">REKAP BON / HUTANG</p>
-              {previousDebt > 0 && <div className="flex justify-between text-xs"><span>Bon Sebelumnya</span><span>{fmt(previousDebt)}</span></div>}
-              <div className="flex justify-between text-xs"><span>Bon Pesanan Ini</span><span>{fmt(order.remaining)}</span></div>
-              <div className="border-t border-gray-300 my-1"></div>
-              <div className="flex justify-between font-bold text-xs"><span>TOTAL HUTANG</span><span className="text-red-600">{fmt(order.partner_debt_total || 0)}</span></div>
-            </>
-          )}
-          <div className="border-t border-gray-800 my-2"></div>
-          <div className="flex justify-between font-bold text-sm"><span>GRAND TOTAL</span><span>{fmt(grandTotal)}</span></div>
+          <div className="flex justify-between font-bold text-sm"><span>SISA HUTANG</span><span className="text-red-600">{fmt(order.partner_debt_total || 0)}</span></div>
           <div className="border-t border-gray-300 my-2"></div>
           <div className="text-center text-xs text-gray-600">
             <p className="font-semibold">Terima kasih!</p>

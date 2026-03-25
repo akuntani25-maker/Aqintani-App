@@ -272,7 +272,6 @@ class ThermalPrinter {
     d.push(...this.textToBytes('No   : ' + order.order_number)); d.push(...this.commands.LINE_FEED);
     d.push(...this.textToBytes('Tgl  : ' + tgl)); d.push(...this.commands.LINE_FEED);
     d.push(...this.textToBytes('Kios : ' + order.partner_store_name)); d.push(...this.commands.LINE_FEED);
-    if (order.partner_phone) { d.push(...this.textToBytes('Telp : ' + order.partner_phone)); d.push(...this.commands.LINE_FEED); }
     if (order.canvasser_name) { d.push(...this.textToBytes('Sales: ' + order.canvasser_name)); d.push(...this.commands.LINE_FEED); }
     d.push(...this.textToBytes(sep)); d.push(...this.commands.LINE_FEED);
 
@@ -283,28 +282,21 @@ class ThermalPrinter {
     });
 
     d.push(...this.textToBytes(sep)); d.push(...this.commands.LINE_FEED);
-    d.push(...this.textToBytes(this.formatLine('Subtotal:', this.formatCurrency(order.subtotal)))); d.push(...this.commands.LINE_FEED);
-    if (order.discount > 0) { d.push(...this.textToBytes(this.formatLine('Diskon:', '-' + this.formatCurrency(order.discount)))); d.push(...this.commands.LINE_FEED); }
-    d.push(...this.commands.BOLD_ON);
-    d.push(...this.textToBytes(this.formatLine('TOTAL:', this.formatCurrency(order.total)))); d.push(...this.commands.LINE_FEED);
-    d.push(...this.commands.BOLD_OFF);
-    if (order.paid > 0) { d.push(...this.textToBytes(this.formatLine('Dibayar:', this.formatCurrency(order.paid)))); d.push(...this.commands.LINE_FEED); }
-    if (order.remaining > 0) { d.push(...this.textToBytes(this.formatLine('Sisa Bon:', this.formatCurrency(order.remaining)))); d.push(...this.commands.LINE_FEED); }
 
     const previousDebt = Math.max(0, (order.partner_debt_total || 0) - (order.remaining || 0));
-    if (previousDebt > 0 || order.remaining > 0) {
-      d.push(...this.textToBytes(sep)); d.push(...this.commands.LINE_FEED);
-      d.push(...this.commands.BOLD_ON); d.push(...this.textToBytes('REKAP BON / HUTANG')); d.push(...this.commands.LINE_FEED); d.push(...this.commands.BOLD_OFF);
-      if (previousDebt > 0) { d.push(...this.textToBytes(this.formatLine('Bon Lama:', this.formatCurrency(previousDebt)))); d.push(...this.commands.LINE_FEED); }
-      d.push(...this.textToBytes(this.formatLine('Bon Ini:', this.formatCurrency(order.remaining)))); d.push(...this.commands.LINE_FEED);
-      d.push(...this.commands.BOLD_ON); d.push(...this.textToBytes(this.formatLine('TTL HUTANG:', this.formatCurrency(order.partner_debt_total || 0)))); d.push(...this.commands.LINE_FEED);
-      d.push(...this.commands.BOLD_OFF);
-    }
 
-    const grandTotal = previousDebt + order.total;
-    d.push(...this.textToBytes(sep)); d.push(...this.commands.LINE_FEED);
-    d.push(...this.commands.BOLD_ON); d.push(...this.textToBytes(this.formatLine('GRAND TOTAL:', this.formatCurrency(grandTotal)))); d.push(...this.commands.LINE_FEED);
+    d.push(...this.commands.BOLD_ON);
+    d.push(...this.textToBytes(this.formatLine('TOTAL PESANAN:', this.formatCurrency(order.total)))); d.push(...this.commands.LINE_FEED);
     d.push(...this.commands.BOLD_OFF);
+    if (previousDebt > 0) { d.push(...this.textToBytes(this.formatLine('Bon Sebelumnya:', this.formatCurrency(previousDebt)))); d.push(...this.commands.LINE_FEED); }
+    d.push(...this.textToBytes(sep)); d.push(...this.commands.LINE_FEED);
+    d.push(...this.textToBytes(this.formatLine('Total Bon:', this.formatCurrency(previousDebt + order.total)))); d.push(...this.commands.LINE_FEED);
+    if (order.paid > 0) { d.push(...this.textToBytes(this.formatLine('Dibayar:', '-' + this.formatCurrency(order.paid)))); d.push(...this.commands.LINE_FEED); }
+    d.push(...this.textToBytes(sep)); d.push(...this.commands.LINE_FEED);
+    d.push(...this.commands.BOLD_ON);
+    d.push(...this.textToBytes(this.formatLine('SISA HUTANG:', this.formatCurrency(order.partner_debt_total || 0)))); d.push(...this.commands.LINE_FEED);
+    d.push(...this.commands.BOLD_OFF);
+
     d.push(...this.commands.ALIGN_CENTER);
     d.push(...this.textToBytes(sep)); d.push(...this.commands.LINE_FEED);
     d.push(...this.textToBytes('Terima kasih!')); d.push(...this.commands.LINE_FEED);

@@ -58,6 +58,7 @@ Aplikasi web responsif untuk toko farmasi dan pertanian "UD. AQIN TANI" dengan s
 40. Dark Mode - Toggle di topbar admin + POS, tersimpan di localStorage
 41. Password Visibility - Icon mata di halaman login untuk show/hide password
 42. Security - Hapus kredensial demo dari frontend code
+43. Format Struk Kios Mitra - Hapus subtotal, grand total, telpon. Urutan: Total Pesanan → Bon Sebelumnya → Total Bon → Dibayar → Sisa Hutang
 
 ## Credentials
 - Admin: admin@aqintani.com / admin123
