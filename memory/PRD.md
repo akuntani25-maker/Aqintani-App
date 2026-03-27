@@ -59,6 +59,9 @@ Aplikasi web responsif untuk toko farmasi dan pertanian "UD. AQIN TANI" dengan s
 41. Password Visibility - Icon mata di halaman login untuk show/hide password
 42. Security - Hapus kredensial demo dari frontend code
 43. Format Struk Kios Mitra - Hapus subtotal, grand total, telpon. Urutan: Total Pesanan → Bon Sebelumnya → Total Bon → Dibayar → Sisa Hutang
+44. Cancel Order Auto Retur - Stok dikembalikan ke gudang asal, hutang kios dikurangi, item external di-skip
+45. Tambah Item ke Pesanan - 3 sumber: Gudang Utama, Gudang Toko, Beli dari Luar (external expense dicatat, dipotong dari hasil penjualan)
+46. Fix Margin Rekap Kios Mitra - Kalkulasi total_sell untuk dus pakai subtotal/price*qty*ipb, tidak minus lagi
 
 ## Credentials
 - Admin: admin@aqintani.com / admin123
