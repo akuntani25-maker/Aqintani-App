@@ -196,13 +196,164 @@ async def create_partner_order(data: PartnerOrderCreate, current_user: dict = De
 
 @router.put("/partner-orders/{order_id}/status")
 async def update_order_status(order_id: str, order_status: str = Query(..., alias="status"), current_user: dict = Depends(get_current_user)):
+    order = await db.partner_orders.find_one({"id": order_id}, {"_id": 0})
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+
+    old_status = order.get("status", "pending")
+
+    # Auto retur stok ketika cancel
+    if order_status in ("canceled", "cancelled") and old_status not in ("canceled", "cancelled"):
+        await db.warehouses.find({}, {"_id": 0}).to_list(100)
+
+        for item in order.get("items", []):
+            item_wh_id = item.get("warehouse_id") or order.get("warehouse_id", "gudang_utama")
+            # Skip external purchases - no stock to return
+            if item.get("source") == "external":
+                continue
+            item_wh_id = item.get("warehouse_id") or order.get("warehouse_id", "gudang_utama")
+            await db.warehouse_stock.update_one(
+                {"product_id": item["product_id"], "warehouse_id": item_wh_id},
+                {"$inc": {"stock": item["quantity"]}}, upsert=True
+            )
+            await recalculate_product_stock(item["product_id"])
+
+        # Kurangi hutang kios mitra
+        remaining = order.get("remaining", 0)
+        if remaining > 0:
+            partner = await db.partner_stores.find_one({"id": order["partner_store_id"]})
+            if partner:
+                new_debt = max(0, partner.get("current_debt", 0) - remaining)
+                await db.partner_stores.update_one({"id": order["partner_store_id"]}, {"$set": {"current_debt": new_debt}})
+
+        await log_audit(
+            user=current_user, action="CANCEL_ORDER_RETUR",
+            entity_type="partner_order", entity_id=order_id,
+            details={
+                "order_number": order.get("order_number"),
+                "partner_store_name": order.get("partner_store_name"),
+                "items_returned": [{"product_name": i["product_name"], "quantity": i["quantity"],
+                    "warehouse_id": i.get("warehouse_id") or order.get("warehouse_id", "gudang_utama")}
+                    for i in order.get("items", [])],
+                "debt_reduced": remaining
+            }
+        )
+
     result = await db.partner_orders.find_one_and_update(
         {"id": order_id}, {"$set": {"status": order_status}},
         return_document=True, projection={"_id": 0}
     )
-    if not result:
-        raise HTTPException(status_code=404, detail="Order not found")
     return result
+
+
+@router.post("/partner-orders/{order_id}/add-items")
+async def add_items_to_order(order_id: str, req: FastAPIRequest, current_user: dict = Depends(get_current_user)):
+    """Tambah item ke pesanan existing. Sumber: gudang_utama, gudang_toko, atau external (beli dari luar)."""
+    body = await req.json()
+    new_items = body.get("items", [])
+    if not new_items:
+        raise HTTPException(status_code=400, detail="Tidak ada item untuk ditambahkan")
+
+    order = await db.partner_orders.find_one({"id": order_id}, {"_id": 0})
+    if not order:
+        raise HTTPException(status_code=404, detail="Pesanan tidak ditemukan")
+    if order.get("status") in ("canceled", "cancelled"):
+        raise HTTPException(status_code=400, detail="Tidak bisa menambah item ke pesanan yang dibatalkan")
+
+    WITA = timezone(timedelta(hours=8))
+    now = datetime.now(WITA)
+    added_items = []
+    total_addition = 0
+    total_external_cost = 0
+
+    for ni in new_items:
+        source = ni.get("source", "gudang_toko")  # gudang_utama, gudang_toko, external
+        product_id = ni["product_id"]
+        product_name = ni["product_name"]
+        quantity = int(ni["quantity"])
+        price = float(ni["price"])
+        warehouse_id = ni.get("warehouse_id", source if source != "external" else "")
+        external_cost = float(ni.get("external_cost", 0))
+
+        if source in ("gudang_utama", "gudang_toko"):
+            wh_stock = await db.warehouse_stock.find_one({"product_id": product_id, "warehouse_id": source})
+            current_qty = wh_stock["stock"] if wh_stock else 0
+            if current_qty < quantity:
+                raise HTTPException(status_code=400, detail=f"Stok tidak cukup untuk {product_name} di {source} (tersedia: {current_qty})")
+            await db.warehouse_stock.update_one(
+                {"product_id": product_id, "warehouse_id": source},
+                {"$inc": {"stock": -quantity}}
+            )
+            await recalculate_product_stock(product_id)
+
+        wh = await db.warehouses.find_one({"id": warehouse_id}, {"_id": 0}) if warehouse_id else None
+        wh_unit = wh.get("unit", "satuan") if wh else "satuan"
+        product = await db.products.find_one({"id": product_id}, {"_id": 0})
+        ipb = product.get("items_per_box", 1) or 1 if product else 1
+        subtotal = price * quantity * ipb if wh_unit == "dus" else price * quantity
+
+        item_doc = {
+            "product_id": product_id, "product_name": product_name,
+            "quantity": quantity, "price": price, "subtotal": subtotal,
+            "warehouse_id": warehouse_id,
+            "is_addition": True, "source": source,
+            "added_at": now.isoformat()
+        }
+        if source == "external":
+            item_doc["external_cost"] = external_cost
+            total_external_cost += external_cost * quantity
+
+        added_items.append(item_doc)
+        total_addition += subtotal
+
+    # Update order
+    existing_items = order.get("items", [])
+    all_items = existing_items + added_items
+    new_total = order["total"] + total_addition
+    new_remaining = order["remaining"] + total_addition
+    new_subtotal = order.get("subtotal", order["total"]) + total_addition
+
+    update_data = {
+        "items": all_items, "total": new_total, "remaining": new_remaining, "subtotal": new_subtotal
+    }
+    await db.partner_orders.update_one({"id": order_id}, {"$set": update_data})
+
+    # Update hutang kios mitra
+    partner = await db.partner_stores.find_one({"id": order["partner_store_id"]})
+    if partner:
+        new_debt = partner.get("current_debt", 0) + total_addition
+        await db.partner_stores.update_one({"id": order["partner_store_id"]}, {"$set": {"current_debt": new_debt}})
+
+    # Record external purchases as expense for canvasser recap
+    if total_external_cost > 0:
+        expense_doc = {
+            "id": str(uuid.uuid4()), "type": "external_purchase",
+            "order_id": order_id, "order_number": order.get("order_number"),
+            "canvasser_id": order.get("canvasser_id", ""),
+            "canvasser_name": order.get("canvasser_name", ""),
+            "partner_store_name": order.get("partner_store_name", ""),
+            "items": [i for i in added_items if i["source"] == "external"],
+            "total_cost": total_external_cost,
+            "created_at": now.isoformat(),
+            "date": now.strftime("%Y-%m-%d") if now.hour < 20 else (now + timedelta(days=1)).strftime("%Y-%m-%d")
+        }
+        await db.canvasser_expenses.insert_one(expense_doc)
+
+    await log_audit(
+        user=current_user, action="TAMBAH_ITEM_PESANAN",
+        entity_type="partner_order", entity_id=order_id,
+        details={
+            "order_number": order.get("order_number"),
+            "partner_store_name": order.get("partner_store_name"),
+            "added_items": [{"name": i["product_name"], "qty": i["quantity"], "source": i["source"]} for i in added_items],
+            "total_addition": total_addition,
+            "external_cost": total_external_cost
+        }
+    )
+
+    updated_order = await db.partner_orders.find_one({"id": order_id}, {"_id": 0})
+    return updated_order
+
 
 
 @router.delete("/partner-orders/{order_id}")

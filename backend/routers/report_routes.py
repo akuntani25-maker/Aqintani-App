@@ -273,8 +273,8 @@ async def get_partner_sales_detail_report(date_from: str, date_to: str, admin: d
             wh_unit = wh.get("unit", "satuan")
             qty_satuan = item["quantity"] * ipb if wh_unit == "dus" else item["quantity"]
             cost_per_unit = (product.get("cost_price", 0) or 0) / ipb
-            sell_price_per_unit = item["price"] / ipb if wh_unit == "dus" else item["price"]
-            total_sell = item["price"] * item["quantity"]
+            sell_price_per_unit = item["price"]
+            total_sell = item.get("subtotal") or (item["price"] * qty_satuan)
             total_cost_item = cost_per_unit * qty_satuan
             margin = total_sell - total_cost_item
             rows.append({

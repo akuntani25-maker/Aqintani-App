@@ -1,0 +1,109 @@
+{
+  "summary": "Iteration 32 - Testing 3 New Features: (1) Cancel Order Auto Retur, (2) Add Items to Existing Order, (3) Fix Margin Calculation. All 17 backend tests PASSED. Frontend UI tests verified Add Item dialog with 3 source options (gudang_utama, gudang_toko, external) and external cost field.",
+  "backend_issues": {
+    "critical": [],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": []
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iteration32_features.py",
+    "/app/test_reports/pytest/iteration32_results.xml"
+  ],
+  "passed_tests": [
+    "TestAuthentication::test_admin_login - Admin login returns token",
+    "TestCancelOrderAutoRetur::test_get_partner_stores - Partner stores endpoint works",
+    "TestCancelOrderAutoRetur::test_get_products - Products endpoint works",
+    "TestCancelOrderAutoRetur::test_get_warehouses - Warehouses endpoint works",
+    "TestCancelOrderAutoRetur::test_create_order_and_cancel_with_stock_return - Create order, cancel, verify stock returns to warehouse and debt reduces",
+    "TestCancelOrderAutoRetur::test_cancel_order_with_external_items_skipped - External items skipped during cancel retur (no stock to return)",
+    "TestAddItemsToOrder::test_add_items_endpoint_exists - POST /api/partner-orders/{id}/add-items endpoint exists",
+    "TestAddItemsToOrder::test_add_items_from_gudang_utama - Add items from gudang_utama deducts stock",
+    "TestAddItemsToOrder::test_add_items_from_gudang_toko - Add items from gudang_toko deducts stock",
+    "TestAddItemsToOrder::test_add_items_external_purchase - External source: no stock change, records expense",
+    "TestAddItemsToOrder::test_add_items_updates_partner_debt - Adding items increases partner debt",
+    "TestAddItemsToOrder::test_cannot_add_items_to_cancelled_order - Cannot add items to cancelled order (returns 400)",
+    "TestPartnerSalesDetailMarginFix::test_partner_sales_detail_endpoint - GET /api/reports/partner-sales-detail returns data",
+    "TestPartnerSalesDetailMarginFix::test_no_negative_margins - Report has no significantly negative margins",
+    "TestPartnerSalesDetailMarginFix::test_total_sell_calculation_for_dus_orders - total_sell uses item.subtotal or price*qty*items_per_box",
+    "TestPartnerSalesDetailMarginFix::test_margin_calculation_uses_cost_price - margin = total_sell - total_cost verified",
+    "TestCanvasserExpenses::test_canvasser_recap_includes_external_expenses - Canvasser recap endpoint works",
+    "UI: Partner Orders page - 'Tambah' button visible on non-cancelled orders (data-testid='add-item-{id}')",
+    "UI: Add Item Dialog - Opens with order number and partner store name",
+    "UI: Add Item Dialog - Product search works (data-testid='add-item-search')",
+    "UI: Add Item Dialog - Cart shows added items with Qty, Harga Jual, Sumber fields",
+    "UI: Add Item Dialog - Source selector has 3 options: Gudang Utama, Gudang Toko, Beli dari Luar",
+    "UI: Add Item Dialog - External source shows 'Harga Beli (Modal)' field (data-testid='ext-cost-{idx}')",
+    "UI: Add Item Dialog - Shows margin calculation: 'Modal: Rp X — Margin: Rp Y'",
+    "UI: Partner Orders table - Cancelled orders show 'RETUR STOK' badge"
+  ],
+  "action_items": [],
+  "critical_code_review_comments": [
+    "Feature 1 (Cancel Auto Retur): partner_routes.py lines 197-245 - PUT /api/partner-orders/{id}/status?status=cancelled",
+    "Feature 1 - Stock return logic (lines 209-219): Iterates items, skips source='external', returns stock to original warehouse_id",
+    "Feature 1 - Debt reduction (lines 221-227): Reduces partner current_debt by order.remaining amount",
+    "Feature 1 - Audit logging (lines 229-240): Logs CANCEL_ORDER_RETUR with items_returned and debt_reduced",
+    "Feature 2 (Add Items): partner_routes.py lines 249-355 - POST /api/partner-orders/{id}/add-items",
+    "Feature 2 - Source handling (lines 278-287): gudang_utama/gudang_toko deduct stock, external skips stock",
+    "Feature 2 - External expense (lines 328-340): Records in canvasser_expenses collection with total_cost",
+    "Feature 2 - Debt update (lines 322-325): Increases partner current_debt by total_addition",
+    "Feature 2 - Validation (lines 260-261): Cannot add to cancelled orders",
+    "Feature 3 (Margin Fix): report_routes.py lines 250-294 - GET /api/reports/partner-sales-detail",
+    "Feature 3 - total_sell calculation (line 277): Uses item.subtotal or price*qty_satuan for correct dus handling",
+    "Feature 3 - qty_satuan calculation (line 274): qty * items_per_box if warehouse_unit == 'dus'",
+    "Frontend (PartnerOrders.js): Lines 294-323 - openAddItemDialog, addToAddItemCart, handleSubmitAddItems",
+    "Frontend (PartnerOrders.js): Lines 767-848 - Add Item Dialog with source selector and external_cost field"
+  ],
+  "updated_files": [
+    "/app/backend/tests/test_iteration32_features.py"
+  ],
+  "success_rate": {
+    "backend": "100% (17/17 tests passed)",
+    "frontend": "100% (All features verified via UI testing)"
+  },
+  "test_credentials": {
+    "admin": "admin@aqintani.com / admin123",
+    "kasir": "kasir@aqintani.com / kasir123"
+  },
+  "seed_data_created": "Multiple test orders created and cancelled during testing for stock return verification",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iteration 32 verified 3 features: (1) Cancel Order Auto Retur - PUT /api/partner-orders/{id}/status?status=cancelled returns stock to original warehouse for each item (skips external items), reduces partner debt by remaining amount. Cancelled orders show 'RETUR STOK' badge. (2) Add Items - POST /api/partner-orders/{id}/add-items with {items: [{product_id, product_name, quantity, price, source, warehouse_id, external_cost}]}. Source options: gudang_utama, gudang_toko (both deduct stock), external (no stock change, records expense in canvasser_expenses). Frontend has 'Tambah' button (data-testid='add-item-{id}') that opens dialog with product search, cart with source selector, and external_cost field when source=external. Shows margin calculation. (3) Margin Fix - GET /api/reports/partner-sales-detail uses item.subtotal or price*qty*items_per_box for dus orders, ensuring correct total_sell and no negative margins.",
+  "features_verified": {
+    "feature_1_cancel_auto_retur": {
+      "endpoint": "PUT /api/partner-orders/{id}/status?status=cancelled",
+      "stock_return": "Returns stock to original warehouse_id for each item",
+      "external_skip": "Items with source='external' are skipped (no stock to return)",
+      "debt_reduction": "Reduces partner current_debt by order.remaining",
+      "audit_log": "Creates CANCEL_ORDER_RETUR entry with items_returned and debt_reduced",
+      "ui_indicator": "Cancelled orders show 'RETUR STOK' badge in table",
+      "implementation": "partner_routes.py lines 197-245"
+    },
+    "feature_2_add_items": {
+      "endpoint": "POST /api/partner-orders/{id}/add-items",
+      "request_body": "{items: [{product_id, product_name, quantity, price, source, warehouse_id, external_cost}]}",
+      "sources": {
+        "gudang_utama": "Deducts stock from gudang_utama",
+        "gudang_toko": "Deducts stock from gudang_toko",
+        "external": "No stock change, records expense in canvasser_expenses"
+      },
+      "updates": "Order total, remaining, subtotal; Partner current_debt",
+      "validation": "Cannot add to cancelled orders (returns 400)",
+      "frontend_button": "data-testid='add-item-{id}'",
+      "frontend_dialog": "data-testid='add-item-dialog'",
+      "dialog_elements": ["add-item-search", "add-cart-item-{idx}", "ext-cost-{idx}"],
+      "implementation": "partner_routes.py lines 249-355, PartnerOrders.js lines 294-323 and 767-848"
+    },
+    "feature_3_margin_fix": {
+      "endpoint": "GET /api/reports/partner-sales-detail",
+      "total_sell_calculation": "item.subtotal or (price * qty_satuan)",
+      "qty_satuan_calculation": "qty * items_per_box if warehouse_unit == 'dus' else qty",
+      "margin_calculation": "total_sell - total_cost where cost = cost_price_per_unit * qty_satuan",
+      "result": "No more negative margins for dus orders",
+      "implementation": "report_routes.py lines 250-294"
+    }
+  }
+}

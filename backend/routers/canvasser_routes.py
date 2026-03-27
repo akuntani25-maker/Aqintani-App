@@ -114,6 +114,10 @@ async def get_my_recap(date: str = "", current_user: dict = Depends(get_current_
             "items_count": len(o.get("items", [])),
         })
 
+    # External purchase expenses
+    expenses = await db.canvasser_expenses.find({"canvasser_id": canvasser_id, "date": date}, {"_id": 0}).to_list(100)
+    total_external_cost = sum(e.get("total_cost", 0) for e in expenses)
+
     return {
         "date": date,
         "total_orders": total_orders,
@@ -124,6 +128,8 @@ async def get_my_recap(date: str = "", current_user: dict = Depends(get_current_
         "stores_visited": stores_visited,
         "return_items": return_items,
         "store_details": store_details,
+        "total_external_cost": total_external_cost,
+        "net_sales": total_paid - total_external_cost,
     }
 
 

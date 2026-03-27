@@ -39,6 +39,9 @@ export const PartnerOrders = () => {
   const [orderType, setOrderType] = useState('regular');
   const [partnerSearch, setPartnerSearch] = useState('');
   const [partnerSearchFocused, setPartnerSearchFocused] = useState(false);
+  const [addItemDialog, setAddItemDialog] = useState(null);
+  const [addItemCart, setAddItemCart] = useState([]);
+  const [addItemSearch, setAddItemSearch] = useState('');
   const [page, setPage] = useState(1);
   const perPage = 15;
 
@@ -277,11 +280,45 @@ export const PartnerOrders = () => {
 
   const updateOrderStatus = async (orderId, newStatus) => {
     try {
+      if (newStatus === 'cancelled') {
+        if (!window.confirm('Pesanan akan dibatalkan dan stok akan dikembalikan otomatis. Lanjutkan?')) return;
+      }
       await api.put(`/partner-orders/${orderId}/status?status=${newStatus}`);
-      toast.success('Status berhasil diperbarui');
+      toast.success(newStatus === 'cancelled' ? 'Pesanan dibatalkan, stok dikembalikan' : 'Status berhasil diperbarui');
       fetchData();
     } catch (error) {
-      toast.error('Gagal memperbarui status');
+      toast.error(error.response?.data?.detail || 'Gagal memperbarui status');
+    }
+  };
+
+  const openAddItemDialog = (order) => {
+    setAddItemDialog(order);
+    setAddItemCart([]);
+    setAddItemSearch('');
+  };
+
+  const addToAddItemCart = (product) => {
+    const existing = addItemCart.find(i => i.product_id === product.id);
+    if (existing) {
+      setAddItemCart(addItemCart.map(i => i.product_id === product.id ? { ...i, quantity: i.quantity + 1 } : i));
+    } else {
+      setAddItemCart([...addItemCart, {
+        product_id: product.id, product_name: product.name,
+        quantity: 1, price: product.price,
+        source: 'gudang_toko', external_cost: 0
+      }]);
+    }
+  };
+
+  const handleSubmitAddItems = async () => {
+    if (addItemCart.length === 0) { toast.error('Tambahkan item terlebih dahulu'); return; }
+    try {
+      await api.post(`/partner-orders/${addItemDialog.id}/add-items`, { items: addItemCart });
+      toast.success('Item tambahan berhasil ditambahkan');
+      setAddItemDialog(null);
+      fetchData();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Gagal menambahkan item');
     }
   };
 
@@ -631,6 +668,8 @@ export const PartnerOrders = () => {
                     {order.has_return && <span className="ml-2 text-xs bg-red-100 text-red-700 px-1.5 py-0.5 rounded font-semibold">RETUR</span>}
                     {order.order_type === 'conditional' && <span className="ml-2 text-xs bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded font-semibold">KONDISIONAL</span>}
                     {order.is_settled && <span className="ml-2 text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded font-semibold">SELESAI</span>}
+                    {order.status === 'cancelled' && <span className="ml-2 text-xs bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded font-semibold">RETUR STOK</span>}
+                    {order.items?.some(i => i.is_addition) && <span className="ml-2 text-xs bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded font-semibold">+TAMBAHAN</span>}
                   </TableCell>
                   <TableCell>{new Date(order.created_at).toLocaleDateString('id-ID')}</TableCell>
                   <TableCell>{order.partner_store_name}</TableCell>
@@ -654,6 +693,11 @@ export const PartnerOrders = () => {
                       <Button size="sm" variant="outline" onClick={() => navigate(`/partner-receipt?id=${order.id}`)} data-testid={`receipt-${order.id}`}>
                         <FileText className="w-4 h-4 mr-1" />Struk
                       </Button>
+                      {order.status !== 'cancelled' && (
+                        <Button size="sm" variant="outline" onClick={() => openAddItemDialog(order)} data-testid={`add-item-${order.id}`} className="text-blue-600 border-blue-200 hover:bg-blue-50">
+                          <Plus className="w-4 h-4 mr-1" />Tambah
+                        </Button>
+                      )}
                       <Button size="sm" variant="outline" onClick={() => openReturnDialog(order)} data-testid={`return-${order.id}`} className="text-orange-600 border-orange-200 hover:bg-orange-50">
                         <RotateCcw className="w-4 h-4 mr-1" />Retur
                       </Button>
@@ -717,6 +761,89 @@ export const PartnerOrders = () => {
               <Button onClick={handleReturn} className="flex-1 bg-orange-600 hover:bg-orange-700" data-testid="submit-return-button">Catat Retur</Button>
             </div>
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add Item Dialog */}
+      <Dialog open={!!addItemDialog} onOpenChange={(o) => !o && setAddItemDialog(null)}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto" data-testid="add-item-dialog">
+          <DialogHeader><DialogTitle>Tambah Item — {addItemDialog?.order_number}</DialogTitle></DialogHeader>
+          {addItemDialog && (
+            <div className="space-y-4">
+              <p className="text-sm text-muted-foreground">Kios: <span className="font-semibold text-foreground">{addItemDialog.partner_store_name}</span></p>
+
+              {/* Search product */}
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input placeholder="Cari barang..." value={addItemSearch} onChange={(e) => setAddItemSearch(e.target.value)} className="pl-10" data-testid="add-item-search" />
+              </div>
+              {addItemSearch && (
+                <div className="max-h-40 overflow-y-auto border rounded-lg divide-y">
+                  {products.filter(p => p.name.toLowerCase().includes(addItemSearch.toLowerCase())).slice(0, 8).map(p => (
+                    <div key={p.id} className="p-2 hover:bg-accent cursor-pointer flex justify-between text-sm" onClick={() => { addToAddItemCart(p); setAddItemSearch(''); }}>
+                      <span>{p.name}</span><span className="text-muted-foreground">{fmt(p.price)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Cart */}
+              {addItemCart.length > 0 && (
+                <div className="space-y-2">
+                  <Label className="font-semibold">Item Tambahan:</Label>
+                  {addItemCart.map((item, idx) => (
+                    <div key={idx} className="p-3 border rounded-lg space-y-2" data-testid={`add-cart-item-${idx}`}>
+                      <div className="flex justify-between items-start">
+                        <p className="font-medium text-sm">{item.product_name}</p>
+                        <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={() => setAddItemCart(addItemCart.filter((_, i) => i !== idx))}>
+                          <Trash2 className="w-3.5 h-3.5 text-destructive" />
+                        </Button>
+                      </div>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                        <div>
+                          <Label className="text-xs">Qty</Label>
+                          <Input type="number" min={1} value={item.quantity} onChange={(e) => setAddItemCart(addItemCart.map((i, idx2) => idx2 === idx ? { ...i, quantity: parseInt(e.target.value) || 1 } : i))} className="h-8" />
+                        </div>
+                        <div>
+                          <Label className="text-xs">Harga Jual</Label>
+                          <Input type="number" min={0} value={item.price} onChange={(e) => setAddItemCart(addItemCart.map((i, idx2) => idx2 === idx ? { ...i, price: parseFloat(e.target.value) || 0 } : i))} className="h-8" />
+                        </div>
+                        <div>
+                          <Label className="text-xs">Sumber</Label>
+                          <Select value={item.source} onValueChange={(v) => setAddItemCart(addItemCart.map((i, idx2) => idx2 === idx ? { ...i, source: v, warehouse_id: v === 'external' ? '' : v } : i))}>
+                            <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="gudang_utama">Gudang Utama</SelectItem>
+                              <SelectItem value="gudang_toko">Gudang Toko</SelectItem>
+                              <SelectItem value="external">Beli dari Luar</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        {item.source === 'external' && (
+                          <div>
+                            <Label className="text-xs">Harga Beli (Modal)</Label>
+                            <Input type="number" min={0} value={item.external_cost} onChange={(e) => setAddItemCart(addItemCart.map((i, idx2) => idx2 === idx ? { ...i, external_cost: parseFloat(e.target.value) || 0 } : i))} className="h-8" data-testid={`ext-cost-${idx}`} />
+                          </div>
+                        )}
+                      </div>
+                      {item.source === 'external' && item.external_cost > 0 && (
+                        <p className="text-xs text-amber-600">Modal: {fmt(item.external_cost * item.quantity)} — Margin: {fmt((item.price - item.external_cost) * item.quantity)}</p>
+                      )}
+                    </div>
+                  ))}
+                  <div className="flex justify-between items-center p-2 bg-muted rounded-lg">
+                    <span className="text-sm font-semibold">Total Tambahan</span>
+                    <span className="font-bold">{fmt(addItemCart.reduce((s, i) => s + i.price * i.quantity, 0))}</span>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex gap-2 pt-2">
+                <Button variant="outline" onClick={() => setAddItemDialog(null)} className="flex-1">Batal</Button>
+                <Button onClick={handleSubmitAddItems} className="flex-1" disabled={addItemCart.length === 0} data-testid="submit-add-items">Tambahkan</Button>
+              </div>
+            </div>
+          )}
         </DialogContent>
       </Dialog>
     </div>
