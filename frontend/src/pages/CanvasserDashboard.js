@@ -632,7 +632,26 @@ export const CanvasserDashboard = () => {
                 <p className="text-sm text-muted-foreground">{settleDialog.order_number}</p>
               </div>
 
-              <p className="text-sm text-muted-foreground">Pilih jumlah yang laku terjual (dalam satuan):</p>
+              <div className="flex items-center justify-between">
+                <p className="text-sm text-muted-foreground">Pilih jumlah yang laku terjual (dalam satuan):</p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="border-green-200 text-green-700 hover:bg-green-50"
+                  data-testid="sell-all-btn"
+                  onClick={() => {
+                    setSettleItems(settleItems.map(item => {
+                      const isDus = item.warehouse_unit === 'dus';
+                      const ipb = item.items_per_box || 1;
+                      const totalPcs = isDus ? item.original_qty * ipb : item.original_qty;
+                      return { ...item, qty_sold: totalPcs };
+                    }));
+                  }}
+                >
+                  <CheckCircle className="w-3 h-3 mr-1" />
+                  Terjual Semua
+                </Button>
+              </div>
 
               <div className="space-y-3">
                 {settleItems.map((item, idx) => {

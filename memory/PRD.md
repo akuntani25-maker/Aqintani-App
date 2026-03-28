@@ -62,6 +62,9 @@ Aplikasi web responsif untuk toko farmasi dan pertanian "UD. AQIN TANI" dengan s
 44. Cancel Order Auto Retur - Stok dikembalikan ke gudang asal, hutang kios dikurangi, item external di-skip
 45. Tambah Item ke Pesanan - 3 sumber: Gudang Utama, Gudang Toko, Beli dari Luar (external expense dicatat, dipotong dari hasil penjualan)
 46. Fix Margin Rekap Kios Mitra - Kalkulasi total_sell untuk dus pakai subtotal/price*qty*ipb, tidak minus lagi
+47. Terjual Semua - Tombol di dialog settlement kanvaser untuk auto-isi semua qty terjual
+48. Filter Retur di Struk - Struk kios mitra hanya tampilkan item yang terjual (settled_items), item retur dikeluarkan
+49. Filter Retur di Laporan - Laporan partner sales detail, best sellers, dan laba/rugi menggunakan qty settled untuk pesanan yang sudah diselesaikan
 
 ## Credentials
 - Admin: admin@aqintani.com / admin123
@@ -70,6 +73,7 @@ Aplikasi web responsif untuk toko farmasi dan pertanian "UD. AQIN TANI" dengan s
 - Canvasser: sahidin@aqintani.com / 123456
 
 ## Test Reports
+- Manual verification (28 Mar 2026): Terjual Semua + Receipt/Report filter (screenshot + curl)
 - iteration_28: Batch 6 fixes (10/10 backend + 3/3 UI passed)
 - iteration_27: Batch 2 - settlement, kondisional, harga satuan (13/13 passed)
 - iteration_26: Batch 1 - form 2 mode, dashboard, reports (14/14 passed)

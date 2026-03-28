@@ -76,10 +76,17 @@ export const PartnerOrderReceipt = () => {
     lines.push(`Kios : ${order.partner_store_name}`);
     if (order.canvasser_name) lines.push(`Sales: ${order.canvasser_name}`);
     lines.push(SEP);
-    order.items.forEach(item => {
-      lines.push(`**${item.product_name}`);
-      lines.push(rightAlign(`  ${item.quantity} x ${fmtN(item.price)}`, fmtN(item.subtotal)));
-    });
+    if (order.is_settled && order.settled_items) {
+      order.settled_items.filter(si => si.qty_sold > 0).forEach(si => {
+        lines.push(`**${si.product_name}`);
+        lines.push(rightAlign(`  ${si.qty_sold} x ${fmtN(si.price)}`, fmtN(si.qty_sold * si.price)));
+      });
+    } else {
+      order.items.forEach(item => {
+        lines.push(`**${item.product_name}`);
+        lines.push(rightAlign(`  ${item.quantity} x ${fmtN(item.price)}`, fmtN(item.subtotal)));
+      });
+    }
     lines.push(SEP);
     lines.push(rightAlign('**TOTAL PESANAN', fmtN(order.total)));
     if (previousDebt > 0) lines.push(rightAlign('Bon Sebelumnya', fmtN(previousDebt)));
@@ -170,12 +177,20 @@ export const PartnerOrderReceipt = () => {
             {order.canvasser_name && <div className="flex justify-between"><span>Sales</span><span>{order.canvasser_name}</span></div>}
           </div>
           <div className="border-t border-gray-300 my-2"></div>
-          {order.items.map((item, i) => (
-            <div key={i} className="mb-1 text-xs">
-              <div className="font-semibold">{item.product_name}</div>
-              <div className="flex justify-between"><span>{item.quantity} x {fmt(item.price)}</span><span className="font-semibold">{fmt(item.subtotal)}</span></div>
-            </div>
-          ))}
+          {(order.is_settled && order.settled_items
+            ? order.settled_items.filter(si => si.qty_sold > 0).map((si, i) => (
+              <div key={i} className="mb-1 text-xs">
+                <div className="font-semibold">{si.product_name}</div>
+                <div className="flex justify-between"><span>{si.qty_sold} x {fmt(si.price)}</span><span className="font-semibold">{fmt(si.qty_sold * si.price)}</span></div>
+              </div>
+            ))
+            : order.items.map((item, i) => (
+              <div key={i} className="mb-1 text-xs">
+                <div className="font-semibold">{item.product_name}</div>
+                <div className="flex justify-between"><span>{item.quantity} x {fmt(item.price)}</span><span className="font-semibold">{fmt(item.subtotal)}</span></div>
+              </div>
+            ))
+          )}
           <div className="border-t border-gray-800 my-2"></div>
           <div className="flex justify-between font-bold text-sm"><span>TOTAL PESANAN</span><span>{fmt(order.total)}</span></div>
           {previousDebt > 0 && <div className="flex justify-between text-xs"><span>Bon Sebelumnya</span><span>{fmt(previousDebt)}</span></div>}

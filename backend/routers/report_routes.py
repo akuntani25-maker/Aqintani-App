@@ -263,34 +263,64 @@ async def get_partner_sales_detail_report(date_from: str, date_to: str, admin: d
     rows = []
     total_sales = total_cost = total_margin = 0
     for o in orders:
-        for item in o.get("items", []):
-            if item["quantity"] <= 0:
-                continue
-            product = products.get(item["product_id"], {})
-            ipb = product.get("items_per_box", 1) or 1
-            item_wh_id = item.get("warehouse_id") or o.get("warehouse_id", "gudang_utama")
-            wh = wh_map.get(item_wh_id, {})
-            wh_unit = wh.get("unit", "satuan")
-            qty_satuan = item["quantity"] * ipb if wh_unit == "dus" else item["quantity"]
-            cost_per_unit = (product.get("cost_price", 0) or 0) / ipb
-            sell_price_per_unit = item["price"]
-            total_sell = item.get("subtotal") or (item["price"] * qty_satuan)
-            total_cost_item = cost_per_unit * qty_satuan
-            margin = total_sell - total_cost_item
-            rows.append({
-                "date": o["date"], "order_number": o.get("order_number", ""),
-                "partner_store_name": o.get("partner_store_name", ""),
-                "product_name": item["product_name"],
-                "quantity_original": item["quantity"], "unit_original": wh_unit,
-                "quantity_satuan": qty_satuan,
-                "cost_price_per_unit": round(cost_per_unit, 2),
-                "sell_price_per_unit": round(sell_price_per_unit, 2),
-                "total_sell": round(total_sell, 2), "total_cost": round(total_cost_item, 2),
-                "margin": round(margin, 2)
-            })
-            total_sales += total_sell
-            total_cost += total_cost_item
-            total_margin += margin
+        # Use settled quantities if order was settled
+        if o.get("is_settled") and o.get("settled_items"):
+            settled_map = {si["product_id"]: si for si in o["settled_items"]}
+            for item in o.get("items", []):
+                si = settled_map.get(item["product_id"])
+                qty_sold = si["qty_sold"] if si else item["quantity"]
+                if qty_sold <= 0:
+                    continue
+                product = products.get(item["product_id"], {})
+                ipb = product.get("items_per_box", 1) or 1
+                cost_per_unit = (product.get("cost_price", 0) or 0) / ipb
+                sell_price_per_unit = si["price"] if si else item["price"]
+                total_sell = qty_sold * sell_price_per_unit
+                total_cost_item = cost_per_unit * qty_sold
+                margin = total_sell - total_cost_item
+                rows.append({
+                    "date": o["date"], "order_number": o.get("order_number", ""),
+                    "partner_store_name": o.get("partner_store_name", ""),
+                    "product_name": item["product_name"],
+                    "quantity_original": qty_sold, "unit_original": "satuan",
+                    "quantity_satuan": qty_sold,
+                    "cost_price_per_unit": round(cost_per_unit, 2),
+                    "sell_price_per_unit": round(sell_price_per_unit, 2),
+                    "total_sell": round(total_sell, 2), "total_cost": round(total_cost_item, 2),
+                    "margin": round(margin, 2)
+                })
+                total_sales += total_sell
+                total_cost += total_cost_item
+                total_margin += margin
+        else:
+            for item in o.get("items", []):
+                if item["quantity"] <= 0:
+                    continue
+                product = products.get(item["product_id"], {})
+                ipb = product.get("items_per_box", 1) or 1
+                item_wh_id = item.get("warehouse_id") or o.get("warehouse_id", "gudang_utama")
+                wh = wh_map.get(item_wh_id, {})
+                wh_unit = wh.get("unit", "satuan")
+                qty_satuan = item["quantity"] * ipb if wh_unit == "dus" else item["quantity"]
+                cost_per_unit = (product.get("cost_price", 0) or 0) / ipb
+                sell_price_per_unit = item["price"]
+                total_sell = item.get("subtotal") or (item["price"] * qty_satuan)
+                total_cost_item = cost_per_unit * qty_satuan
+                margin = total_sell - total_cost_item
+                rows.append({
+                    "date": o["date"], "order_number": o.get("order_number", ""),
+                    "partner_store_name": o.get("partner_store_name", ""),
+                    "product_name": item["product_name"],
+                    "quantity_original": item["quantity"], "unit_original": wh_unit,
+                    "quantity_satuan": qty_satuan,
+                    "cost_price_per_unit": round(cost_per_unit, 2),
+                    "sell_price_per_unit": round(sell_price_per_unit, 2),
+                    "total_sell": round(total_sell, 2), "total_cost": round(total_cost_item, 2),
+                    "margin": round(margin, 2)
+                })
+                total_sales += total_sell
+                total_cost += total_cost_item
+                total_margin += margin
     return {"date_from": date_from, "date_to": date_to, "rows": rows, "total_sales": round(total_sales, 2), "total_cost": round(total_cost, 2), "total_margin": round(total_margin, 2), "total_items": len(rows)}
 
 
@@ -326,22 +356,38 @@ async def get_best_sellers_report(date_from: str, date_to: str, admin: dict = De
             cost_per_unit = (product.get("cost_price", 0) or 0) / ipb
             agg[pid]["cost_total"] += cost_per_unit * item["quantity"]
     for o in orders:
-        for item in o.get("items", []):
-            if item["quantity"] <= 0:
-                continue
-            pid = item["product_id"]
-            if pid not in agg:
-                agg[pid] = {"product_name": item["product_name"], "qty_pos": 0, "qty_partner": 0, "revenue_pos": 0, "revenue_partner": 0, "cost_total": 0}
-            product = products.get(pid, {})
-            ipb = product.get("items_per_box", 1) or 1
-            item_wh_id = item.get("warehouse_id") or o.get("warehouse_id", "gudang_utama")
-            wh = wh_map.get(item_wh_id, {})
-            wh_unit = wh.get("unit", "satuan")
-            qty_satuan = item["quantity"] * ipb if wh_unit == "dus" else item["quantity"]
-            agg[pid]["qty_partner"] += qty_satuan
-            agg[pid]["revenue_partner"] += item["subtotal"]
-            cost_per_unit = (product.get("cost_price", 0) or 0) / ipb
-            agg[pid]["cost_total"] += cost_per_unit * qty_satuan
+        # Use settled quantities if order was settled
+        if o.get("is_settled") and o.get("settled_items"):
+            for si in o["settled_items"]:
+                if si.get("qty_sold", 0) <= 0:
+                    continue
+                pid = si["product_id"]
+                if pid not in agg:
+                    agg[pid] = {"product_name": si["product_name"], "qty_pos": 0, "qty_partner": 0, "revenue_pos": 0, "revenue_partner": 0, "cost_total": 0}
+                product = products.get(pid, {})
+                ipb = product.get("items_per_box", 1) or 1
+                qty_satuan = si["qty_sold"]
+                agg[pid]["qty_partner"] += qty_satuan
+                agg[pid]["revenue_partner"] += qty_satuan * si["price"]
+                cost_per_unit = (product.get("cost_price", 0) or 0) / ipb
+                agg[pid]["cost_total"] += cost_per_unit * qty_satuan
+        else:
+            for item in o.get("items", []):
+                if item["quantity"] <= 0:
+                    continue
+                pid = item["product_id"]
+                if pid not in agg:
+                    agg[pid] = {"product_name": item["product_name"], "qty_pos": 0, "qty_partner": 0, "revenue_pos": 0, "revenue_partner": 0, "cost_total": 0}
+                product = products.get(pid, {})
+                ipb = product.get("items_per_box", 1) or 1
+                item_wh_id = item.get("warehouse_id") or o.get("warehouse_id", "gudang_utama")
+                wh = wh_map.get(item_wh_id, {})
+                wh_unit = wh.get("unit", "satuan")
+                qty_satuan = item["quantity"] * ipb if wh_unit == "dus" else item["quantity"]
+                agg[pid]["qty_partner"] += qty_satuan
+                agg[pid]["revenue_partner"] += item["subtotal"]
+                cost_per_unit = (product.get("cost_price", 0) or 0) / ipb
+                agg[pid]["cost_total"] += cost_per_unit * qty_satuan
     rows = []
     for pid, data in agg.items():
         total_qty = data["qty_pos"] + data["qty_partner"]
@@ -468,14 +514,25 @@ async def get_profit_loss_report(date_from: str, date_to: str, admin: dict = Dep
     partner_cogs = 0
     for o in partner_orders:
         partner_revenue += o.get("total", 0)
-        for item in o.get("items", []):
-            pid = item.get("product_id", "")
-            qty = item.get("quantity", 0)
-            prod = await get_product(pid)
-            if prod:
-                ipb = prod.get("items_per_box", 1) or 1
-                cost_per_unit = (prod.get("cost_price", 0) or 0) / ipb
-                partner_cogs += qty * cost_per_unit
+        if o.get("is_settled") and o.get("settled_items"):
+            for si in o["settled_items"]:
+                if si.get("qty_sold", 0) <= 0:
+                    continue
+                pid = si.get("product_id", "")
+                prod = await get_product(pid)
+                if prod:
+                    ipb = prod.get("items_per_box", 1) or 1
+                    cost_per_unit = (prod.get("cost_price", 0) or 0) / ipb
+                    partner_cogs += si["qty_sold"] * cost_per_unit
+        else:
+            for item in o.get("items", []):
+                pid = item.get("product_id", "")
+                qty = item.get("quantity", 0)
+                prod = await get_product(pid)
+                if prod:
+                    ipb = prod.get("items_per_box", 1) or 1
+                    cost_per_unit = (prod.get("cost_price", 0) or 0) / ipb
+                    partner_cogs += qty * cost_per_unit
 
     total_revenue = pos_revenue + partner_revenue
     total_cogs = pos_cogs + partner_cogs
@@ -500,11 +557,20 @@ async def get_profit_loss_report(date_from: str, date_to: str, admin: dict = Dep
         if d not in daily:
             daily[d] = {"date": d, "revenue": 0, "cogs": 0}
         daily[d]["revenue"] += o.get("total", 0)
-        for item in o.get("items", []):
-            prod = await get_product(item.get("product_id", ""))
-            if prod:
-                ipb = prod.get("items_per_box", 1) or 1
-                daily[d]["cogs"] += item.get("quantity", 0) * ((prod.get("cost_price", 0) or 0) / ipb)
+        if o.get("is_settled") and o.get("settled_items"):
+            for si in o["settled_items"]:
+                if si.get("qty_sold", 0) <= 0:
+                    continue
+                prod = await get_product(si.get("product_id", ""))
+                if prod:
+                    ipb = prod.get("items_per_box", 1) or 1
+                    daily[d]["cogs"] += si["qty_sold"] * ((prod.get("cost_price", 0) or 0) / ipb)
+        else:
+            for item in o.get("items", []):
+                prod = await get_product(item.get("product_id", ""))
+                if prod:
+                    ipb = prod.get("items_per_box", 1) or 1
+                    daily[d]["cogs"] += item.get("quantity", 0) * ((prod.get("cost_price", 0) or 0) / ipb)
 
     daily_data = sorted(
         [{"date": v["date"], "revenue": round(v["revenue"]), "cogs": round(v["cogs"]), "profit": round(v["revenue"] - v["cogs"])} for v in daily.values()],
