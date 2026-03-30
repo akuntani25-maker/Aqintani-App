@@ -1,7 +1,7 @@
 # UD. AQIN TANI - Product Requirements Document
 
 ## Original Problem Statement
-Aplikasi web responsif untuk toko farmasi dan pertanian "UD. AQIN TANI" dengan sistem manajemen bisnis lengkap.
+Aplikasi web responsif untuk toko pertanian "UD. AQIN TANI" dengan sistem manajemen bisnis lengkap.
 
 ## User Personas
 - **Admin**: Manajemen penuh
