@@ -1,4 +1,4 @@
-<analysis>**original_problem_statement**: The user wants to build a responsive web application for a pharmacy and agriculture store named UD. AQIN TANI.
+<analysis>**original_problem_statement**: The user wants to build a responsive web application for an agriculture store named UD. AQIN TANI.
 
 **PRODUCT REQUIREMENTS:**
 1.  **Core App:** A full-stack application (FastAPI, React, MongoDB) with multiple user roles (Admin, Manager, Karyawan Kantor, Cashier, Canvasser).
