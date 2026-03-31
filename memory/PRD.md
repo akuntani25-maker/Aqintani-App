@@ -65,6 +65,7 @@ Aplikasi web responsif untuk toko farmasi dan pertanian "UD. AQIN TANI" dengan s
 47. Terjual Semua - Tombol di dialog settlement kanvaser untuk auto-isi semua qty terjual
 48. Filter Retur di Struk - Struk kios mitra hanya tampilkan item yang terjual (settled_items), item retur dikeluarkan
 49. Filter Retur di Laporan - Laporan partner sales detail, best sellers, dan laba/rugi menggunakan qty settled untuk pesanan yang sudah diselesaikan
+50. MongoDB Indexing - Index komprehensif pada 15+ koleksi untuk optimasi performa query (transactions, products, partner_orders, purchases, warehouse_stock, users, dll)
 
 ## Credentials
 - Admin: admin@aqintani.com / admin123

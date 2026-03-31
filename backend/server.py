@@ -7,7 +7,7 @@ import logging
 import uuid
 from datetime import datetime, timezone
 
-from database import db
+from database import db, create_indexes
 from auth import hash_password
 from services import ensure_warehouse_stock, recalculate_product_stock
 
@@ -69,6 +69,9 @@ async def health_check():
 
 @app.on_event("startup")
 async def startup_db():
+    # Create database indexes for performance
+    await create_indexes()
+
     admin_exists = await db.users.find_one({"role": "admin"})
     if not admin_exists:
         default_admin = {
