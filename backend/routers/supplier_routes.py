@@ -351,6 +351,81 @@ async def pay_supplier_debt(supplier_id: str, amount: float, notes: str = "", ad
     }
 
 
+@router.put("/supplier-debts/{supplier_id}/correct")
+async def correct_supplier_debt(supplier_id: str, req: Request, admin: dict = Depends(require_admin_panel_access)):
+    """Koreksi manual hutang supplier: set nilai hutang baru."""
+    body = await req.json()
+    new_debt = float(body.get("new_debt", 0))
+    notes = body.get("notes", "")
+
+    if new_debt < 0:
+        raise HTTPException(status_code=400, detail="Nilai hutang tidak boleh negatif")
+
+    supplier = await db.suppliers.find_one({"id": supplier_id}, {"_id": 0})
+    if not supplier:
+        raise HTTPException(status_code=404, detail="Supplier tidak ditemukan")
+
+    # Calculate current total debt
+    purchases = await db.purchases.find({"supplier_id": supplier_id}, {"_id": 0}).to_list(10000)
+    old_debt = sum(max(0, p.get("remaining", 0)) for p in purchases)
+    diff = new_debt - old_debt
+
+    if diff == 0:
+        return {"message": "Tidak ada perubahan", "old_debt": old_debt, "new_debt": new_debt}
+
+    # Distribute adjustment across purchases
+    if diff < 0:
+        # Debt reduced: pay off from oldest first
+        reduce = abs(diff)
+        unpaid = sorted([p for p in purchases if p.get("remaining", 0) > 0], key=lambda x: x.get("date", ""))
+        for p in unpaid:
+            if reduce <= 0:
+                break
+            rem = p.get("remaining", 0)
+            adj = min(reduce, rem)
+            await db.purchases.update_one(
+                {"id": p["id"]},
+                {"$set": {"paid": p["paid"] + adj, "remaining": max(0, rem - adj)}}
+            )
+            reduce -= adj
+    else:
+        # Debt increased: add adjustment to the newest purchase
+        unpaid = sorted(purchases, key=lambda x: x.get("date", ""), reverse=True)
+        if unpaid:
+            target = unpaid[0]
+            await db.purchases.update_one(
+                {"id": target["id"]},
+                {"$inc": {"remaining": diff, "total": diff}}
+            )
+        else:
+            # No purchases exist, create an adjustment record
+            WITA = timezone(timedelta(hours=8))
+            now = datetime.now(WITA)
+            adj_doc = {
+                "id": str(uuid.uuid4()), "supplier_id": supplier_id,
+                "supplier_name": supplier["name"], "date": now.strftime("%Y-%m-%d"),
+                "items": [{"product_name": "Koreksi Manual", "quantity": 1, "price": diff, "subtotal": diff}],
+                "total": diff, "paid": 0, "remaining": diff,
+                "notes": notes or "Koreksi manual hutang supplier",
+                "created_at": now.isoformat(), "source": "correction"
+            }
+            await db.purchases.insert_one(adj_doc)
+
+    # Log audit
+    from services import log_audit
+    await log_audit(
+        user=admin, action="KOREKSI_HUTANG_SUPPLIER", entity_type="supplier",
+        entity_id=supplier_id,
+        details={
+            "supplier_name": supplier["name"],
+            "old_debt": old_debt, "new_debt": new_debt,
+            "difference": diff, "notes": notes
+        }
+    )
+
+    return {"message": "Hutang supplier berhasil dikoreksi", "old_debt": old_debt, "new_debt": new_debt}
+
+
 @router.get("/supplier-debts/export-csv")
 async def export_supplier_debts_csv(admin: dict = Depends(require_admin_panel_access)):
     suppliers = await db.suppliers.find({}, {"_id": 0}).sort("name", 1).to_list(1000)

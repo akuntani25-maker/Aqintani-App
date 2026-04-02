@@ -8,7 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../components/
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
 import {
   DollarSign, AlertTriangle, CreditCard, Users, Search, Download,
-  ChevronDown, ChevronUp, Clock, FileText, Bell, Banknote, CalendarDays, RotateCcw
+  ChevronDown, ChevronUp, Clock, FileText, Bell, Banknote, CalendarDays, RotateCcw, Edit3
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { CurrencyInput } from '../components/CurrencyInput';
@@ -33,6 +33,11 @@ export const SupplierDebt = () => {
   const [paySubmitting, setPaySubmitting] = useState(false);
   const [showAllPurchases, setShowAllPurchases] = useState(false);
   const [detailTab, setDetailTab] = useState('purchases');
+  const [correctModalOpen, setCorrectModalOpen] = useState(false);
+  const [correctSupplier, setCorrectSupplier] = useState(null);
+  const [correctAmount, setCorrectAmount] = useState('');
+  const [correctNotes, setCorrectNotes] = useState('');
+  const [correctSubmitting, setCorrectSubmitting] = useState(false);
   const [returnModalOpen, setReturnModalOpen] = useState(false);
   const [returnPurchase, setReturnPurchase] = useState(null);
   const [returnItems, setReturnItems] = useState([]);
@@ -171,6 +176,35 @@ export const SupplierDebt = () => {
       toast.success('File CSV berhasil diunduh');
     } catch (error) {
       toast.error('Gagal mengexport CSV');
+    }
+  };
+
+  const openCorrectModal = (supplier) => {
+    setCorrectSupplier(supplier);
+    setCorrectAmount(String(supplier.outstanding));
+    setCorrectNotes('');
+    setCorrectModalOpen(true);
+  };
+
+  const handleCorrection = async () => {
+    if (!correctSupplier || correctAmount === '') return;
+    setCorrectSubmitting(true);
+    try {
+      await api.put(`/supplier-debts/${correctSupplier.supplier_id}/correct`, {
+        new_debt: parseFloat(correctAmount) || 0,
+        notes: correctNotes
+      });
+      toast.success('Hutang supplier berhasil dikoreksi');
+      setCorrectModalOpen(false);
+      fetchData();
+      if (expandedSupplier === correctSupplier.supplier_id) {
+        setExpandedSupplier(null);
+        setTimeout(() => toggleSupplier(correctSupplier.supplier_id), 200);
+      }
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Gagal mengoreksi hutang');
+    } finally {
+      setCorrectSubmitting(false);
     }
   };
 
@@ -330,6 +364,9 @@ export const SupplierDebt = () => {
                         <CreditCard className="w-3.5 h-3.5" /> Bayar
                       </Button>
                     )}
+                    <Button size="sm" variant="outline" className="hidden md:flex gap-1" onClick={(e) => { e.stopPropagation(); openCorrectModal(s); }} data-testid={`correct-btn-${s.supplier_id}`}>
+                      <Edit3 className="w-3.5 h-3.5" /> Koreksi
+                    </Button>
                     {isExpanded ? <ChevronUp className="w-4 h-4 text-muted-foreground" /> : <ChevronDown className="w-4 h-4 text-muted-foreground" />}
                   </div>
                 </div>
@@ -339,6 +376,9 @@ export const SupplierDebt = () => {
                     <CreditCard className="w-3.5 h-3.5" /> Bayar Hutang
                   </Button>
                 )}
+                <Button size="sm" variant="outline" className="md:hidden mt-1 w-full gap-1" onClick={(e) => { e.stopPropagation(); openCorrectModal(s); }} data-testid={`correct-btn-mobile-${s.supplier_id}`}>
+                  <Edit3 className="w-3.5 h-3.5" /> Koreksi Hutang
+                </Button>
               </div>
 
               {/* Expanded Detail */}
@@ -559,6 +599,38 @@ export const SupplierDebt = () => {
       </Dialog>
 
       {/* Return Dialog */}
+      {/* Correction Dialog */}
+      <Dialog open={correctModalOpen} onOpenChange={setCorrectModalOpen}>
+        <DialogContent className="max-w-md" data-testid="correct-modal">
+          <DialogHeader>
+            <DialogTitle>Koreksi Hutang Supplier</DialogTitle>
+          </DialogHeader>
+          {correctSupplier && (
+            <div className="space-y-4">
+              <Card className="p-3 bg-muted/50">
+                <p className="font-semibold">{correctSupplier.supplier_name}</p>
+                <p className="text-sm text-red-600 font-bold mt-1">Hutang saat ini: {fmt(correctSupplier.outstanding)}</p>
+              </Card>
+              <div className="space-y-2">
+                <Label>Nilai Hutang Baru</Label>
+                <CurrencyInput value={parseInt(correctAmount) || 0} onChange={(v) => setCorrectAmount(String(v))} data-testid="correct-amount-input" />
+                <p className="text-xs text-muted-foreground">Masukkan nilai hutang yang seharusnya. Sistem akan menyesuaikan selisihnya.</p>
+              </div>
+              <div className="space-y-2">
+                <Label>Alasan Koreksi</Label>
+                <Input placeholder="Contoh: Data tidak sesuai nota..." value={correctNotes} onChange={(e) => setCorrectNotes(e.target.value)} data-testid="correct-notes-input" />
+              </div>
+              <div className="flex gap-2 justify-end pt-2">
+                <Button variant="outline" onClick={() => setCorrectModalOpen(false)}>Batal</Button>
+                <Button onClick={handleCorrection} disabled={correctSubmitting} data-testid="submit-correct-btn">
+                  {correctSubmitting ? 'Memproses...' : 'Simpan Koreksi'}
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={returnModalOpen} onOpenChange={setReturnModalOpen}>
         <DialogContent className="max-w-lg" data-testid="return-modal">
           <DialogHeader>

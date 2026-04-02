@@ -6,7 +6,7 @@ import { Label } from '../components/ui/label';
 import { Card } from '../components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
-import { Search, Plus, Minus, Trash2, ShoppingCart, Users, DollarSign, Banknote, ChevronDown, ChevronUp } from 'lucide-react';
+import { Search, Plus, Minus, Trash2, ShoppingCart, Users, DollarSign, Banknote, ChevronDown, ChevronUp, Edit3 } from 'lucide-react';
 import { toast } from 'sonner';
 import { CurrencyInput } from '../components/CurrencyInput';
 
@@ -33,6 +33,9 @@ export const FarmerDebts = () => {
   const [productSearch, setProductSearch] = useState('');
   const [productResults, setProductResults] = useState([]);
   const [submitting, setSubmitting] = useState(false);
+  const [correctModal, setCorrectModal] = useState(null);
+  const [correctAmount, setCorrectAmount] = useState(0);
+  const [correctNotes, setCorrectNotes] = useState('');
 
   const fetchOverview = useCallback(async () => {
     try {
@@ -96,6 +99,22 @@ export const FarmerDebts = () => {
       fetchOverview();
       if (expandedFarmer) toggleExpand({ id: expandedFarmer });
     } catch (e) { toast.error(e.response?.data?.detail || 'Gagal membayar'); }
+    finally { setSubmitting(false); }
+  };
+
+  const handleCorrection = async () => {
+    if (correctAmount < 0) { toast.error('Nilai hutang tidak boleh negatif'); return; }
+    setSubmitting(true);
+    try {
+      await api.put(`/farmer-debts/${correctModal.id}/correct`, {
+        new_debt: parseFloat(correctAmount) || 0,
+        notes: correctNotes
+      });
+      toast.success('Hutang petani berhasil dikoreksi');
+      setCorrectModal(null);
+      fetchOverview();
+      if (expandedFarmer) toggleExpand({ id: expandedFarmer });
+    } catch (e) { toast.error(e.response?.data?.detail || 'Gagal mengoreksi hutang'); }
     finally { setSubmitting(false); }
   };
 
@@ -189,6 +208,7 @@ export const FarmerDebts = () => {
                     <div className="flex items-center gap-1">
                       <Button size="sm" variant="outline" onClick={e => { e.stopPropagation(); setShowNewDebt(farmer); setDebtCart([]); setDebtPaid(0); }} data-testid={`new-debt-${farmer.id}`}><ShoppingCart className="w-3 h-3 mr-1" />Bon</Button>
                       {farmer.current_debt > 0 && <Button size="sm" variant="outline" onClick={e => { e.stopPropagation(); setPayModal(farmer); setPayAmount(farmer.current_debt); }} data-testid={`pay-farmer-${farmer.id}`}><DollarSign className="w-3 h-3 mr-1" />Bayar</Button>}
+                      <Button size="sm" variant="outline" onClick={e => { e.stopPropagation(); setCorrectModal(farmer); setCorrectAmount(farmer.current_debt); setCorrectNotes(''); }} data-testid={`correct-farmer-${farmer.id}`}><Edit3 className="w-3 h-3 mr-1" />Koreksi</Button>
                       <Button size="sm" variant="ghost" onClick={e => { e.stopPropagation(); setEditFarmer(farmer); setFarmerForm({ name: farmer.name, phone: farmer.phone || '', address: farmer.address || '', debt_limit: farmer.debt_limit || 0 }); setShowAddFarmer(true); }}>Edit</Button>
                       {expandedFarmer === farmer.id ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                     </div>
@@ -258,6 +278,29 @@ export const FarmerDebts = () => {
       </Dialog>
 
       {/* New Debt Transaction Dialog */}
+      {/* Correction Dialog */}
+      <Dialog open={!!correctModal} onOpenChange={() => setCorrectModal(null)}>
+        <DialogContent className="max-w-sm" data-testid="correct-farmer-modal">
+          <DialogHeader><DialogTitle>Koreksi Hutang Petani</DialogTitle></DialogHeader>
+          {correctModal && (
+            <div className="space-y-4">
+              <p className="text-sm">Petani: <strong>{correctModal.name}</strong></p>
+              <p className="text-sm">Hutang saat ini: <strong className="text-red-600">{fmt(correctModal.current_debt)}</strong></p>
+              <div className="space-y-2">
+                <Label>Nilai Hutang Baru</Label>
+                <CurrencyInput value={correctAmount} onChange={setCorrectAmount} data-testid="correct-farmer-amount" />
+                <p className="text-xs text-muted-foreground">Masukkan nilai hutang yang seharusnya</p>
+              </div>
+              <div className="space-y-2"><Label>Alasan Koreksi</Label><Input placeholder="Contoh: Selisih data..." value={correctNotes} onChange={e => setCorrectNotes(e.target.value)} data-testid="correct-farmer-notes" /></div>
+              <div className="flex gap-2 justify-end">
+                <Button variant="outline" onClick={() => setCorrectModal(null)}>Batal</Button>
+                <Button onClick={handleCorrection} disabled={submitting} data-testid="confirm-farmer-correct">{submitting ? 'Memproses...' : 'Simpan Koreksi'}</Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={!!showNewDebt} onOpenChange={() => setShowNewDebt(null)}>
         <DialogContent className="max-w-lg"><DialogHeader><DialogTitle>Bon Baru - {showNewDebt?.name}</DialogTitle></DialogHeader>
           <div className="space-y-4">
