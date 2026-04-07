@@ -54,7 +54,7 @@ async def pay_partner_store(store_id: str, amount: float, notes: str = "", admin
     store = await db.partner_stores.find_one({"id": store_id})
     if not store:
         raise HTTPException(status_code=404, detail="Partner store not found")
-    new_debt = max(0, store.get("current_debt", 0) - amount)
+    new_debt = store.get("current_debt", 0) - amount
     await db.partner_stores.update_one({"id": store_id}, {"$set": {"current_debt": new_debt}})
     payment_doc = {
         "id": str(uuid.uuid4()), "type": "partner_store", "reference_id": store_id,
@@ -93,7 +93,7 @@ async def edit_partner_store_debt(store_id: str, req: FastAPIRequest, admin: dic
     if edit_type == "payment":
         if amount <= 0:
             raise HTTPException(status_code=400, detail="Jumlah pembayaran harus lebih dari 0")
-        new_debt = max(0, old_debt - amount)
+        new_debt = old_debt - amount
         # Record payment in payment_history
         payment_doc = {
             "id": str(uuid.uuid4()), "type": "partner_store", "reference_id": store_id,

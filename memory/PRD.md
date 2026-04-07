@@ -68,6 +68,9 @@ Aplikasi web responsif untuk toko farmasi dan pertanian "UD. AQIN TANI" dengan s
 50. MongoDB Indexing - Index komprehensif pada 15+ koleksi untuk optimasi performa query (transactions, products, partner_orders, purchases, warehouse_stock, users, dll)
 51. Koreksi Hutang Supplier - Fitur edit/koreksi manual sisa hutang supplier dengan audit trail
 52. Koreksi Hutang Petani - Fitur edit/koreksi manual sisa hutang petani dengan audit trail
+53. Fix Piutang Kios Mitra - Pembayaran lebih dari total piutang sekarang bisa minus (kelebihan bayar)
+54. Stok Mobil Box - Halaman baru untuk kelola barang kondisional di kendaraan (muat, jual ke kios, retur ke gudang)
+55. Integrasi Aset Mobil - Nilai stok mobil box ditambahkan ke perhitungan Nilai Aset Bersih di dashboard
 
 ## Credentials
 - Admin: admin@aqintani.com / admin123

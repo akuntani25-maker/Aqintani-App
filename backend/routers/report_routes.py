@@ -135,7 +135,18 @@ async def get_dashboard_stats(admin: dict = Depends(require_admin_panel_access))
     farmers = await db.farmers.find({}, {"_id": 0, "current_debt": 1}).to_list(10000)
     total_farmer_debt = sum(f.get("current_debt", 0) for f in farmers)
 
-    total_assets = total_inventory + total_partner_debt + total_personal_loans + total_farmer_debt - total_supplier_debt
+    # Vehicle stock value (barang kondisional di mobil)
+    v_stocks = await db.vehicle_stock.find({"remaining_qty": {"$gt": 0}}, {"_id": 0}).to_list(10000)
+    total_vehicle_stock = 0
+    for vs in v_stocks:
+        prod = prod_map.get(vs["product_id"])
+        if prod:
+            cp = prod.get("cost_price", 0) or 0
+            ipb = prod.get("items_per_box", 1) or 1
+            total_vehicle_stock += (cp / ipb) * vs["remaining_qty"]
+    total_vehicle_stock = round(total_vehicle_stock)
+
+    total_assets = total_inventory + total_vehicle_stock + total_partner_debt + total_personal_loans + total_farmer_debt - total_supplier_debt
 
     # Due this month
     now = datetime.now(timezone.utc)
@@ -165,6 +176,7 @@ async def get_dashboard_stats(admin: dict = Depends(require_admin_panel_access))
         "partner_debt_vehicles": partner_debt_vehicles,
         "total_personal_loans": total_personal_loans,
         "total_farmer_debt": total_farmer_debt, "total_assets": total_assets,
+        "total_vehicle_stock": total_vehicle_stock,
         "due_this_month": [{k: v for k, v in d.items() if k != "_id"} for d in due_this_month]
     }
 

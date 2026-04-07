@@ -98,7 +98,7 @@ export const Dashboard = () => {
             <p className="text-[10px] md:text-xs font-bold uppercase tracking-wider text-slate-300 mb-1">Nilai Aset Bersih</p>
             <p className="text-xl md:text-2xl lg:text-3xl font-bold">{fmt(stats?.total_assets || 0)}</p>
             <p className="text-xs text-slate-400 mt-1">
-              Gudang ({fmt(stats?.inventory_value || 0)}) + Piutang ({fmt(stats?.total_personal_loans || 0)}) + Hutang Petani ({fmt(stats?.total_farmer_debt || 0)}) - Bon Supplier ({fmt(stats?.total_supplier_debt || 0)})
+              Gudang ({fmt(stats?.inventory_value || 0)}) + Stok Mobil ({fmt(stats?.total_vehicle_stock || 0)}) + Piutang ({fmt(stats?.total_personal_loans || 0)}) + Hutang Petani ({fmt(stats?.total_farmer_debt || 0)}) - Bon Supplier ({fmt(stats?.total_supplier_debt || 0)})
             </p>
             {/* Bon Mitra per Armada breakdown */}
             <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1">

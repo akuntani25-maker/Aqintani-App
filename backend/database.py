@@ -90,6 +90,11 @@ async def create_indexes():
         await db.returns.create_index("created_at")
         await db.returns.create_index("transaction_id")
 
+        # vehicle_stock
+        await db.vehicle_stock.create_index("id", unique=True)
+        await db.vehicle_stock.create_index("vehicle_id")
+        await db.vehicle_stock.create_index([("vehicle_id", 1), ("remaining_qty", 1)])
+
         logger.info("Database indexes created successfully")
     except Exception as e:
         logger.warning(f"Index creation warning (non-fatal): {e}")
