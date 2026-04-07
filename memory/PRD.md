@@ -71,6 +71,7 @@ Aplikasi web responsif untuk toko farmasi dan pertanian "UD. AQIN TANI" dengan s
 53. Fix Piutang Kios Mitra - Pembayaran lebih dari total piutang sekarang bisa minus (kelebihan bayar)
 54. Stok Mobil Box - Halaman baru untuk kelola barang kondisional di kendaraan (muat, jual ke kios, retur ke gudang)
 55. Integrasi Aset Mobil - Nilai stok mobil box ditambahkan ke perhitungan Nilai Aset Bersih di dashboard
+56. Alur Pesanan Kondisional - Pesanan kondisional di halaman Pesanan Kios Mitra sekarang langsung masuk ke Stok Mobil Box (pilih mobil, bukan kios mitra)
 
 ## Credentials
 - Admin: admin@aqintani.com / admin123

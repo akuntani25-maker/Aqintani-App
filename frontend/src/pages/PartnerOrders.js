@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
 import { toast } from 'sonner';
-import { Plus, Search, Package, Trash2, ShoppingCart, Warehouse, FileText, DollarSign, TrendingUp, RotateCcw, Pencil, Trash, X, Store } from 'lucide-react';
+import { Plus, Search, Package, Trash2, ShoppingCart, Warehouse, FileText, DollarSign, TrendingUp, RotateCcw, Pencil, Trash, X, Store, Truck } from 'lucide-react';
 import { CurrencyInput } from '../components/CurrencyInput';
 import { Pagination } from '../components/Pagination';
 
@@ -44,18 +44,21 @@ export const PartnerOrders = () => {
   const [addItemSearch, setAddItemSearch] = useState('');
   const [page, setPage] = useState(1);
   const perPage = 15;
+  const [vehicles, setVehicles] = useState([]);
+  const [selectedVehicle, setSelectedVehicle] = useState('');
 
   useEffect(() => { fetchData(); }, []);
 
   const fetchData = async () => {
     try {
-      const [ordersRes, storesRes, canvassersRes, productsRes, whRes, whStockRes] = await Promise.all([
+      const [ordersRes, storesRes, canvassersRes, productsRes, whRes, whStockRes, vehRes] = await Promise.all([
         api.get('/partner-orders'),
         api.get('/partner-stores'),
         api.get('/canvassers'),
         api.get('/products'),
         api.get('/warehouses'),
-        api.get('/warehouse-stock')
+        api.get('/warehouse-stock'),
+        api.get('/vehicles')
       ]);
       setOrders(ordersRes.data);
       setPartnerStores(storesRes.data);
@@ -63,6 +66,7 @@ export const PartnerOrders = () => {
       setProducts(productsRes.data);
       setWarehouses(whRes.data);
       setWarehouseStock(whStockRes.data);
+      setVehicles(vehRes.data);
     } catch (error) {
       toast.error('Gagal memuat data');
     } finally { setLoading(false); }
@@ -185,8 +189,36 @@ export const PartnerOrders = () => {
   };
 
   const handleSubmit = async () => {
-    if (!selectedPartner) { toast.error('Pilih kios mitra'); return; }
     if (cart.length === 0) { toast.error('Keranjang kosong'); return; }
+
+    // Conditional order → load to vehicle stock
+    if (orderType === 'conditional') {
+      if (!selectedVehicle) { toast.error('Pilih mobil box tujuan'); return; }
+      try {
+        const items = cart.map(item => ({
+          product_id: item.product_id,
+          quantity: item.quantity,
+          price: item.price,
+          warehouse_id: item.warehouse_id || defaultWarehouse
+        }));
+        await api.post('/vehicle-stock/load', {
+          vehicle_id: selectedVehicle,
+          items,
+          notes: `Pesanan kondisional ${deliveryDate}`
+        });
+        const veh = vehicles.find(v => v.id === selectedVehicle);
+        toast.success(`${cart.length} item dimuat ke ${veh?.name || 'mobil box'}`);
+        resetForm();
+        setIsDialogOpen(false);
+        fetchData();
+      } catch (error) {
+        toast.error(error.response?.data?.detail || 'Gagal memuat barang ke mobil');
+      }
+      return;
+    }
+
+    // Regular order → create partner order
+    if (!selectedPartner) { toast.error('Pilih kios mitra'); return; }
     const { subtotal, total } = calculateTotal();
     try {
       const res = await api.post('/partner-orders', {
@@ -269,6 +301,7 @@ export const PartnerOrders = () => {
   const resetForm = () => {
     setSelectedPartner('');
     setSelectedCanvasser('');
+    setSelectedVehicle('');
     setDefaultWarehouse('gudang_utama');
     setCart([]);
     setDiscount(0);
@@ -361,6 +394,29 @@ export const PartnerOrders = () => {
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               <div className="lg:col-span-2 space-y-4">
                 <div className="space-y-2">
+                  <Label>Tipe Pesanan</Label>
+                  <Select value={orderType} onValueChange={(v) => { setOrderType(v); setSelectedPartner(''); setSelectedVehicle(''); setPartnerSearch(''); }}>
+                    <SelectTrigger data-testid="order-type-select"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="regular">Pesanan Langsung</SelectItem>
+                      <SelectItem value="conditional">Kondisional (Barang Pegangan)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  {orderType === 'conditional' && <p className="text-xs text-amber-600">Barang akan dimuat ke stok mobil box, bukan ke kios mitra.</p>}
+                </div>
+
+                {orderType === 'conditional' ? (
+                  <div className="space-y-2">
+                    <Label>Pilih Mobil Box *</Label>
+                    <Select value={selectedVehicle} onValueChange={setSelectedVehicle}>
+                      <SelectTrigger data-testid="order-vehicle-select"><SelectValue placeholder="Pilih mobil box tujuan" /></SelectTrigger>
+                      <SelectContent>
+                        {vehicles.map(v => <SelectItem key={v.id} value={v.id}><Truck className="w-3 h-3 inline mr-1" />{v.name} ({v.plate_number})</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                ) : (
+                <div className="space-y-2">
                   <Label>Cari Kios Mitra *</Label>
                   {selectedPartnerStore ? (
                     <div className="flex items-center gap-2 p-3 bg-emerald-50 border border-emerald-200 rounded-lg" data-testid="selected-partner-info">
@@ -424,6 +480,7 @@ export const PartnerOrders = () => {
                     </div>
                   )}
                 </div>
+                )}
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label>Kanvaser</Label>
@@ -443,17 +500,6 @@ export const PartnerOrders = () => {
                     <SelectTrigger data-testid="order-warehouse-select"><SelectValue /></SelectTrigger>
                     <SelectContent>{warehouses.map(wh => <SelectItem key={wh.id} value={wh.id}>{wh.name} ({wh.unit})</SelectItem>)}</SelectContent>
                   </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label>Tipe Pesanan</Label>
-                  <Select value={orderType} onValueChange={setOrderType}>
-                    <SelectTrigger data-testid="order-type-select"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="regular">Pesanan Langsung</SelectItem>
-                      <SelectItem value="conditional">Kondisional (Barang Pegangan)</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  {orderType === 'conditional' && <p className="text-xs text-amber-600">Barang yang dibawa kanvaser untuk ditawarkan langsung ke kios.</p>}
                 </div>
                 <div className="space-y-2">
                   <Label>Cari Barang</Label>
@@ -549,7 +595,9 @@ export const PartnerOrders = () => {
                 </div>
                 <div className="flex gap-2 pt-2">
                   <Button variant="outline" onClick={() => setIsDialogOpen(false)} className="flex-1">Batal</Button>
-                  <Button onClick={handleSubmit} className="flex-1" disabled={cart.length === 0} data-testid="submit-order-button">Buat Pesanan</Button>
+                  <Button onClick={handleSubmit} className="flex-1" disabled={cart.length === 0} data-testid="submit-order-button">
+                    {orderType === 'conditional' ? 'Muat ke Mobil Box' : 'Buat Pesanan'}
+                  </Button>
                 </div>
               </div>
             </div>
