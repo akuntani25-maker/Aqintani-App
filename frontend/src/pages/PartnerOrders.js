@@ -35,6 +35,8 @@ export const PartnerOrders = () => {
   const [returnItems, setReturnItems] = useState([]);
   const [returnNotes, setReturnNotes] = useState('');
   const [returnWarehouse, setReturnWarehouse] = useState('gudang_toko');
+  const [returnToVehicle, setReturnToVehicle] = useState(false);
+  const [returnVehicleId, setReturnVehicleId] = useState('');
   const [searchOrder, setSearchOrder] = useState('');
   const [orderType, setOrderType] = useState('regular');
   const [partnerSearch, setPartnerSearch] = useState('');
@@ -254,6 +256,8 @@ export const PartnerOrders = () => {
     setReturnItems(order.items.map(i => ({ ...i, return_qty: 0, reason: '' })));
     setReturnNotes('');
     setReturnWarehouse('gudang_toko');
+    setReturnToVehicle(false);
+    setReturnVehicleId('');
   };
 
   const openTransferDialog = (order) => {
@@ -297,10 +301,13 @@ export const PartnerOrders = () => {
     }));
     if (items.length === 0) { toast.error('Pilih produk yang diretur'); return; }
     try {
-      await api.post('/returns', {
+      const payload = {
         source_type: 'partner_order', source_id: returnDialog.id,
-        items, notes: returnNotes, warehouse_id: returnWarehouse
-      });
+        items, notes: returnNotes,
+        warehouse_id: returnToVehicle ? 'gudang_toko' : returnWarehouse,
+        vehicle_id: returnToVehicle ? returnVehicleId : ''
+      };
+      await api.post('/returns', payload);
       toast.success('Retur berhasil dicatat');
       setReturnDialog(null);
       fetchData();
@@ -841,11 +848,28 @@ export const PartnerOrders = () => {
               ))}
             </div>
             <div className="space-y-2">
-              <Label>Gudang Tujuan Retur</Label>
-              <Select value={returnWarehouse} onValueChange={setReturnWarehouse}>
-                <SelectTrigger data-testid="return-warehouse-select"><SelectValue /></SelectTrigger>
-                <SelectContent>{warehouses.map(wh => <SelectItem key={wh.id} value={wh.id}>{wh.name}</SelectItem>)}</SelectContent>
-              </Select>
+              <Label>Tujuan Retur</Label>
+              <div className="flex gap-2">
+                <Button type="button" size="sm" variant={!returnToVehicle ? 'default' : 'outline'}
+                  onClick={() => setReturnToVehicle(false)} data-testid="return-dest-warehouse">
+                  <Warehouse className="w-3.5 h-3.5 mr-1.5" />Gudang
+                </Button>
+                <Button type="button" size="sm" variant={returnToVehicle ? 'default' : 'outline'}
+                  onClick={() => setReturnToVehicle(true)} data-testid="return-dest-vehicle">
+                  <Truck className="w-3.5 h-3.5 mr-1.5" />Mobil Box
+                </Button>
+              </div>
+              {!returnToVehicle ? (
+                <Select value={returnWarehouse} onValueChange={setReturnWarehouse}>
+                  <SelectTrigger data-testid="return-warehouse-select"><SelectValue /></SelectTrigger>
+                  <SelectContent>{warehouses.map(wh => <SelectItem key={wh.id} value={wh.id}>{wh.name}</SelectItem>)}</SelectContent>
+                </Select>
+              ) : (
+                <Select value={returnVehicleId} onValueChange={setReturnVehicleId}>
+                  <SelectTrigger data-testid="return-vehicle-select"><SelectValue placeholder="Pilih mobil box" /></SelectTrigger>
+                  <SelectContent>{vehicles.map(v => <SelectItem key={v.id} value={v.id}>{v.name} ({v.plate_number})</SelectItem>)}</SelectContent>
+                </Select>
+              )}
             </div>
             <div className="space-y-2">
               <Label>Catatan</Label>

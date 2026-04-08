@@ -194,7 +194,7 @@ async def edit_transaction_prices(transaction_id: str, req: FastAPIRequest, curr
 @router.post("/returns")
 async def create_return(data: ReturnCreate, admin: dict = Depends(require_pos_access)):
     now = datetime.now(timezone.utc)
-    vehicle_id = data.vehicle_id if hasattr(data, 'vehicle_id') else None
+    vehicle_id = data.vehicle_id if data.vehicle_id else None
     return_doc = {
         "id": str(uuid.uuid4()), "return_number": f"RTN{now.strftime('%Y%m%d%H%M%S')}",
         "source_type": data.source_type, "source_id": data.source_id,

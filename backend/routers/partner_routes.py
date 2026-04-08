@@ -652,7 +652,7 @@ async def transfer_partner_order(order_id: str, req: FastAPIRequest, current_use
     # Check if target store already has an active order (pending, not settled)
     existing_order = await db.partner_orders.find_one({
         "partner_store_id": new_store_id,
-        "status": {"$nin": ["cancelled"]},
+        "status": {"$nin": ["cancelled", "canceled"]},
         "is_settled": {"$ne": True}
     }, {"_id": 0})
 

@@ -51,6 +51,7 @@ export const Products = () => {
   const [priceHistory, setPriceHistory] = useState([]);
   const [priceHistoryProduct, setPriceHistoryProduct] = useState(null);
 
+  // Edit form data (used when editing existing product)
   const [formData, setFormData] = useState({
     name: '', barcode: '', category_id: '', supplier_id: '',
     stock: 0, warehouse_id: 'gudang_utama', price: 0, cost_price: 0,
@@ -59,12 +60,17 @@ export const Products = () => {
     description: '', min_stock_alert: 10, invoice_number: '', due_date: ''
   });
 
-  // Form mode: 'new' or 'restock'
-  const [formMode, setFormMode] = useState('new');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState([]);
-  const [selectedProduct, setSelectedProduct] = useState(null);
-  const [searchLoading, setSearchLoading] = useState(false);
+  // Bulk add states
+  const [bulkSupplier, setBulkSupplier] = useState(null);
+  const [supplierSearch, setSupplierSearch] = useState('');
+  const [supplierSearchFocused, setSupplierSearchFocused] = useState(false);
+  const [bulkWarehouse, setBulkWarehouse] = useState('gudang_utama');
+  const emptyBulkItem = { isNew: true, existing_product_id: '', name: '', barcode: '', category_id: '', stock: 1, items_per_box: 1, supplier_cost_price: 0, cost_price: 0, price: 0, box_price: 0, searchQuery: '', searchResults: [], searchOpen: false };
+  const [bulkItems, setBulkItems] = useState([{ ...emptyBulkItem }]);
+  const [bulkPaid, setBulkPaid] = useState(0);
+  const [bulkInvoice, setBulkInvoice] = useState('');
+  const [bulkDueDate, setBulkDueDate] = useState('');
+  const [bulkSubmitting, setBulkSubmitting] = useState(false);
 
   useEffect(() => { fetchData(); }, []);
 
@@ -89,24 +95,12 @@ export const Products = () => {
     return entry ? entry.stock : 0;
   };
 
-  const handleSubmit = async (e) => {
+  const handleEditSubmit = async (e) => {
     e.preventDefault();
+    if (!editingProduct) return;
     try {
-      if (editingProduct) {
-        await api.put(`/products/${editingProduct.id}`, formData);
-        toast.success('Barang berhasil diperbarui');
-      } else if (formMode === 'restock' && selectedProduct) {
-        await api.post('/products', {
-          ...formData,
-          name: selectedProduct.name,
-          is_restock: true,
-          existing_product_id: selectedProduct.id
-        });
-        toast.success('Restok barang berhasil');
-      } else {
-        await api.post('/products', formData);
-        toast.success('Barang berhasil ditambahkan');
-      }
+      await api.put(`/products/${editingProduct.id}`, formData);
+      toast.success('Barang berhasil diperbarui');
       setIsDialogOpen(false);
       resetForm();
       fetchData();
@@ -115,37 +109,91 @@ export const Products = () => {
     }
   };
 
-  const searchProducts = async (q) => {
-    setSearchQuery(q);
-    if (q.length < 1) { setSearchResults([]); return; }
-    setSearchLoading(true);
+  const searchBulkProduct = async (idx, query) => {
+    const newItems = [...bulkItems];
+    newItems[idx].searchQuery = query;
+    newItems[idx].name = query;
+    newItems[idx].isNew = true;
+    newItems[idx].existing_product_id = '';
+    if (query.length < 1) { newItems[idx].searchResults = []; newItems[idx].searchOpen = false; setBulkItems(newItems); return; }
+    newItems[idx].searchOpen = true;
+    setBulkItems([...newItems]);
     try {
-      const res = await api.get(`/products/search-autocomplete?q=${encodeURIComponent(q)}`);
-      setSearchResults(res.data);
-    } catch { setSearchResults([]); }
-    finally { setSearchLoading(false); }
+      const res = await api.get(`/products/search-autocomplete?q=${encodeURIComponent(query)}`);
+      setBulkItems(prev => {
+        const updated = [...prev];
+        if (updated[idx]) { updated[idx].searchResults = res.data; }
+        return updated;
+      });
+    } catch {
+      setBulkItems(prev => {
+        const updated = [...prev];
+        if (updated[idx]) { updated[idx].searchResults = []; }
+        return updated;
+      });
+    }
   };
 
-  const selectExistingProduct = (product) => {
-    setSelectedProduct(product);
-    setSearchQuery(product.name);
-    setSearchResults([]);
-    setFormData({
-      ...formData,
-      name: product.name,
-      barcode: product.barcode,
-      category_id: product.category_id,
-      supplier_id: product.supplier_id,
-      price: product.price,
-      cost_price: product.cost_price,
-      supplier_cost_price: product.supplier_cost_price || 0,
-      box_price: product.box_price || 0,
-      items_per_box: product.items_per_box || 1,
-      min_stock_alert: product.min_stock_alert,
-      expiry_date: product.expiry_date || '',
-      batch_number: product.batch_number || '',
-      description: product.description || '',
+  const selectBulkProduct = (idx, product) => {
+    setBulkItems(prev => {
+      const updated = [...prev];
+      if (product) {
+        updated[idx] = {
+          ...updated[idx], isNew: false, existing_product_id: product.id,
+          name: product.name, barcode: product.barcode || '',
+          category_id: product.category_id || '', items_per_box: product.items_per_box || 1,
+          supplier_cost_price: product.supplier_cost_price || 0,
+          cost_price: product.cost_price || 0, price: product.price || 0,
+          box_price: product.box_price || 0, searchQuery: product.name,
+          searchResults: [], searchOpen: false
+        };
+      } else {
+        updated[idx] = { ...updated[idx], isNew: true, existing_product_id: '', searchResults: [], searchOpen: false };
+      }
+      return updated;
     });
+  };
+
+  const updateBulkItem = (idx, field, value) => {
+    setBulkItems(prev => {
+      const updated = [...prev];
+      updated[idx] = { ...updated[idx], [field]: value };
+      return updated;
+    });
+  };
+
+  const addBulkItem = () => setBulkItems(prev => [...prev, { ...emptyBulkItem }]);
+
+  const bulkTotal = bulkItems.reduce((sum, item) => {
+    const cost = item.supplier_cost_price || item.cost_price;
+    return sum + (cost * (item.stock || 0));
+  }, 0);
+
+  const handleBulkSubmit = async () => {
+    if (!bulkSupplier) { toast.error('Pilih supplier terlebih dahulu'); return; }
+    const validItems = bulkItems.filter(i => i.name && i.stock > 0);
+    if (validItems.length === 0) { toast.error('Tambahkan minimal 1 item'); return; }
+    setBulkSubmitting(true);
+    try {
+      const res = await api.post('/products/bulk', {
+        supplier_id: bulkSupplier.id,
+        warehouse_id: bulkWarehouse,
+        items: validItems.map(i => ({
+          existing_product_id: i.existing_product_id || '',
+          name: i.name, barcode: i.barcode, category_id: i.category_id,
+          stock: i.stock, items_per_box: i.items_per_box,
+          supplier_cost_price: i.supplier_cost_price, cost_price: i.cost_price,
+          price: i.price, box_price: i.box_price
+        })),
+        initial_paid: bulkPaid, invoice_number: bulkInvoice, due_date: bulkDueDate
+      });
+      toast.success(res.data.message || 'Barang berhasil disimpan');
+      setIsDialogOpen(false);
+      resetForm();
+      fetchData();
+    } catch (error) {
+      toast.error(error.response?.data?.detail || 'Gagal menyimpan');
+    } finally { setBulkSubmitting(false); }
   };
 
   const handleDelete = async (id) => {
@@ -161,7 +209,6 @@ export const Products = () => {
 
   const handleEdit = (product) => {
     setEditingProduct(product);
-    setFormMode('new');
     setFormData({
       name: product.name, barcode: product.barcode, category_id: product.category_id,
       supplier_id: product.supplier_id, stock: product.stock, warehouse_id: 'gudang_utama',
@@ -200,10 +247,14 @@ export const Products = () => {
 
   const resetForm = () => {
     setEditingProduct(null);
-    setFormMode('new');
-    setSearchQuery('');
-    setSearchResults([]);
-    setSelectedProduct(null);
+    setBulkSupplier(null);
+    setSupplierSearch('');
+    setSupplierSearchFocused(false);
+    setBulkWarehouse('gudang_utama');
+    setBulkItems([{ ...emptyBulkItem }]);
+    setBulkPaid(0);
+    setBulkInvoice('');
+    setBulkDueDate('');
     setFormData({
       name: '', barcode: '', category_id: '', supplier_id: '',
       stock: 0, warehouse_id: 'gudang_utama', price: 0, cost_price: 0,
@@ -329,61 +380,14 @@ export const Products = () => {
                 Tambah Barang
               </Button>
             </DialogTrigger>
-          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle>{editingProduct ? 'Edit Barang' : 'Tambah Barang'}</DialogTitle>
+              <DialogTitle>{editingProduct ? 'Edit Barang' : 'Tambah Barang dari Supplier'}</DialogTitle>
             </DialogHeader>
 
-            {/* Mode Selector (only when adding new) */}
-            {!editingProduct && (
-              <div className="flex gap-2 mb-4" data-testid="form-mode-selector">
-                <Button type="button" variant={formMode === 'new' ? 'default' : 'outline'} size="sm" onClick={() => { setFormMode('new'); setSelectedProduct(null); setSearchQuery(''); setSearchResults([]); }} data-testid="mode-new-btn">
-                  Barang Baru
-                </Button>
-                <Button type="button" variant={formMode === 'restock' ? 'default' : 'outline'} size="sm" onClick={() => setFormMode('restock')} data-testid="mode-restock-btn">
-                  Restok Barang
-                </Button>
-              </div>
-            )}
-
-            <form onSubmit={handleSubmit} className="space-y-4">
-              {/* Product Search (restock mode) */}
-              {!editingProduct && formMode === 'restock' && (
-                <div className="space-y-2 relative">
-                  <Label>Cari Barang *</Label>
-                  <Input
-                    value={searchQuery}
-                    onChange={(e) => searchProducts(e.target.value)}
-                    placeholder="Ketik nama barang..."
-                    data-testid="product-search-input"
-                    autoComplete="off"
-                  />
-                  {searchLoading && <p className="text-xs text-muted-foreground mt-1">Mencari...</p>}
-                  {searchResults.length > 0 && (
-                    <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-white border rounded-lg shadow-lg max-h-64 overflow-y-auto" data-testid="search-dropdown">
-                      {searchResults.map(p => (
-                        <button key={p.id} type="button" className="w-full text-left px-3 py-2 hover:bg-accent border-b last:border-b-0 transition-colors" onClick={() => selectExistingProduct(p)} data-testid={`search-result-${p.id}`}>
-                          <p className="font-medium text-sm">{p.name}</p>
-                          <div className="flex gap-3 text-xs text-muted-foreground">
-                            <span>Stok: {fmtNum(p.stock)} satuan</span>
-                            <span>Supplier: {p.supplier_name}</span>
-                            <span>HPP: {fmt(p.cost_price)}/dus</span>
-                          </div>
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                  {selectedProduct && (
-                    <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-lg mt-2" data-testid="selected-product-info">
-                      <p className="font-semibold text-emerald-800">{selectedProduct.name}</p>
-                      <p className="text-xs text-emerald-700">Stok saat ini: {fmtNum(selectedProduct.stock)} satuan | Supplier: {selectedProduct.supplier_name}</p>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Name + Barcode (new mode or editing) */}
-              {(formMode === 'new' || editingProduct) && (
+            {editingProduct ? (
+              /* ===== EDIT MODE ===== */
+              <form onSubmit={handleEditSubmit} className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="name">Nama Barang *</Label>
@@ -394,126 +398,63 @@ export const Products = () => {
                     <Input id="barcode" value={formData.barcode} onChange={(e) => setFormData({ ...formData, barcode: e.target.value })} data-testid="product-barcode-input" />
                   </div>
                 </div>
-              )}
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Kategori</Label>
-                  <Select value={formData.category_id} onValueChange={(v) => setFormData({ ...formData, category_id: v })}>
-                    <SelectTrigger data-testid="product-category-select"><SelectValue placeholder="Pilih kategori" /></SelectTrigger>
-                    <SelectContent>{categories.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label>Supplier</Label>
-                  <Select value={formData.supplier_id} onValueChange={(v) => setFormData({ ...formData, supplier_id: v })}>
-                    <SelectTrigger data-testid="product-supplier-select"><SelectValue placeholder="Pilih supplier" /></SelectTrigger>
-                    <SelectContent>{suppliers.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}</SelectContent>
-                  </Select>
-                </div>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                {!editingProduct && (
-                  <>
-                    <div className="space-y-2">
-                      <Label>Stok {formMode === 'restock' ? 'Tambahan' : 'Awal'} (dus)</Label>
-                      <Input type="number" value={formData.stock} onChange={(e) => setFormData({ ...formData, stock: parseInt(e.target.value) || 0 })} data-testid="product-stock-input" />
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Gudang Tujuan</Label>
-                      <Select value={formData.warehouse_id} onValueChange={(v) => setFormData({ ...formData, warehouse_id: v })}>
-                        <SelectTrigger data-testid="product-warehouse-select"><SelectValue /></SelectTrigger>
-                        <SelectContent>{warehouses.map(wh => <SelectItem key={wh.id} value={wh.id}>{wh.name} ({wh.unit})</SelectItem>)}</SelectContent>
-                      </Select>
-                    </div>
-                  </>
-                )}
-                <div className="space-y-2">
-                  <Label>Isi per Dus *</Label>
-                  <Input type="number" min="0.1" step="0.1" value={formData.items_per_box} onChange={(e) => setFormData({ ...formData, items_per_box: parseFloat(e.target.value) || 1 })} required data-testid="product-items-per-box-input" />
-                </div>
-              </div>
-              {formData.stock > 0 && formData.items_per_box > 0 && (
-                <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
-                  <p className="text-sm text-blue-800">{formData.stock} dus x {formData.items_per_box} satuan/dus = <span className="font-bold">{formData.stock * formData.items_per_box} satuan</span> masuk ke {warehouses.find(w => w.id === formData.warehouse_id)?.name || 'gudang'}</p>
-                </div>
-              )}
-              {!editingProduct && formData.stock > 0 && formData.supplier_id && (formData.supplier_cost_price > 0 || formData.cost_price > 0) && (() => {
-                const supplierPrice = formData.supplier_cost_price || formData.cost_price;
-                const totalPurchase = supplierPrice * formData.stock;
-                const paid = Math.min(formData.initial_paid || 0, totalPurchase);
-                const debt = totalPurchase - paid;
-                return (
-                  <div className="p-4 bg-amber-50 rounded-lg border border-amber-200 space-y-3">
-                    <p className="text-sm font-semibold text-amber-900">Pembelian Otomatis ke Supplier</p>
-                    <div className="flex items-center justify-between text-sm text-amber-800">
-                      <span>Total: {fmt(totalPurchase)}</span>
-                      <span>({formData.stock} dus x {fmt(supplierPrice)}/dus)</span>
-                    </div>
-                    <div className="space-y-2">
-                      <Label className="text-amber-900">Bayar di Muka</Label>
-                      <CurrencyInput
-                        value={formData.initial_paid}
-                        onChange={(v) => setFormData({ ...formData, initial_paid: v })}
-                        data-testid="product-initial-paid-input"
-                      />
-                    </div>
-                    <div className="grid grid-cols-2 gap-3">
-                      <div className="space-y-2">
-                        <Label className="text-amber-900">No. Invoice</Label>
-                        <Input value={formData.invoice_number} onChange={(e) => setFormData({...formData, invoice_number: e.target.value})} placeholder="INV-001" data-testid="product-invoice-input" />
-                      </div>
-                      <div className="space-y-2">
-                        <Label className="text-amber-900">Jatuh Tempo</Label>
-                        <Input type="date" value={formData.due_date} onChange={(e) => setFormData({...formData, due_date: e.target.value})} data-testid="product-duedate-input" />
-                      </div>
-                    </div>
-                    {debt > 0 ? (
-                      <p className="text-sm font-medium text-red-700">Sisa hutang: {fmt(debt)}</p>
-                    ) : (
-                      <p className="text-sm font-medium text-green-700">Lunas</p>
-                    )}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Kategori</Label>
+                    <Select value={formData.category_id} onValueChange={(v) => setFormData({ ...formData, category_id: v })}>
+                      <SelectTrigger data-testid="product-category-select"><SelectValue placeholder="Pilih kategori" /></SelectTrigger>
+                      <SelectContent>{categories.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}</SelectContent>
+                    </Select>
                   </div>
-                );
-              })()}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Harga Pokok Supplier/Dus</Label>
-                  <CurrencyInput value={formData.supplier_cost_price} onChange={(v) => setFormData({ ...formData, supplier_cost_price: v })} data-testid="product-supplier-cost-input" />
-                  <p className="text-xs text-muted-foreground">Harga asli dari supplier (untuk hutang)</p>
+                  <div className="space-y-2">
+                    <Label>Supplier</Label>
+                    <Select value={formData.supplier_id} onValueChange={(v) => setFormData({ ...formData, supplier_id: v })}>
+                      <SelectTrigger data-testid="product-supplier-select"><SelectValue placeholder="Pilih supplier" /></SelectTrigger>
+                      <SelectContent>{suppliers.map(s => <SelectItem key={s.id} value={s.id}>{s.name}</SelectItem>)}</SelectContent>
+                    </Select>
+                  </div>
                 </div>
-                <div className="space-y-2">
-                  <Label>Harga Pokok Toko/Dus *</Label>
-                  <CurrencyInput value={formData.cost_price} onChange={(v) => setFormData({ ...formData, cost_price: v })} required data-testid="product-cost-input" />
-                  <p className="text-xs text-muted-foreground">HPP yang diset toko (untuk kalkulasi margin)</p>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Isi per Dus *</Label>
+                    <Input type="number" min="0.1" step="0.1" value={formData.items_per_box} onChange={(e) => setFormData({ ...formData, items_per_box: parseFloat(e.target.value) || 1 })} required data-testid="product-items-per-box-input" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Min. Stok Alert</Label>
+                    <Input type="number" value={formData.min_stock_alert} onChange={(e) => setFormData({ ...formData, min_stock_alert: parseInt(e.target.value) || 10 })} />
+                  </div>
                 </div>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Harga Jual Satuan *</Label>
-                  <CurrencyInput value={formData.price} onChange={(v) => setFormData({ ...formData, price: v })} required data-testid="product-price-input" />
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Harga Pokok Supplier/Dus</Label>
+                    <CurrencyInput value={formData.supplier_cost_price} onChange={(v) => setFormData({ ...formData, supplier_cost_price: v })} data-testid="product-supplier-cost-input" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Harga Pokok Toko/Dus *</Label>
+                    <CurrencyInput value={formData.cost_price} onChange={(v) => setFormData({ ...formData, cost_price: v })} required data-testid="product-cost-input" />
+                  </div>
                 </div>
-                <div className="space-y-2">
-                  <Label>Harga Jual/Dus</Label>
-                  <CurrencyInput value={formData.box_price} onChange={(v) => setFormData({ ...formData, box_price: v })} data-testid="product-box-price-input" />
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Harga Jual Satuan *</Label>
+                    <CurrencyInput value={formData.price} onChange={(v) => setFormData({ ...formData, price: v })} required data-testid="product-price-input" />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Harga Jual/Dus</Label>
+                    <CurrencyInput value={formData.box_price} onChange={(v) => setFormData({ ...formData, box_price: v })} data-testid="product-box-price-input" />
+                  </div>
                 </div>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <div className="space-y-2">
-                  <Label>Kadaluarsa</Label>
-                  <Input type="date" value={formData.expiry_date} onChange={(e) => setFormData({ ...formData, expiry_date: e.target.value })} />
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Kadaluarsa</Label>
+                    <Input type="date" value={formData.expiry_date} onChange={(e) => setFormData({ ...formData, expiry_date: e.target.value })} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>No. Batch</Label>
+                    <Input value={formData.batch_number} onChange={(e) => setFormData({ ...formData, batch_number: e.target.value })} />
+                  </div>
                 </div>
-                <div className="space-y-2">
-                  <Label>No. Batch</Label>
-                  <Input value={formData.batch_number} onChange={(e) => setFormData({ ...formData, batch_number: e.target.value })} />
-                </div>
-                <div className="space-y-2">
-                  <Label>Min. Stok Alert</Label>
-                  <Input type="number" value={formData.min_stock_alert} onChange={(e) => setFormData({ ...formData, min_stock_alert: parseInt(e.target.value) || 10 })} />
-                </div>
-              </div>
-              {/* Image Upload - only for edit mode */}
-              {editingProduct && (
+                {/* Image Upload */}
                 <div className="space-y-2 border-t pt-4">
                   <Label>Gambar Produk</Label>
                   <div className="flex items-center gap-4">
@@ -530,11 +471,7 @@ export const Products = () => {
                       </div>
                     )}
                     <div>
-                      <input
-                        type="file"
-                        accept="image/jpeg,image/png,image/webp"
-                        id="product-image-upload"
-                        className="hidden"
+                      <input type="file" accept="image/jpeg,image/png,image/webp" id="product-image-upload" className="hidden"
                         onChange={async (e) => {
                           const file = e.target.files?.[0];
                           if (file) {
@@ -554,12 +491,197 @@ export const Products = () => {
                     </div>
                   </div>
                 </div>
-              )}
-              <div className="flex gap-2 justify-end pt-4">
-                <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>Batal</Button>
-                <Button type="submit" data-testid="product-submit-button">{editingProduct ? 'Perbarui' : 'Simpan'}</Button>
+                <div className="flex gap-2 justify-end pt-4">
+                  <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>Batal</Button>
+                  <Button type="submit" data-testid="product-submit-button">Perbarui</Button>
+                </div>
+              </form>
+            ) : (
+              /* ===== BULK ADD MODE ===== */
+              <div className="space-y-5" data-testid="bulk-add-form">
+                {/* Supplier Search */}
+                <div className="space-y-2">
+                  <Label>Supplier *</Label>
+                  {bulkSupplier ? (
+                    <div className="flex items-center gap-2 p-3 bg-emerald-50 border border-emerald-200 rounded-lg" data-testid="bulk-selected-supplier">
+                      <Package className="w-4 h-4 text-emerald-600 shrink-0" />
+                      <span className="font-semibold text-sm text-emerald-900 flex-1">{bulkSupplier.name}</span>
+                      <Button size="sm" variant="ghost" className="h-7 w-7 p-0" onClick={() => setBulkSupplier(null)} data-testid="clear-bulk-supplier">
+                        <X className="w-4 h-4 text-muted-foreground" />
+                      </Button>
+                    </div>
+                  ) : (
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                      <Input placeholder="Ketik nama supplier..." value={supplierSearch}
+                        onChange={(e) => setSupplierSearch(e.target.value)}
+                        onFocus={() => setSupplierSearchFocused(true)}
+                        onBlur={() => setTimeout(() => setSupplierSearchFocused(false), 200)}
+                        className="pl-10" data-testid="bulk-supplier-search" autoComplete="off"
+                      />
+                      {supplierSearchFocused && (
+                        <div className="absolute z-50 w-full bg-white border rounded-md shadow-lg mt-1 max-h-48 overflow-y-auto">
+                          {suppliers.filter(s => !supplierSearch || s.name.toLowerCase().includes(supplierSearch.toLowerCase())).map(s => (
+                            <div key={s.id} className="px-3 py-2 hover:bg-accent cursor-pointer text-sm"
+                              onClick={() => { setBulkSupplier(s); setSupplierSearch(''); setSupplierSearchFocused(false); }}
+                              data-testid={`supplier-option-${s.id}`}>
+                              <p className="font-medium">{s.name}</p>
+                              {s.phone && <p className="text-xs text-muted-foreground">{s.phone}</p>}
+                            </div>
+                          ))}
+                          {suppliers.filter(s => !supplierSearch || s.name.toLowerCase().includes(supplierSearch.toLowerCase())).length === 0 && (
+                            <p className="px-3 py-2 text-sm text-muted-foreground">Supplier tidak ditemukan</p>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* Warehouse */}
+                <div className="space-y-2">
+                  <Label>Gudang Tujuan</Label>
+                  <Select value={bulkWarehouse} onValueChange={setBulkWarehouse}>
+                    <SelectTrigger data-testid="bulk-warehouse-select"><SelectValue /></SelectTrigger>
+                    <SelectContent>{warehouses.map(wh => <SelectItem key={wh.id} value={wh.id}>{wh.name} ({wh.unit})</SelectItem>)}</SelectContent>
+                  </Select>
+                </div>
+
+                {/* Items List */}
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <Label className="font-semibold">Daftar Barang ({bulkItems.filter(i => i.name && i.stock > 0).length} item)</Label>
+                  </div>
+                  {bulkItems.map((item, idx) => (
+                    <div key={idx} className="p-3 border rounded-lg space-y-2 bg-muted/20" data-testid={`bulk-item-${idx}`}>
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-semibold text-muted-foreground">#{idx + 1} {item.existing_product_id ? '(Restok)' : item.name ? '(Baru)' : ''}</span>
+                        {bulkItems.length > 1 && (
+                          <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={() => setBulkItems(bulkItems.filter((_, i) => i !== idx))} data-testid={`remove-bulk-item-${idx}`}>
+                            <Trash2 className="w-3.5 h-3.5 text-destructive" />
+                          </Button>
+                        )}
+                      </div>
+                      {/* Product search */}
+                      <div className="relative">
+                        <Input placeholder="Cari/ketik nama barang..." value={item.searchQuery}
+                          onChange={(e) => searchBulkProduct(idx, e.target.value)}
+                          onFocus={() => updateBulkItem(idx, 'searchOpen', true)}
+                          onBlur={() => setTimeout(() => updateBulkItem(idx, 'searchOpen', false), 200)}
+                          autoComplete="off" className="text-sm"
+                          data-testid={`bulk-product-search-${idx}`}
+                        />
+                        {item.searchOpen && item.searchResults.length > 0 && (
+                          <div className="absolute z-50 w-full bg-white border rounded-md shadow-lg mt-1 max-h-40 overflow-y-auto">
+                            <div className="px-3 py-2 text-xs text-emerald-600 bg-emerald-50 font-medium cursor-pointer hover:bg-emerald-100"
+                              onClick={() => selectBulkProduct(idx, null)} data-testid={`bulk-new-product-${idx}`}>
+                              + Barang Baru: "{item.searchQuery}"
+                            </div>
+                            {item.searchResults.map(p => (
+                              <div key={p.id} className="px-3 py-2 hover:bg-accent cursor-pointer" onClick={() => selectBulkProduct(idx, p)} data-testid={`bulk-search-result-${p.id}`}>
+                                <p className="text-sm font-medium">{p.name}</p>
+                                <p className="text-xs text-muted-foreground">Stok: {fmtNum(p.stock)} satuan | HPP: {fmt(p.cost_price)}/dus</p>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        {item.existing_product_id && (
+                          <p className="text-xs text-emerald-600 mt-1">Restok barang yang sudah ada</p>
+                        )}
+                      </div>
+                      {/* Fields */}
+                      <div className="grid grid-cols-3 gap-2">
+                        <div>
+                          <Label className="text-xs">Qty (dus)</Label>
+                          <Input type="number" min={0} value={item.stock} className="h-8 text-sm"
+                            onChange={(e) => updateBulkItem(idx, 'stock', parseInt(e.target.value) || 0)}
+                            data-testid={`bulk-qty-${idx}`} />
+                        </div>
+                        <div>
+                          <Label className="text-xs">Isi/Dus</Label>
+                          <Input type="number" min={0.1} step={0.1} value={item.items_per_box} className="h-8 text-sm"
+                            onChange={(e) => updateBulkItem(idx, 'items_per_box', parseFloat(e.target.value) || 1)}
+                            data-testid={`bulk-ipb-${idx}`} />
+                        </div>
+                        <div>
+                          <Label className="text-xs">Harga Supplier/Dus</Label>
+                          <CurrencyInput value={item.supplier_cost_price} className="h-8 text-sm"
+                            onChange={(v) => updateBulkItem(idx, 'supplier_cost_price', v)}
+                            data-testid={`bulk-supplier-cost-${idx}`} />
+                        </div>
+                      </div>
+                      {item.isNew && !item.existing_product_id && (
+                        <div className="grid grid-cols-3 gap-2">
+                          <div>
+                            <Label className="text-xs">HPP Toko/Dus</Label>
+                            <CurrencyInput value={item.cost_price} className="h-8 text-sm"
+                              onChange={(v) => updateBulkItem(idx, 'cost_price', v)}
+                              data-testid={`bulk-cost-${idx}`} />
+                          </div>
+                          <div>
+                            <Label className="text-xs">Jual/Satuan</Label>
+                            <CurrencyInput value={item.price} className="h-8 text-sm"
+                              onChange={(v) => updateBulkItem(idx, 'price', v)}
+                              data-testid={`bulk-price-${idx}`} />
+                          </div>
+                          <div>
+                            <Label className="text-xs">Jual/Dus</Label>
+                            <CurrencyInput value={item.box_price} className="h-8 text-sm"
+                              onChange={(v) => updateBulkItem(idx, 'box_price', v)}
+                              data-testid={`bulk-box-price-${idx}`} />
+                          </div>
+                        </div>
+                      )}
+                      {item.stock > 0 && item.items_per_box > 0 && (
+                        <p className="text-xs text-blue-600">{item.stock} dus x {item.items_per_box} = <strong>{Math.round(item.stock * item.items_per_box)} satuan</strong>
+                          {item.supplier_cost_price > 0 && <span className="ml-2 text-amber-700">| Subtotal: {fmt(item.supplier_cost_price * item.stock)}</span>}
+                        </p>
+                      )}
+                    </div>
+                  ))}
+                  <Button type="button" variant="outline" onClick={addBulkItem} className="w-full" data-testid="add-bulk-item-btn">
+                    <Plus className="w-4 h-4 mr-2" /> Tambah Item
+                  </Button>
+                </div>
+
+                {/* Payment Section */}
+                {bulkSupplier && bulkTotal > 0 && (
+                  <div className="p-4 bg-amber-50 rounded-lg border border-amber-200 space-y-3" data-testid="bulk-payment-section">
+                    <p className="text-sm font-semibold text-amber-900">Pembelian ke {bulkSupplier.name}</p>
+                    <div className="flex items-center justify-between text-sm text-amber-800">
+                      <span>Total Pembelian:</span>
+                      <span className="font-bold text-base">{fmt(bulkTotal)}</span>
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="text-amber-900">Bayar di Muka</Label>
+                      <CurrencyInput value={bulkPaid} onChange={setBulkPaid} data-testid="bulk-paid-input" />
+                    </div>
+                    <div className="grid grid-cols-2 gap-3">
+                      <div className="space-y-1">
+                        <Label className="text-xs text-amber-900">No. Invoice</Label>
+                        <Input value={bulkInvoice} onChange={(e) => setBulkInvoice(e.target.value)} placeholder="INV-001" data-testid="bulk-invoice-input" />
+                      </div>
+                      <div className="space-y-1">
+                        <Label className="text-xs text-amber-900">Jatuh Tempo</Label>
+                        <Input type="date" value={bulkDueDate} onChange={(e) => setBulkDueDate(e.target.value)} data-testid="bulk-duedate-input" />
+                      </div>
+                    </div>
+                    {bulkTotal - (bulkPaid || 0) > 0 ? (
+                      <p className="text-sm font-medium text-red-700">Sisa hutang: {fmt(bulkTotal - (bulkPaid || 0))}</p>
+                    ) : (
+                      <p className="text-sm font-medium text-green-700">Lunas</p>
+                    )}
+                  </div>
+                )}
+
+                <div className="flex gap-2 justify-end pt-4">
+                  <Button variant="outline" onClick={() => setIsDialogOpen(false)}>Batal</Button>
+                  <Button onClick={handleBulkSubmit} disabled={bulkSubmitting || !bulkSupplier || bulkItems.every(i => !i.name || i.stock <= 0)} data-testid="product-submit-button">
+                    {bulkSubmitting ? 'Menyimpan...' : `Simpan ${bulkItems.filter(i => i.name && i.stock > 0).length} Item`}
+                  </Button>
+                </div>
               </div>
-            </form>
+            )}
           </DialogContent>
           </Dialog>
         </div>

@@ -306,3 +306,4 @@ class ReturnCreate(BaseModel):
     items: List[dict]
     notes: str = ""
     warehouse_id: str = "gudang_toko"
+    vehicle_id: Optional[str] = ""

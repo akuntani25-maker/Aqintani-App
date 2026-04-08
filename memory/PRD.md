@@ -80,6 +80,9 @@ Aplikasi web responsif untuk toko farmasi dan pertanian "UD. AQIN TANI" dengan s
 62. Edit Harga di Modal Jual - Harga jual bisa diedit langsung di form penjualan stok mobil box
 63. Konversi Unit Stok Box - Loading dari gudang dus otomatis dikonversi ke pcs di vehicle stock
 64. Simplifikasi Supplier Debt - Pembayaran hutang supplier disederhanakan, retur per-item dihilangkan
+65. Bulk Add Product - Form "Tambah Barang dari Supplier" untuk input banyak barang sekaligus dari satu supplier, dengan integrasi hutang supplier (bayar di muka, invoice, jatuh tempo) dan search supplier
+66. Retur ke Mobil Box - Modal retur di Pesanan Kios Mitra kini bisa pilih tujuan: Gudang atau Mobil Box
+67. Oper Pesanan Merge Fix - Fix query oper pesanan agar handle kedua ejaan "cancelled"/"canceled"
 
 ## Credentials
 - Admin: admin@aqintani.com / admin123
@@ -97,6 +100,9 @@ Aplikasi web responsif untuk toko farmasi dan pertanian "UD. AQIN TANI" dengan s
 ## Upcoming Tasks (P1)
 1. Halaman baru untuk kelola "barang retur" dari canvasser
 2. Fitur di halaman laporan admin untuk melihat & kelola retur tersebut
+
+## Future Tasks (P2)
+1. Rekap harian stok mobil box (muat, terjual, retur per hari per mobil)
 
 ## Key Files
 - `/app/print_server.py` - Local print server with auto-start
