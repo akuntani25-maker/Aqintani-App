@@ -76,6 +76,10 @@ Aplikasi web responsif untuk toko farmasi dan pertanian "UD. AQIN TANI" dengan s
 58. Settlement Retur ke Stok Box - Sisa barang dari penyelesaian pesanan kanvaser kini masuk ke stok mobil box (bukan langsung gudang)
 59. Edit Harga Stok Mobil - Tombol edit harga jual per item di halaman Stok Mobil Box
 60. Retur Pilih Gudang - Retur dari stok mobil box kini bisa pilih gudang tujuan (Utama/Toko)
+61. Oper ke Pesanan Existing - Transfer/oper pesanan otomatis merge ke pesanan aktif kios tujuan (tidak buat baru)
+62. Edit Harga di Modal Jual - Harga jual bisa diedit langsung di form penjualan stok mobil box
+63. Konversi Unit Stok Box - Loading dari gudang dus otomatis dikonversi ke pcs di vehicle stock
+64. Simplifikasi Supplier Debt - Pembayaran hutang supplier disederhanakan, retur per-item dihilangkan
 
 ## Credentials
 - Admin: admin@aqintani.com / admin123

@@ -417,7 +417,6 @@ export const SupplierDebt = () => {
                                       <TableHead>Jatuh Tempo</TableHead>
                                       <TableHead>Status</TableHead>
                                       <TableHead>Catatan</TableHead>
-                                      <TableHead></TableHead>
                                     </TableRow>
                                   </TableHeader>
                                   <TableBody>
@@ -460,13 +459,6 @@ export const SupplierDebt = () => {
                                             }
                                           </TableCell>
                                           <TableCell className="text-muted-foreground text-xs max-w-[150px] truncate">{p.notes || '-'}</TableCell>
-                                          <TableCell>
-                                            {p.remaining > 0 && (
-                                              <Button variant="ghost" size="sm" className="text-orange-600 hover:text-orange-700 h-7 px-2" onClick={() => openReturnModal(p)} data-testid={`return-btn-${p.id}`}>
-                                                <RotateCcw className="w-3.5 h-3.5 mr-1" />Retur
-                                              </Button>
-                                            )}
-                                          </TableCell>
                                         </TableRow>
                                       );
                                     })}
@@ -506,9 +498,6 @@ export const SupplierDebt = () => {
                                         <div className="flex items-center gap-2 mt-2">
                                           <CalendarDays className="w-3.5 h-3.5 text-muted-foreground" />
                                           <input type="date" className="text-xs border rounded px-1.5 py-0.5 flex-1" value={p.due_date || ''} onChange={handleMobileDueDate} />
-                                          <Button variant="ghost" size="sm" className="text-orange-600 h-7 px-2" onClick={() => openReturnModal(p)}>
-                                            <RotateCcw className="w-3.5 h-3.5 mr-1" />Retur
-                                          </Button>
                                         </div>
                                       )}
                                       {p.notes && <p className="text-xs text-muted-foreground mt-1">{p.notes}</p>}

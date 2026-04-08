@@ -584,7 +584,7 @@ async def settle_partner_order(order_id: str, data: SettlementRequest, current_u
 async def transfer_partner_order(order_id: str, req: FastAPIRequest, current_user: dict = Depends(get_current_user)):
     """
     Oper pesanan: pindahkan sebagian/seluruh item dari satu kios ke kios lain.
-    Body: { new_partner_store_id, items: [{product_id, quantity, new_price}], payment_type: 'cash'|'bon' }
+    Jika kios tujuan sudah punya pesanan aktif, tambahkan ke pesanan yang ada.
     """
     body = await req.json()
     new_store_id = body.get("new_partner_store_id")
@@ -603,16 +603,13 @@ async def transfer_partner_order(order_id: str, req: FastAPIRequest, current_use
         raise HTTPException(status_code=404, detail="Kios mitra tujuan tidak ditemukan")
 
     old_store_id = order["partner_store_id"]
-    old_store = await db.partner_stores.find_one({"id": old_store_id}, {"_id": 0})
 
     WITA = timezone(timedelta(hours=8))
     now = datetime.now(WITA)
 
-    # Build transfer details
     new_order_items = []
     total_transferred = 0
     old_debt_reduction = 0
-
     remaining_items = list(order.get("items", []))
 
     for ti in transfer_items:
@@ -620,33 +617,22 @@ async def transfer_partner_order(order_id: str, req: FastAPIRequest, current_use
         qty = int(ti["quantity"])
         new_price = float(ti.get("new_price", 0))
 
-        # Find and reduce from original order
         for i, oi in enumerate(remaining_items):
             if oi["product_id"] == pid:
                 orig_price = oi["price"]
                 if qty > oi["quantity"]:
                     raise HTTPException(status_code=400, detail=f"Qty oper melebihi qty pesanan untuk {oi['product_name']}")
-
-                # Calculate debt reduction for old store
                 old_debt_reduction += qty * orig_price
-
-                # Reduce original item qty
                 remaining_items[i] = {**oi, "quantity": oi["quantity"] - qty, "subtotal": (oi["quantity"] - qty) * orig_price}
-
-                # Add to new order
                 subtotal = qty * new_price
                 new_order_items.append({
-                    "product_id": pid,
-                    "product_name": oi["product_name"],
-                    "quantity": qty,
-                    "price": new_price,
-                    "subtotal": subtotal,
+                    "product_id": pid, "product_name": oi["product_name"],
+                    "quantity": qty, "price": new_price, "subtotal": subtotal,
                     "warehouse_id": oi.get("warehouse_id", order.get("warehouse_id", "gudang_toko"))
                 })
                 total_transferred += subtotal
                 break
 
-    # Remove items with qty 0
     remaining_items = [it for it in remaining_items if it["quantity"] > 0]
     new_old_total = sum(it["subtotal"] for it in remaining_items)
 
@@ -659,62 +645,79 @@ async def transfer_partner_order(order_id: str, req: FastAPIRequest, current_use
     }})
 
     # Reduce old store debt
-    if old_store and old_debt_reduction > 0 and order.get("remaining", 0) > 0:
+    if old_debt_reduction > 0 and order.get("remaining", 0) > 0:
         debt_reduce = min(old_debt_reduction, order.get("remaining", 0))
-        await db.partner_stores.update_one(
-            {"id": old_store_id},
-            {"$inc": {"current_debt": -debt_reduce}}
-        )
+        await db.partner_stores.update_one({"id": old_store_id}, {"$inc": {"current_debt": -debt_reduce}})
 
-    # Create new order for new store
-    new_order_doc = {
-        "id": str(uuid.uuid4()),
-        "order_number": f"TR-{now.strftime('%Y%m%d%H%M%S')}",
+    # Check if target store already has an active order (pending, not settled)
+    existing_order = await db.partner_orders.find_one({
         "partner_store_id": new_store_id,
-        "partner_store_name": new_store["name"],
-        "canvasser_id": order.get("canvasser_id", ""),
-        "canvasser_name": order.get("canvasser_name", ""),
-        "delivery_date": now.strftime("%Y-%m-%d"),
-        "date": now.strftime("%Y-%m-%d"),
-        "items": new_order_items,
-        "subtotal": total_transferred,
-        "discount": 0,
-        "total": total_transferred,
-        "paid": total_transferred if payment_type == "cash" else 0,
-        "remaining": 0 if payment_type == "cash" else total_transferred,
-        "status": "delivered",
-        "order_type": "transfer",
-        "source_order_id": order_id,
-        "source_order_number": order.get("order_number", ""),
-        "source_store_name": order.get("partner_store_name", ""),
-        "warehouse_id": order.get("warehouse_id", "gudang_toko"),
-        "is_settled": True,
-        "settled_items": [{"product_id": ni["product_id"], "product_name": ni["product_name"],
-                           "qty_sold": ni["quantity"], "original_qty": ni["quantity"],
-                           "price": ni["price"]} for ni in new_order_items],
-        "return_items": [],
-        "created_at": now.isoformat()
-    }
-    await db.partner_orders.insert_one(new_order_doc)
+        "status": {"$nin": ["cancelled"]},
+        "is_settled": {"$ne": True}
+    }, {"_id": 0})
+
+    if existing_order:
+        # Add items to existing order
+        updated_items = list(existing_order.get("items", []))
+        for ni in new_order_items:
+            found = False
+            for j, ei in enumerate(updated_items):
+                if ei["product_id"] == ni["product_id"]:
+                    new_qty = ei["quantity"] + ni["quantity"]
+                    updated_items[j] = {**ei, "quantity": new_qty, "price": ni["price"], "subtotal": new_qty * ni["price"]}
+                    found = True
+                    break
+            if not found:
+                updated_items.append(ni)
+
+        new_existing_total = sum(it["subtotal"] for it in updated_items)
+        await db.partner_orders.update_one({"id": existing_order["id"]}, {"$set": {
+            "items": updated_items,
+            "subtotal": new_existing_total,
+            "total": new_existing_total,
+            "remaining": new_existing_total - existing_order.get("paid", 0),
+        }})
+        target_order_id = existing_order["id"]
+    else:
+        # Create new order
+        new_order_doc = {
+            "id": str(uuid.uuid4()),
+            "order_number": f"TR-{now.strftime('%Y%m%d%H%M%S')}",
+            "partner_store_id": new_store_id,
+            "partner_store_name": new_store["name"],
+            "canvasser_id": order.get("canvasser_id", ""),
+            "canvasser_name": order.get("canvasser_name", ""),
+            "delivery_date": now.strftime("%Y-%m-%d"),
+            "date": now.strftime("%Y-%m-%d"),
+            "items": new_order_items,
+            "subtotal": total_transferred, "discount": 0, "total": total_transferred,
+            "paid": total_transferred if payment_type == "cash" else 0,
+            "remaining": 0 if payment_type == "cash" else total_transferred,
+            "status": "delivered",
+            "order_type": "transfer",
+            "source_order_id": order_id,
+            "warehouse_id": order.get("warehouse_id", "gudang_toko"),
+            "is_settled": False, "return_items": [],
+            "created_at": now.isoformat()
+        }
+        await db.partner_orders.insert_one(new_order_doc)
+        target_order_id = new_order_doc["id"]
 
     # Update new store debt if bon
     if payment_type == "bon":
-        await db.partner_stores.update_one(
-            {"id": new_store_id},
-            {"$inc": {"current_debt": total_transferred}}
-        )
+        await db.partner_stores.update_one({"id": new_store_id}, {"$inc": {"current_debt": total_transferred}})
 
     await log_audit(current_user, "TRANSFER_ORDER", "partner_orders", order_id, {
         "from_store": order.get("partner_store_name", ""),
         "to_store": new_store["name"],
         "items": [{"name": ni["product_name"], "qty": ni["quantity"], "price": ni["price"]} for ni in new_order_items],
-        "payment_type": payment_type,
-        "total": total_transferred
+        "payment_type": payment_type, "total": total_transferred,
+        "merged_to_existing": existing_order is not None
     })
 
     return {
-        "message": f"Pesanan berhasil dioper ke {new_store['name']}",
-        "new_order_id": new_order_doc["id"],
+        "message": f"Pesanan berhasil dioper ke {new_store['name']}" + (" (ditambahkan ke pesanan yang ada)" if existing_order else ""),
+        "target_order_id": target_order_id,
         "total_transferred": total_transferred,
         "old_order_new_total": new_old_total
     }

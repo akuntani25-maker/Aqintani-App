@@ -124,6 +124,8 @@ export const VehicleStock = () => {
     }
     setSellSubmitting(true);
     try {
+      // Save edited price first
+      await api.put(`/vehicle-stock/${sellModal.id}/edit-price`, { price: sellModal.price });
       await api.post(`/vehicle-stock/${sellModal.id}/sell`, {
         partner_store_id: sellStoreId,
         quantity: sellQty,
@@ -257,13 +259,6 @@ export const VehicleStock = () => {
                       <td className="py-2 text-right">{fmt(s.price)}</td>
                       <td className="py-2 text-right space-x-1">
                         <Button
-                          size="sm" variant="ghost"
-                          onClick={() => { setEditPriceModal(s); setEditPrice(s.price); }}
-                          data-testid={`edit-price-btn-${s.id}`}
-                        >
-                          <Pencil className="w-3 h-3" />
-                        </Button>
-                        <Button
                           size="sm" variant="outline"
                           onClick={() => { setSellModal(s); setSellQty(1); setSellStoreId(''); setSellPayment('bon'); setStoreSearch(''); }}
                           data-testid={`sell-btn-${s.id}`}
@@ -388,7 +383,12 @@ export const VehicleStock = () => {
               <div className="space-y-2">
                 <Label>Jumlah</Label>
                 <Input type="number" min={1} max={sellModal.remaining_qty} value={sellQty} onChange={e => setSellQty(parseInt(e.target.value) || 0)} data-testid="sell-qty-input" />
-                <p className="text-xs text-muted-foreground">Subtotal: {fmt(sellQty * sellModal.price)}</p>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Harga Jual</Label>
+                <CurrencyInput value={sellModal.price} onChange={v => setSellModal({...sellModal, price: v})} data-testid="sell-price-input" />
+                <p className="text-xs text-muted-foreground">Subtotal: {fmt(sellQty * (sellModal?.price || 0))}</p>
               </div>
 
               <div className="space-y-2">
@@ -468,30 +468,6 @@ export const VehicleStock = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Edit Price Modal */}
-      <Dialog open={!!editPriceModal} onOpenChange={() => setEditPriceModal(null)}>
-        <DialogContent className="max-w-sm" data-testid="edit-price-modal">
-          <DialogHeader><DialogTitle>Edit Harga Jual</DialogTitle></DialogHeader>
-          {editPriceModal && (
-            <div className="space-y-4">
-              <Card className="p-3 bg-muted/50">
-                <p className="font-semibold">{editPriceModal.product_name}</p>
-                <p className="text-sm text-muted-foreground">Harga saat ini: {fmt(editPriceModal.price)}</p>
-              </Card>
-              <div className="space-y-2">
-                <Label>Harga Jual Baru</Label>
-                <CurrencyInput value={editPrice} onChange={setEditPrice} data-testid="edit-price-input" />
-              </div>
-              <div className="flex gap-2 justify-end">
-                <Button variant="outline" onClick={() => setEditPriceModal(null)}>Batal</Button>
-                <Button onClick={handleEditPrice} disabled={editPriceSubmitting} data-testid="submit-edit-price">
-                  {editPriceSubmitting ? 'Menyimpan...' : 'Simpan'}
-                </Button>
-              </div>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
     </div>
   );
 };

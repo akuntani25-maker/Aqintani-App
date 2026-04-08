@@ -89,6 +89,9 @@ async def load_vehicle_stock(data: dict, admin: dict = Depends(require_admin_pan
         wh_unit = wh.get("unit", "satuan") if wh else "satuan"
         qty_in_wh_unit = quantity / ipb if wh_unit == "dus" else quantity
 
+        # Convert quantity to satuan (pcs) for vehicle stock
+        qty_in_pcs = quantity * ipb if wh_unit == "dus" else quantity
+
         if current < qty_in_wh_unit:
             raise HTTPException(
                 status_code=400,
@@ -114,7 +117,7 @@ async def load_vehicle_stock(data: dict, admin: dict = Depends(require_admin_pan
         if existing:
             await db.vehicle_stock.update_one(
                 {"id": existing["id"]},
-                {"$inc": {"quantity": quantity, "remaining_qty": quantity}}
+                {"$inc": {"quantity": qty_in_pcs, "remaining_qty": qty_in_pcs}}
             )
         else:
             stock_doc = {
@@ -123,8 +126,8 @@ async def load_vehicle_stock(data: dict, admin: dict = Depends(require_admin_pan
                 "vehicle_name": vehicle.get("name", ""),
                 "product_id": product_id,
                 "product_name": product["name"],
-                "quantity": quantity,
-                "remaining_qty": quantity,
+                "quantity": qty_in_pcs,
+                "remaining_qty": qty_in_pcs,
                 "sold_qty": 0,
                 "returned_qty": 0,
                 "price": item.get("price", product.get("sell_price", 0)),
@@ -137,7 +140,7 @@ async def load_vehicle_stock(data: dict, admin: dict = Depends(require_admin_pan
 
         loaded_items.append({
             "product_name": product["name"],
-            "quantity": quantity
+            "quantity": qty_in_pcs
         })
 
     await log_audit(admin, "LOAD_VEHICLE_STOCK", "vehicle_stock", vehicle_id, {
