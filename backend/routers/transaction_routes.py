@@ -194,19 +194,51 @@ async def edit_transaction_prices(transaction_id: str, req: FastAPIRequest, curr
 @router.post("/returns")
 async def create_return(data: ReturnCreate, admin: dict = Depends(require_pos_access)):
     now = datetime.now(timezone.utc)
+    vehicle_id = data.vehicle_id if hasattr(data, 'vehicle_id') else None
     return_doc = {
         "id": str(uuid.uuid4()), "return_number": f"RTN{now.strftime('%Y%m%d%H%M%S')}",
         "source_type": data.source_type, "source_id": data.source_id,
-        "items": data.items, "notes": data.notes, "warehouse_id": data.warehouse_id,
+        "items": data.items, "notes": data.notes,
+        "warehouse_id": data.warehouse_id if not vehicle_id else f"vehicle:{vehicle_id}",
+        "vehicle_id": vehicle_id or "",
         "created_at": now.isoformat(), "date": now.strftime("%Y-%m-%d")
     }
     await db.returns.insert_one(return_doc)
-    for item in data.items:
-        await db.warehouse_stock.update_one(
-            {"product_id": item["product_id"], "warehouse_id": data.warehouse_id},
-            {"$inc": {"stock": item["quantity"]}}, upsert=True
-        )
-        await recalculate_product_stock(item["product_id"])
+
+    if vehicle_id:
+        # Return to vehicle stock instead of warehouse
+        vehicle = await db.vehicles.find_one({"id": vehicle_id}, {"_id": 0})
+        vehicle_name = vehicle.get("name", "") if vehicle else ""
+        for item in data.items:
+            existing_vs = await db.vehicle_stock.find_one(
+                {"vehicle_id": vehicle_id, "product_id": item["product_id"], "remaining_qty": {"$gt": 0}}
+            )
+            if existing_vs:
+                await db.vehicle_stock.update_one(
+                    {"id": existing_vs["id"]},
+                    {"$inc": {"remaining_qty": item["quantity"], "quantity": item["quantity"]}}
+                )
+            else:
+                vs_doc = {
+                    "id": str(uuid.uuid4()),
+                    "vehicle_id": vehicle_id, "vehicle_name": vehicle_name,
+                    "product_id": item["product_id"], "product_name": item["product_name"],
+                    "quantity": item["quantity"], "remaining_qty": item["quantity"],
+                    "sold_qty": 0, "returned_qty": 0,
+                    "price": item.get("price", 0),
+                    "warehouse_id": data.warehouse_id or "gudang_toko",
+                    "loaded_at": now.isoformat(),
+                    "notes": f"Retur dari pesanan {data.source_id}", "status": "active"
+                }
+                await db.vehicle_stock.insert_one(vs_doc)
+    else:
+        for item in data.items:
+            await db.warehouse_stock.update_one(
+                {"product_id": item["product_id"], "warehouse_id": data.warehouse_id},
+                {"$inc": {"stock": item["quantity"]}}, upsert=True
+            )
+            await recalculate_product_stock(item["product_id"])
+
     if data.source_type == "transaction":
         await db.transactions.update_one({"id": data.source_id}, {"$set": {"has_return": True}})
     elif data.source_type == "partner_order":
@@ -218,7 +250,7 @@ async def create_return(data: ReturnCreate, admin: dict = Depends(require_pos_ac
             await db.partner_orders.update_one({"id": data.source_id}, {"$set": {"remaining": new_remaining}})
             partner_store = await db.partner_stores.find_one({"id": order["partner_store_id"]})
             if partner_store:
-                new_debt = max(0, partner_store.get("current_debt", 0) - return_total)
+                new_debt = partner_store.get("current_debt", 0) - return_total
                 await db.partner_stores.update_one({"id": order["partner_store_id"]}, {"$set": {"current_debt": new_debt}})
     return_doc.pop("_id", None)
     return return_doc
