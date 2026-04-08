@@ -187,6 +187,7 @@ async def sell_vehicle_stock(stock_id: str, data: dict, admin: dict = Depends(re
         "partner_store_id": partner_store_id,
         "partner_store_name": store["name"],
         "canvasser_id": "",
+        "canvasser_name": "",
         "delivery_date": now.strftime("%Y-%m-%d"),
         "date": now.strftime("%Y-%m-%d"),
         "items": [{
@@ -198,6 +199,7 @@ async def sell_vehicle_stock(stock_id: str, data: dict, admin: dict = Depends(re
             "warehouse_id": stock["warehouse_id"]
         }],
         "subtotal": subtotal,
+        "discount": 0,
         "total": subtotal,
         "paid": subtotal if payment_type == "cash" else 0,
         "remaining": 0 if payment_type == "cash" else subtotal,
@@ -252,6 +254,7 @@ async def return_vehicle_stock(stock_id: str, data: dict, admin: dict = Depends(
     """Return items from vehicle stock back to warehouse."""
     quantity = int(data.get("quantity", 0))
     notes = data.get("notes", "")
+    target_warehouse = data.get("warehouse_id", "")
 
     if quantity <= 0:
         raise HTTPException(status_code=400, detail="Jumlah retur harus > 0")
@@ -268,7 +271,7 @@ async def return_vehicle_stock(stock_id: str, data: dict, admin: dict = Depends(
 
     product = await db.products.find_one({"id": stock["product_id"]}, {"_id": 0})
     ipb = product.get("items_per_box", 1) or 1 if product else 1
-    warehouse_id = stock.get("warehouse_id", "gudang_toko")
+    warehouse_id = target_warehouse or stock.get("warehouse_id", "gudang_toko")
     wh = await db.warehouses.find_one({"id": warehouse_id}, {"_id": 0})
     wh_unit = wh.get("unit", "satuan") if wh else "satuan"
     qty_in_wh_unit = quantity / ipb if wh_unit == "dus" else quantity
@@ -316,3 +319,20 @@ async def get_vehicle_stock_total_value(current_user: dict = Depends(get_current
         total += (cost / ipb) * s["remaining_qty"]
 
     return {"total_value": round(total)}
+
+
+
+@router.put("/vehicle-stock/{stock_id}/edit-price")
+async def edit_vehicle_stock_price(stock_id: str, data: dict, admin: dict = Depends(require_pos_access)):
+    """Edit harga jual item di stok kendaraan."""
+    new_price = float(data.get("price", 0))
+    if new_price < 0:
+        raise HTTPException(status_code=400, detail="Harga tidak boleh negatif")
+
+    stock = await db.vehicle_stock.find_one({"id": stock_id}, {"_id": 0})
+    if not stock:
+        raise HTTPException(status_code=404, detail="Stok kendaraan tidak ditemukan")
+
+    await db.vehicle_stock.update_one({"id": stock_id}, {"$set": {"price": new_price}})
+
+    return {"message": f"Harga {stock['product_name']} diubah ke {new_price}", "new_price": new_price}

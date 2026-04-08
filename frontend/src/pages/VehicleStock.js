@@ -7,7 +7,7 @@ import { Label } from '../components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { toast } from 'sonner';
-import { Truck, Package, Plus, ShoppingCart, RotateCcw, Search, ArrowLeft } from 'lucide-react';
+import { Truck, Package, Plus, ShoppingCart, RotateCcw, Search, ArrowLeft, Pencil } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { CurrencyInput } from '../components/CurrencyInput';
 
@@ -45,6 +45,12 @@ export const VehicleStock = () => {
   const [returnQty, setReturnQty] = useState(0);
   const [returnNotes, setReturnNotes] = useState('');
   const [returnSubmitting, setReturnSubmitting] = useState(false);
+  const [returnWarehouse, setReturnWarehouse] = useState('');
+
+  // Edit price
+  const [editPriceModal, setEditPriceModal] = useState(null);
+  const [editPrice, setEditPrice] = useState(0);
+  const [editPriceSubmitting, setEditPriceSubmitting] = useState(false);
 
   const fetchData = useCallback(async () => {
     setLoading(true);
@@ -136,13 +142,26 @@ export const VehicleStock = () => {
     try {
       await api.post(`/vehicle-stock/${returnModal.id}/return`, {
         quantity: returnQty,
-        notes: returnNotes
+        notes: returnNotes,
+        warehouse_id: returnWarehouse
       });
       toast.success('Barang berhasil diretur ke gudang');
       setReturnModal(null);
       fetchData();
     } catch (e) { toast.error(e.response?.data?.detail || 'Gagal meretur'); }
     finally { setReturnSubmitting(false); }
+  };
+
+  const handleEditPrice = async () => {
+    if (editPrice < 0) { toast.error('Harga tidak boleh negatif'); return; }
+    setEditPriceSubmitting(true);
+    try {
+      await api.put(`/vehicle-stock/${editPriceModal.id}/edit-price`, { price: editPrice });
+      toast.success('Harga berhasil diubah');
+      setEditPriceModal(null);
+      fetchData();
+    } catch (e) { toast.error(e.response?.data?.detail || 'Gagal mengubah harga'); }
+    finally { setEditPriceSubmitting(false); }
   };
 
   const filteredStores = storeSearch
@@ -238,6 +257,13 @@ export const VehicleStock = () => {
                       <td className="py-2 text-right">{fmt(s.price)}</td>
                       <td className="py-2 text-right space-x-1">
                         <Button
+                          size="sm" variant="ghost"
+                          onClick={() => { setEditPriceModal(s); setEditPrice(s.price); }}
+                          data-testid={`edit-price-btn-${s.id}`}
+                        >
+                          <Pencil className="w-3 h-3" />
+                        </Button>
+                        <Button
                           size="sm" variant="outline"
                           onClick={() => { setSellModal(s); setSellQty(1); setSellStoreId(''); setSellPayment('bon'); setStoreSearch(''); }}
                           data-testid={`sell-btn-${s.id}`}
@@ -246,7 +272,7 @@ export const VehicleStock = () => {
                         </Button>
                         <Button
                           size="sm" variant="outline"
-                          onClick={() => { setReturnModal(s); setReturnQty(s.remaining_qty); setReturnNotes(''); }}
+                          onClick={() => { setReturnModal(s); setReturnQty(s.remaining_qty); setReturnNotes(''); setReturnWarehouse(warehouses[0]?.id || 'gudang_toko'); }}
                           data-testid={`return-btn-${s.id}`}
                         >
                           <RotateCcw className="w-3 h-3 mr-1" /> Retur
@@ -419,6 +445,15 @@ export const VehicleStock = () => {
                 <Input type="number" min={1} max={returnModal.remaining_qty} value={returnQty} onChange={e => setReturnQty(parseInt(e.target.value) || 0)} data-testid="return-qty-input" />
               </div>
               <div className="space-y-2">
+                <Label>Gudang Tujuan</Label>
+                <Select value={returnWarehouse} onValueChange={setReturnWarehouse}>
+                  <SelectTrigger data-testid="return-warehouse-select"><SelectValue placeholder="Pilih gudang" /></SelectTrigger>
+                  <SelectContent>
+                    {warehouses.map(wh => <SelectItem key={wh.id} value={wh.id}>{wh.name} ({wh.unit})</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
                 <Label>Catatan</Label>
                 <Input value={returnNotes} onChange={e => setReturnNotes(e.target.value)} placeholder="Opsional..." data-testid="return-notes-input" />
               </div>
@@ -426,6 +461,31 @@ export const VehicleStock = () => {
                 <Button variant="outline" onClick={() => setReturnModal(null)}>Batal</Button>
                 <Button onClick={handleReturn} disabled={returnSubmitting} data-testid="submit-return-btn">
                   {returnSubmitting ? 'Memproses...' : 'Retur'}
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Price Modal */}
+      <Dialog open={!!editPriceModal} onOpenChange={() => setEditPriceModal(null)}>
+        <DialogContent className="max-w-sm" data-testid="edit-price-modal">
+          <DialogHeader><DialogTitle>Edit Harga Jual</DialogTitle></DialogHeader>
+          {editPriceModal && (
+            <div className="space-y-4">
+              <Card className="p-3 bg-muted/50">
+                <p className="font-semibold">{editPriceModal.product_name}</p>
+                <p className="text-sm text-muted-foreground">Harga saat ini: {fmt(editPriceModal.price)}</p>
+              </Card>
+              <div className="space-y-2">
+                <Label>Harga Jual Baru</Label>
+                <CurrencyInput value={editPrice} onChange={setEditPrice} data-testid="edit-price-input" />
+              </div>
+              <div className="flex gap-2 justify-end">
+                <Button variant="outline" onClick={() => setEditPriceModal(null)}>Batal</Button>
+                <Button onClick={handleEditPrice} disabled={editPriceSubmitting} data-testid="submit-edit-price">
+                  {editPriceSubmitting ? 'Menyimpan...' : 'Simpan'}
                 </Button>
               </div>
             </div>

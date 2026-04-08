@@ -9,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
 import { toast } from 'sonner';
-import { Plus, Search, Package, Trash2, ShoppingCart, Warehouse, FileText, DollarSign, TrendingUp, RotateCcw, Pencil, Trash, X, Store, Truck } from 'lucide-react';
+import { Plus, Search, Package, Trash2, ShoppingCart, Warehouse, FileText, DollarSign, TrendingUp, RotateCcw, Pencil, Trash, X, Store, Truck, ArrowRightLeft } from 'lucide-react';
 import { CurrencyInput } from '../components/CurrencyInput';
 import { Pagination } from '../components/Pagination';
 
@@ -46,6 +46,14 @@ export const PartnerOrders = () => {
   const perPage = 15;
   const [vehicles, setVehicles] = useState([]);
   const [selectedVehicle, setSelectedVehicle] = useState('');
+
+  // Transfer dialog
+  const [transferDialog, setTransferDialog] = useState(null);
+  const [transferItems, setTransferItems] = useState([]);
+  const [transferStoreId, setTransferStoreId] = useState('');
+  const [transferPayment, setTransferPayment] = useState('bon');
+  const [transferStoreSearch, setTransferStoreSearch] = useState('');
+  const [transferSubmitting, setTransferSubmitting] = useState(false);
 
   useEffect(() => { fetchData(); }, []);
 
@@ -246,6 +254,40 @@ export const PartnerOrders = () => {
     setReturnItems(order.items.map(i => ({ ...i, return_qty: 0, reason: '' })));
     setReturnNotes('');
     setReturnWarehouse('gudang_toko');
+  };
+
+  const openTransferDialog = (order) => {
+    setTransferDialog(order);
+    setTransferItems(order.items.filter(i => i.quantity > 0).map(i => ({
+      product_id: i.product_id, product_name: i.product_name,
+      quantity: i.quantity, max_qty: i.quantity,
+      new_price: i.price, selected: false
+    })));
+    setTransferStoreId('');
+    setTransferPayment('bon');
+    setTransferStoreSearch('');
+  };
+
+  const handleTransfer = async () => {
+    const selected = transferItems.filter(i => i.selected && i.quantity > 0);
+    if (selected.length === 0) { toast.error('Pilih item yang akan dioper'); return; }
+    if (!transferStoreId) { toast.error('Pilih kios mitra tujuan'); return; }
+    setTransferSubmitting(true);
+    try {
+      await api.post(`/partner-orders/${transferDialog.id}/transfer`, {
+        new_partner_store_id: transferStoreId,
+        items: selected.map(i => ({
+          product_id: i.product_id,
+          quantity: i.quantity,
+          new_price: i.new_price
+        })),
+        payment_type: transferPayment
+      });
+      toast.success('Pesanan berhasil dioper');
+      setTransferDialog(null);
+      fetchData();
+    } catch (e) { toast.error(e.response?.data?.detail || 'Gagal mengoper pesanan'); }
+    finally { setTransferSubmitting(false); }
   };
 
   const handleReturn = async () => {
@@ -746,6 +788,11 @@ export const PartnerOrders = () => {
                           <Plus className="w-4 h-4 mr-1" />Tambah
                         </Button>
                       )}
+                      {order.status !== 'cancelled' && order.items.length > 0 && (
+                        <Button size="sm" variant="outline" onClick={() => openTransferDialog(order)} data-testid={`transfer-${order.id}`} className="text-purple-600 border-purple-200 hover:bg-purple-50">
+                          <ArrowRightLeft className="w-4 h-4 mr-1" />Oper
+                        </Button>
+                      )}
                       <Button size="sm" variant="outline" onClick={() => openReturnDialog(order)} data-testid={`return-${order.id}`} className="text-orange-600 border-orange-200 hover:bg-orange-50">
                         <RotateCcw className="w-4 h-4 mr-1" />Retur
                       </Button>
@@ -889,6 +936,84 @@ export const PartnerOrders = () => {
               <div className="flex gap-2 pt-2">
                 <Button variant="outline" onClick={() => setAddItemDialog(null)} className="flex-1">Batal</Button>
                 <Button onClick={handleSubmitAddItems} className="flex-1" disabled={addItemCart.length === 0} data-testid="submit-add-items">Tambahkan</Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Transfer Dialog */}
+      <Dialog open={!!transferDialog} onOpenChange={() => setTransferDialog(null)}>
+        <DialogContent className="max-w-lg" data-testid="transfer-dialog">
+          <DialogHeader><DialogTitle>Oper Pesanan</DialogTitle></DialogHeader>
+          {transferDialog && (
+            <div className="space-y-4 max-h-[70vh] overflow-y-auto">
+              <Card className="p-3 bg-muted/50">
+                <p className="text-sm">Dari: <strong>{transferDialog.partner_store_name}</strong></p>
+                <p className="text-xs text-muted-foreground">No. Order: {transferDialog.order_number}</p>
+              </Card>
+
+              <div className="space-y-2">
+                <Label>Pilih item yang dioper:</Label>
+                {transferItems.map((item, idx) => (
+                  <div key={item.product_id} className={`p-3 border rounded-lg space-y-2 ${item.selected ? 'border-purple-300 bg-purple-50/50' : ''}`}>
+                    <div className="flex items-center gap-2">
+                      <input type="checkbox" checked={item.selected} onChange={e => {
+                        const ni = [...transferItems]; ni[idx].selected = e.target.checked; setTransferItems(ni);
+                      }} className="rounded" data-testid={`transfer-check-${idx}`} />
+                      <span className="flex-1 text-sm font-medium">{item.product_name}</span>
+                    </div>
+                    {item.selected && (
+                      <div className="grid grid-cols-2 gap-2 pl-6">
+                        <div>
+                          <Label className="text-xs">Jumlah (max: {item.max_qty})</Label>
+                          <Input type="number" min={1} max={item.max_qty} value={item.quantity}
+                            onChange={e => { const ni = [...transferItems]; ni[idx].quantity = Math.min(parseInt(e.target.value) || 1, item.max_qty); setTransferItems(ni); }}
+                            className="h-8" data-testid={`transfer-qty-${idx}`} />
+                        </div>
+                        <div>
+                          <Label className="text-xs">Harga Jual Baru</Label>
+                          <CurrencyInput value={item.new_price} onChange={v => { const ni = [...transferItems]; ni[idx].new_price = v; setTransferItems(ni); }}
+                            className="h-8" data-testid={`transfer-price-${idx}`} />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              <div className="space-y-2">
+                <Label>Kios Mitra Tujuan *</Label>
+                <Input placeholder="Cari kios mitra..." value={transferStoreSearch} onChange={e => setTransferStoreSearch(e.target.value)} data-testid="transfer-store-search" />
+                <div className="border rounded-md max-h-32 overflow-y-auto">
+                  {partnerStores.filter(s => s.id !== transferDialog.partner_store_id && (!transferStoreSearch || s.name.toLowerCase().includes(transferStoreSearch.toLowerCase()))).map(s => (
+                    <div key={s.id}
+                      className={`px-3 py-2 text-sm cursor-pointer ${transferStoreId === s.id ? 'bg-purple-100 font-medium' : 'hover:bg-muted'}`}
+                      onClick={() => setTransferStoreId(s.id)} data-testid={`transfer-store-${s.id}`}>{s.name}</div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Pembayaran</Label>
+                <Select value={transferPayment} onValueChange={setTransferPayment}>
+                  <SelectTrigger data-testid="transfer-payment"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="cash">Cash / Tunai</SelectItem>
+                    <SelectItem value="bon">Bon / Hutang</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="p-3 bg-purple-50 rounded-lg">
+                <p className="text-sm font-semibold">Total Oper: {fmt(transferItems.filter(i => i.selected).reduce((s, i) => s + i.quantity * i.new_price, 0))}</p>
+              </div>
+
+              <div className="flex gap-2 justify-end">
+                <Button variant="outline" onClick={() => setTransferDialog(null)}>Batal</Button>
+                <Button onClick={handleTransfer} disabled={transferSubmitting} className="bg-purple-600 hover:bg-purple-700" data-testid="submit-transfer">
+                  {transferSubmitting ? 'Memproses...' : 'Oper Pesanan'}
+                </Button>
               </div>
             </div>
           )}

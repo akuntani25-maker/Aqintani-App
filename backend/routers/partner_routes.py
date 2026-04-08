@@ -435,13 +435,19 @@ class SettlementRequest(PydanticBaseModel):
 async def settle_partner_order(order_id: str, data: SettlementRequest, current_user: dict = Depends(get_current_user)):
     """
     Selesaikan pesanan: kanvaser melaporkan item yang laku.
-    Sisa otomatis kembali ke stok (satuan → gudang_toko, utuh dus → gudang_utama).
+    Sisa otomatis masuk ke stok mobil box (vehicle_stock).
     """
     order = await db.partner_orders.find_one({"id": order_id}, {"_id": 0})
     if not order:
         raise HTTPException(status_code=404, detail="Pesanan tidak ditemukan")
     if order.get("is_settled"):
         raise HTTPException(status_code=400, detail="Pesanan sudah diselesaikan")
+
+    # Find the vehicle for this canvasser
+    canvasser_id = order.get("canvasser_id", "")
+    canvasser = await db.canvassers.find_one({"id": canvasser_id}, {"_id": 0}) if canvasser_id else None
+    vehicle_id = canvasser.get("vehicle_id", "") if canvasser else ""
+    vehicle = await db.vehicles.find_one({"id": vehicle_id}, {"_id": 0}) if vehicle_id else None
 
     return_items = []
     new_total = 0
@@ -464,7 +470,7 @@ async def settle_partner_order(order_id: str, data: SettlementRequest, current_u
         # Calculate what was sold in satuan
         if original_unit == "dus":
             original_qty_satuan = settle_item.original_qty * items_per_box
-            sold_satuan = settle_item.qty_sold  # qty_sold is in satuan
+            sold_satuan = settle_item.qty_sold
         else:
             original_qty_satuan = settle_item.original_qty
             sold_satuan = settle_item.qty_sold
@@ -474,43 +480,79 @@ async def settle_partner_order(order_id: str, data: SettlementRequest, current_u
         new_total += sold_total
 
         if remaining_satuan > 0:
-            # Calculate full boxes and partial
-            full_boxes = int(remaining_satuan // items_per_box) if items_per_box > 0 else 0
-            partial_pcs = remaining_satuan - (full_boxes * items_per_box)
-
-            # Return full boxes to gudang_utama
-            if full_boxes > 0:
-                await db.warehouse_stock.update_one(
-                    {"product_id": settle_item.product_id, "warehouse_id": "gudang_utama"},
-                    {"$inc": {"stock": full_boxes}}, upsert=True
+            if vehicle_id and vehicle:
+                # Return to vehicle stock
+                existing_vs = await db.vehicle_stock.find_one(
+                    {"vehicle_id": vehicle_id, "product_id": settle_item.product_id, "remaining_qty": {"$gt": 0}}
                 )
+                if existing_vs:
+                    await db.vehicle_stock.update_one(
+                        {"id": existing_vs["id"]},
+                        {"$inc": {"remaining_qty": remaining_satuan, "quantity": remaining_satuan}}
+                    )
+                else:
+                    vs_doc = {
+                        "id": str(uuid.uuid4()),
+                        "vehicle_id": vehicle_id,
+                        "vehicle_name": vehicle.get("name", ""),
+                        "product_id": settle_item.product_id,
+                        "product_name": settle_item.product_name,
+                        "quantity": remaining_satuan,
+                        "remaining_qty": remaining_satuan,
+                        "sold_qty": 0,
+                        "returned_qty": 0,
+                        "price": settle_item.price,
+                        "warehouse_id": original_wh_id,
+                        "loaded_at": datetime.now(timezone.utc).isoformat(),
+                        "notes": f"Retur dari pesanan {order.get('order_number', '')}",
+                        "status": "active"
+                    }
+                    await db.vehicle_stock.insert_one(vs_doc)
+
                 return_items.append({
                     "product_id": settle_item.product_id,
                     "product_name": settle_item.product_name,
-                    "quantity": full_boxes,
-                    "unit": "dus",
-                    "warehouse_id": "gudang_utama"
-                })
-
-            # Return partial pieces to gudang_toko
-            if partial_pcs > 0:
-                await db.warehouse_stock.update_one(
-                    {"product_id": settle_item.product_id, "warehouse_id": "gudang_toko"},
-                    {"$inc": {"stock": partial_pcs}}, upsert=True
-                )
-                return_items.append({
-                    "product_id": settle_item.product_id,
-                    "product_name": settle_item.product_name,
-                    "quantity": partial_pcs,
+                    "quantity": remaining_satuan,
                     "unit": "satuan",
-                    "warehouse_id": "gudang_toko"
+                    "warehouse_id": f"vehicle:{vehicle_id}",
+                    "vehicle_name": vehicle.get("name", "")
                 })
+            else:
+                # Fallback: return to warehouse if no vehicle found
+                full_boxes = int(remaining_satuan // items_per_box) if items_per_box > 0 else 0
+                partial_pcs = remaining_satuan - (full_boxes * items_per_box)
 
-            await recalculate_product_stock(settle_item.product_id)
+                if full_boxes > 0:
+                    await db.warehouse_stock.update_one(
+                        {"product_id": settle_item.product_id, "warehouse_id": "gudang_utama"},
+                        {"$inc": {"stock": full_boxes}}, upsert=True
+                    )
+                    return_items.append({
+                        "product_id": settle_item.product_id,
+                        "product_name": settle_item.product_name,
+                        "quantity": full_boxes,
+                        "unit": "dus",
+                        "warehouse_id": "gudang_utama"
+                    })
+
+                if partial_pcs > 0:
+                    await db.warehouse_stock.update_one(
+                        {"product_id": settle_item.product_id, "warehouse_id": "gudang_toko"},
+                        {"$inc": {"stock": partial_pcs}}, upsert=True
+                    )
+                    return_items.append({
+                        "product_id": settle_item.product_id,
+                        "product_name": settle_item.product_name,
+                        "quantity": partial_pcs,
+                        "unit": "satuan",
+                        "warehouse_id": "gudang_toko"
+                    })
+
+                await recalculate_product_stock(settle_item.product_id)
 
     # Update order with settled info
     old_total = order.get("total", 0)
-    debt_diff = old_total - new_total  # How much debt decreases
+    debt_diff = old_total - new_total
 
     await db.partner_orders.update_one({"id": order_id}, {"$set": {
         "is_settled": True,
@@ -527,7 +569,7 @@ async def settle_partner_order(order_id: str, data: SettlementRequest, current_u
     if debt_diff > 0:
         partner = await db.partner_stores.find_one({"id": order["partner_store_id"]})
         if partner:
-            new_debt = max(0, partner.get("current_debt", 0) - debt_diff)
+            new_debt = partner.get("current_debt", 0) - debt_diff
             await db.partner_stores.update_one({"id": order["partner_store_id"]}, {"$set": {"current_debt": new_debt}})
 
     return {
@@ -535,4 +577,144 @@ async def settle_partner_order(order_id: str, data: SettlementRequest, current_u
         "new_total": new_total,
         "return_items": return_items,
         "debt_reduced": debt_diff
+    }
+
+
+@router.post("/partner-orders/{order_id}/transfer")
+async def transfer_partner_order(order_id: str, req: FastAPIRequest, current_user: dict = Depends(get_current_user)):
+    """
+    Oper pesanan: pindahkan sebagian/seluruh item dari satu kios ke kios lain.
+    Body: { new_partner_store_id, items: [{product_id, quantity, new_price}], payment_type: 'cash'|'bon' }
+    """
+    body = await req.json()
+    new_store_id = body.get("new_partner_store_id")
+    transfer_items = body.get("items", [])
+    payment_type = body.get("payment_type", "bon")
+
+    if not new_store_id or not transfer_items:
+        raise HTTPException(status_code=400, detail="Data oper pesanan tidak lengkap")
+
+    order = await db.partner_orders.find_one({"id": order_id}, {"_id": 0})
+    if not order:
+        raise HTTPException(status_code=404, detail="Pesanan tidak ditemukan")
+
+    new_store = await db.partner_stores.find_one({"id": new_store_id}, {"_id": 0})
+    if not new_store:
+        raise HTTPException(status_code=404, detail="Kios mitra tujuan tidak ditemukan")
+
+    old_store_id = order["partner_store_id"]
+    old_store = await db.partner_stores.find_one({"id": old_store_id}, {"_id": 0})
+
+    WITA = timezone(timedelta(hours=8))
+    now = datetime.now(WITA)
+
+    # Build transfer details
+    new_order_items = []
+    total_transferred = 0
+    old_debt_reduction = 0
+
+    remaining_items = list(order.get("items", []))
+
+    for ti in transfer_items:
+        pid = ti["product_id"]
+        qty = int(ti["quantity"])
+        new_price = float(ti.get("new_price", 0))
+
+        # Find and reduce from original order
+        for i, oi in enumerate(remaining_items):
+            if oi["product_id"] == pid:
+                orig_price = oi["price"]
+                if qty > oi["quantity"]:
+                    raise HTTPException(status_code=400, detail=f"Qty oper melebihi qty pesanan untuk {oi['product_name']}")
+
+                # Calculate debt reduction for old store
+                old_debt_reduction += qty * orig_price
+
+                # Reduce original item qty
+                remaining_items[i] = {**oi, "quantity": oi["quantity"] - qty, "subtotal": (oi["quantity"] - qty) * orig_price}
+
+                # Add to new order
+                subtotal = qty * new_price
+                new_order_items.append({
+                    "product_id": pid,
+                    "product_name": oi["product_name"],
+                    "quantity": qty,
+                    "price": new_price,
+                    "subtotal": subtotal,
+                    "warehouse_id": oi.get("warehouse_id", order.get("warehouse_id", "gudang_toko"))
+                })
+                total_transferred += subtotal
+                break
+
+    # Remove items with qty 0
+    remaining_items = [it for it in remaining_items if it["quantity"] > 0]
+    new_old_total = sum(it["subtotal"] for it in remaining_items)
+
+    # Update original order
+    await db.partner_orders.update_one({"id": order_id}, {"$set": {
+        "items": remaining_items,
+        "subtotal": new_old_total,
+        "total": new_old_total,
+        "remaining": max(0, new_old_total - order.get("paid", 0)),
+    }})
+
+    # Reduce old store debt
+    if old_store and old_debt_reduction > 0 and order.get("remaining", 0) > 0:
+        debt_reduce = min(old_debt_reduction, order.get("remaining", 0))
+        await db.partner_stores.update_one(
+            {"id": old_store_id},
+            {"$inc": {"current_debt": -debt_reduce}}
+        )
+
+    # Create new order for new store
+    new_order_doc = {
+        "id": str(uuid.uuid4()),
+        "order_number": f"TR-{now.strftime('%Y%m%d%H%M%S')}",
+        "partner_store_id": new_store_id,
+        "partner_store_name": new_store["name"],
+        "canvasser_id": order.get("canvasser_id", ""),
+        "canvasser_name": order.get("canvasser_name", ""),
+        "delivery_date": now.strftime("%Y-%m-%d"),
+        "date": now.strftime("%Y-%m-%d"),
+        "items": new_order_items,
+        "subtotal": total_transferred,
+        "discount": 0,
+        "total": total_transferred,
+        "paid": total_transferred if payment_type == "cash" else 0,
+        "remaining": 0 if payment_type == "cash" else total_transferred,
+        "status": "delivered",
+        "order_type": "transfer",
+        "source_order_id": order_id,
+        "source_order_number": order.get("order_number", ""),
+        "source_store_name": order.get("partner_store_name", ""),
+        "warehouse_id": order.get("warehouse_id", "gudang_toko"),
+        "is_settled": True,
+        "settled_items": [{"product_id": ni["product_id"], "product_name": ni["product_name"],
+                           "qty_sold": ni["quantity"], "original_qty": ni["quantity"],
+                           "price": ni["price"]} for ni in new_order_items],
+        "return_items": [],
+        "created_at": now.isoformat()
+    }
+    await db.partner_orders.insert_one(new_order_doc)
+
+    # Update new store debt if bon
+    if payment_type == "bon":
+        await db.partner_stores.update_one(
+            {"id": new_store_id},
+            {"$inc": {"current_debt": total_transferred}}
+        )
+
+    await log_audit(current_user, "TRANSFER_ORDER", "partner_orders", order_id, {
+        "from_store": order.get("partner_store_name", ""),
+        "to_store": new_store["name"],
+        "items": [{"name": ni["product_name"], "qty": ni["quantity"], "price": ni["price"]} for ni in new_order_items],
+        "payment_type": payment_type,
+        "total": total_transferred
+    })
+
+    return {
+        "message": f"Pesanan berhasil dioper ke {new_store['name']}",
+        "new_order_id": new_order_doc["id"],
+        "total_transferred": total_transferred,
+        "old_order_new_total": new_old_total
     }

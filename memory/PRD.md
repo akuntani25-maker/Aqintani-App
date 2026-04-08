@@ -72,6 +72,10 @@ Aplikasi web responsif untuk toko farmasi dan pertanian "UD. AQIN TANI" dengan s
 54. Stok Mobil Box - Halaman baru untuk kelola barang kondisional di kendaraan (muat, jual ke kios, retur ke gudang)
 55. Integrasi Aset Mobil - Nilai stok mobil box ditambahkan ke perhitungan Nilai Aset Bersih di dashboard
 56. Alur Pesanan Kondisional - Pesanan kondisional di halaman Pesanan Kios Mitra sekarang langsung masuk ke Stok Mobil Box (pilih mobil, bukan kios mitra)
+57. Oper Pesanan - Fitur transfer pesanan dari satu kios ke kios lain, dengan edit harga jual manual dan pilih pembayaran cash/bon
+58. Settlement Retur ke Stok Box - Sisa barang dari penyelesaian pesanan kanvaser kini masuk ke stok mobil box (bukan langsung gudang)
+59. Edit Harga Stok Mobil - Tombol edit harga jual per item di halaman Stok Mobil Box
+60. Retur Pilih Gudang - Retur dari stok mobil box kini bisa pilih gudang tujuan (Utama/Toko)
 
 ## Credentials
 - Admin: admin@aqintani.com / admin123
