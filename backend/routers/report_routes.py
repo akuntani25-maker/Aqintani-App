@@ -606,6 +606,151 @@ async def get_profit_loss_report(date_from: str, date_to: str, admin: dict = Dep
 
 
 # ============= AI STOCK FORECAST =============
+@router.post("/agriculture/lombok-info")
+async def get_lombok_agriculture_info(admin: dict = Depends(get_current_user)):
+    """Info cuaca & rekomendasi pertanian Lombok menggunakan Open-Meteo + AI."""
+    import httpx
+    from emergentintegrations.llm.openai import LlmChat, UserMessage
+
+    WMO_CODES = {
+        0: "Cerah", 1: "Sebagian Cerah", 2: "Berawan Sebagian", 3: "Berawan",
+        45: "Berkabut", 48: "Kabut Tebal",
+        51: "Gerimis Ringan", 53: "Gerimis", 55: "Gerimis Lebat",
+        61: "Hujan Ringan", 63: "Hujan Sedang", 65: "Hujan Lebat",
+        80: "Hujan Singkat", 81: "Hujan Singkat Sedang", 82: "Hujan Singkat Lebat",
+        95: "Hujan Petir", 96: "Hujan Petir + Hujan Es", 99: "Hujan Petir Hebat"
+    }
+
+    regions = [
+        {"name": "Lombok Barat", "city": "Mataram", "lat": -8.5833, "lon": 116.1167},
+        {"name": "Lombok Tengah", "city": "Praya", "lat": -8.7167, "lon": 116.2833},
+        {"name": "Lombok Timur", "city": "Selong", "lat": -8.6500, "lon": 116.5500},
+        {"name": "Lombok Utara", "city": "Tanjung", "lat": -8.3500, "lon": 116.3000},
+    ]
+
+    weather_data = []
+    async with httpx.AsyncClient(timeout=15) as client:
+        for region in regions:
+            try:
+                resp = await client.get("https://api.open-meteo.com/v1/forecast", params={
+                    "latitude": region["lat"], "longitude": region["lon"],
+                    "current": "temperature_2m,relative_humidity_2m,rain,wind_speed_10m,weather_code",
+                    "daily": "temperature_2m_max,temperature_2m_min,rain_sum,precipitation_probability_max",
+                    "timezone": "Asia/Makassar", "forecast_days": 7
+                })
+                data = resp.json()
+                current = data.get("current", {})
+                daily = data.get("daily", {})
+                weather_code = current.get("weather_code", 0)
+                weather_data.append({
+                    "region": region["name"], "city": region["city"],
+                    "temperature": current.get("temperature_2m"),
+                    "humidity": current.get("relative_humidity_2m"),
+                    "rain": current.get("rain", 0),
+                    "wind_speed": current.get("wind_speed_10m"),
+                    "weather_code": weather_code,
+                    "weather_desc": WMO_CODES.get(weather_code, "Tidak Diketahui"),
+                    "forecast_7d": {
+                        "dates": daily.get("time", []),
+                        "temp_max": daily.get("temperature_2m_max", []),
+                        "temp_min": daily.get("temperature_2m_min", []),
+                        "rain_sum": daily.get("rain_sum", []),
+                        "rain_prob": daily.get("precipitation_probability_max", [])
+                    }
+                })
+            except Exception:
+                weather_data.append({
+                    "region": region["name"], "city": region["city"],
+                    "temperature": None, "humidity": None, "rain": 0,
+                    "wind_speed": None, "weather_code": 0,
+                    "weather_desc": "Data tidak tersedia", "forecast_7d": {}
+                })
+
+    now = datetime.now(timezone.utc)
+    month_name = ["Januari", "Februari", "Maret", "April", "Mei", "Juni",
+                  "Juli", "Agustus", "September", "Oktober", "November", "Desember"][now.month - 1]
+
+    weather_summary = "\n".join([
+        f"- {w['region']} ({w['city']}): {w['weather_desc']}, Suhu {w['temperature']}°C, "
+        f"Kelembaban {w['humidity']}%, Hujan {w['rain']}mm, Angin {w['wind_speed']}km/h, "
+        f"Prediksi hujan 7 hari: {w['forecast_7d'].get('rain_sum', [])}"
+        for w in weather_data if w['temperature'] is not None
+    ])
+
+    prompt = f"""Kamu adalah ahli pertanian berpengalaman di Pulau Lombok, Nusa Tenggara Barat, Indonesia.
+Kamu sangat memahami pola tanam, jenis tanah, iklim tropis, dan kebutuhan petani di Lombok.
+
+Bulan saat ini: {month_name} {now.year}
+Kondisi cuaca terkini di berbagai wilayah Lombok:
+{weather_summary}
+
+Berdasarkan data cuaca real-time dan musim saat ini, berikan informasi KOMPREHENSIF dalam format JSON (tanpa markdown code block):
+{{
+  "ringkasan_cuaca": "Deskripsi kondisi cuaca Lombok saat ini, apakah musim hujan/kemarau/peralihan, dan dampaknya untuk pertanian (3-4 kalimat)",
+  "musim": "hujan / kemarau / peralihan",
+  "tanaman_rekomendasi": [
+    {{
+      "nama": "Nama tanaman",
+      "jenis": "pangan/hortikultura/perkebunan",
+      "keterangan": "Kenapa cocok ditanam sekarang berdasarkan cuaca & musim",
+      "wilayah_ideal": "Wilayah Lombok yang paling cocok",
+      "masa_tanam": "Estimasi waktu tanam hingga panen",
+      "tips": "Tips singkat penanaman"
+    }}
+  ],
+  "kebutuhan_pupuk_obat": [
+    {{
+      "nama": "Nama pupuk/pestisida/obat pertanian",
+      "kategori": "pupuk/pestisida/fungisida/herbisida",
+      "kegunaan": "Untuk tanaman apa dan kenapa dibutuhkan saat ini",
+      "dosis": "Dosis/cara penggunaan yang disarankan",
+      "prioritas": "tinggi/sedang/rendah",
+      "alasan_prioritas": "Kenapa prioritas ini berdasarkan kondisi cuaca"
+    }}
+  ],
+  "hama_penyakit_waspada": [
+    {{
+      "nama": "Nama hama/penyakit",
+      "tanaman_target": "Tanaman yang rentan",
+      "tanda": "Tanda-tanda serangan",
+      "pencegahan": "Cara pencegahan"
+    }}
+  ],
+  "tips_musiman": ["Tip praktis 1", "Tip praktis 2", "Tip praktis 3", "Tip praktis 4"],
+  "peringatan": ["Peringatan penting terkait cuaca/bencana jika ada, kosongkan jika tidak ada"]
+}}
+
+Berikan minimal 5 tanaman rekomendasi, 6 pupuk/obat, dan 3 hama/penyakit yang relevan.
+Prioritaskan informasi yang paling berguna untuk petani kecil di Lombok."""
+
+    try:
+        llm_key = os.environ.get("EMERGENT_LLM_KEY", "")
+        chat = LlmChat(api_key=llm_key, session_id=str(uuid.uuid4()),
+            system_message="Kamu adalah ahli pertanian Lombok. Selalu balas dalam format JSON valid tanpa markdown code block. Gunakan bahasa Indonesia.")
+        chat = chat.with_model("openai", "gpt-4o")
+        chat = chat.with_params(temperature=0.4)
+        result_text = await chat.send_message(UserMessage(text=prompt))
+        import json as json_module
+        try:
+            ai_data = json_module.loads(result_text)
+        except json_module.JSONDecodeError:
+            if "```" in result_text:
+                json_str = result_text.split("```")[1]
+                if json_str.startswith("json"):
+                    json_str = json_str[4:]
+                ai_data = json_module.loads(json_str.strip())
+            else:
+                ai_data = {"ringkasan_cuaca": result_text, "musim": "", "tanaman_rekomendasi": [],
+                           "kebutuhan_pupuk_obat": [], "hama_penyakit_waspada": [], "tips_musiman": [], "peringatan": []}
+        return {"status": "success", "weather": weather_data, "ai": ai_data, "bulan": f"{month_name} {now.year}"}
+    except Exception as e:
+        return {"status": "fallback", "weather": weather_data,
+                "ai": {"ringkasan_cuaca": f"AI tidak tersedia: {str(e)}", "musim": "",
+                        "tanaman_rekomendasi": [], "kebutuhan_pupuk_obat": [],
+                        "hama_penyakit_waspada": [], "tips_musiman": [], "peringatan": []},
+                "bulan": f"{month_name} {now.year}"}
+
+
 @router.post("/forecast/stock")
 async def forecast_stock(admin: dict = Depends(require_admin_panel_access)):
     from emergentintegrations.llm.openai import LlmChat, UserMessage
