@@ -555,7 +555,14 @@ export const Products = () => {
                   {bulkItems.map((item, idx) => (
                     <div key={idx} className="p-3 border rounded-lg space-y-2 bg-muted/20" data-testid={`bulk-item-${idx}`}>
                       <div className="flex items-center justify-between">
-                        <span className="text-xs font-semibold text-muted-foreground">#{idx + 1} {item.existing_product_id ? '(Restok)' : item.name ? '(Baru)' : ''}</span>
+                        <span className="text-xs font-semibold text-muted-foreground">
+                          #{idx + 1}
+                          {item.existing_product_id ? (
+                            <span className="ml-1.5 px-1.5 py-0.5 bg-emerald-100 text-emerald-700 rounded">Restok</span>
+                          ) : item.name ? (
+                            <span className="ml-1.5 px-1.5 py-0.5 bg-blue-100 text-blue-700 rounded">Baru</span>
+                          ) : null}
+                        </span>
                         {bulkItems.length > 1 && (
                           <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={() => setBulkItems(bulkItems.filter((_, i) => i !== idx))} data-testid={`remove-bulk-item-${idx}`}>
                             <Trash2 className="w-3.5 h-3.5 text-destructive" />
@@ -571,23 +578,33 @@ export const Products = () => {
                           autoComplete="off" className="text-sm"
                           data-testid={`bulk-product-search-${idx}`}
                         />
-                        {item.searchOpen && item.searchResults.length > 0 && (
+                        {item.searchOpen && item.searchQuery.length > 0 && (
                           <div className="absolute z-50 w-full bg-white border rounded-md shadow-lg mt-1 max-h-40 overflow-y-auto">
-                            <div className="px-3 py-2 text-xs text-emerald-600 bg-emerald-50 font-medium cursor-pointer hover:bg-emerald-100"
-                              onClick={() => selectBulkProduct(idx, null)} data-testid={`bulk-new-product-${idx}`}>
-                              + Barang Baru: "{item.searchQuery}"
-                            </div>
-                            {item.searchResults.map(p => (
-                              <div key={p.id} className="px-3 py-2 hover:bg-accent cursor-pointer" onClick={() => selectBulkProduct(idx, p)} data-testid={`bulk-search-result-${p.id}`}>
-                                <p className="text-sm font-medium">{p.name}</p>
-                                <p className="text-xs text-muted-foreground">Stok: {fmtNum(p.stock)} satuan | HPP: {fmt(p.cost_price)}/dus</p>
+                            {item.searchResults.length > 0 ? (
+                              <>
+                                {item.searchResults.map(p => (
+                                  <div key={p.id} className="px-3 py-2 hover:bg-accent cursor-pointer border-b last:border-b-0" onClick={() => selectBulkProduct(idx, p)} data-testid={`bulk-search-result-${p.id}`}>
+                                    <p className="text-sm font-medium">{p.name}</p>
+                                    <p className="text-xs text-muted-foreground">Stok: {fmtNum(p.stock)} satuan | HPP: {fmt(p.cost_price)}/dus</p>
+                                  </div>
+                                ))}
+                                <div className="px-3 py-2 text-xs text-blue-600 bg-blue-50 font-medium cursor-pointer hover:bg-blue-100 border-t"
+                                  onClick={() => selectBulkProduct(idx, null)} data-testid={`bulk-new-product-${idx}`}>
+                                  + Tambah sebagai Barang Baru: "{item.searchQuery}"
+                                </div>
+                              </>
+                            ) : (
+                              <div className="px-3 py-2 text-xs text-amber-700 bg-amber-50">
+                                Barang tidak ditemukan — akan otomatis dibuat sebagai <strong>barang baru</strong>
                               </div>
-                            ))}
+                            )}
                           </div>
                         )}
-                        {item.existing_product_id && (
-                          <p className="text-xs text-emerald-600 mt-1">Restok barang yang sudah ada</p>
-                        )}
+                        {item.existing_product_id ? (
+                          <p className="text-xs text-emerald-600 mt-1">Restok: stok akan ditambahkan ke barang yang sudah ada</p>
+                        ) : item.name && !item.existing_product_id ? (
+                          <p className="text-xs text-blue-600 mt-1">Barang baru akan dibuat</p>
+                        ) : null}
                       </div>
                       {/* Fields */}
                       <div className="grid grid-cols-3 gap-2">
