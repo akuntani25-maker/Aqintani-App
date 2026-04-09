@@ -6,7 +6,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, LineChart, Line
 } from 'recharts';
-import { TrendingUp, Package, DollarSign, ShoppingCart, Star, CloudSun, Loader2, RefreshCw, Leaf, Droplets, Wind, Thermometer, Bug, FlaskConical, AlertTriangle, Sprout, CloudRain } from 'lucide-react';
+import { TrendingUp, Package, DollarSign, ShoppingCart, Star, CloudSun, Loader2, RefreshCw, Leaf, Droplets, Wind, Thermometer, Bug, FlaskConical, AlertTriangle, Sprout, CloudRain, Newspaper, TrendingDown, ArrowUpRight, ExternalLink, BarChart3 } from 'lucide-react';
 import { toast } from 'sonner';
 
 const fmt = (v) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(v);
@@ -80,6 +80,7 @@ export const Analytics = () => {
 
   const weather = agriData?.weather || [];
   const ai = agriData?.ai || {};
+  const newsArticles = agriData?.news || [];
 
   return (
     <div className="p-4 md:p-6 lg:p-8 space-y-6" data-testid="analytics-page">
@@ -339,6 +340,98 @@ export const Analytics = () => {
                       </div>
                     </Card>
                   ))}
+                </div>
+              )}
+
+              {/* Recommended Crops - now labeled as based on real data */}
+              {ai.aktivitas_pertanian_terkini?.length > 0 && (
+                <div>
+                  <h3 className="text-base font-semibold mb-3 flex items-center gap-2">
+                    <Sprout className="w-5 h-5 text-emerald-600" />Aktivitas Pertanian Terkini di Lombok
+                  </h3>
+                  <p className="text-xs text-muted-foreground mb-3 -mt-1">Berdasarkan data real dari berita dan laporan terkini</p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {ai.aktivitas_pertanian_terkini.map((a, i) => (
+                      <Card key={i} className="p-4 bg-green-50/50 border-green-200 hover:shadow-md transition-shadow" data-testid={`aktiv-${i}`}>
+                        <div className="flex items-start justify-between mb-2">
+                          <h4 className="font-semibold text-sm">{a.tanaman}</h4>
+                          <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
+                            a.status?.includes('panen') ? 'bg-amber-100 text-amber-700' :
+                            a.status?.includes('tanam') ? 'bg-green-100 text-green-700' :
+                            'bg-blue-100 text-blue-700'
+                          }`}>{a.status}</span>
+                        </div>
+                        {a.wilayah && <p className="text-xs text-emerald-700 mb-1"><span className="font-medium">Wilayah:</span> {a.wilayah}</p>}
+                        <p className="text-xs text-muted-foreground leading-relaxed">{a.detail}</p>
+                        {a.sumber_info && (
+                          <p className="text-[10px] text-blue-600 mt-2 italic">Sumber: {a.sumber_info}</p>
+                        )}
+                      </Card>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* Market Conditions */}
+              {ai.kondisi_pasar?.length > 0 && (
+                <div>
+                  <h3 className="text-base font-semibold mb-3 flex items-center gap-2">
+                    <BarChart3 className="w-5 h-5 text-indigo-600" />Kondisi Pasar Terkini
+                  </h3>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                    {ai.kondisi_pasar.map((k, i) => (
+                      <Card key={i} className="p-4 hover:shadow-md transition-shadow" data-testid={`market-${i}`}>
+                        <div className="flex items-center justify-between mb-1.5">
+                          <h4 className="font-semibold text-sm">{k.komoditas}</h4>
+                          <span className={`text-xs font-bold flex items-center gap-0.5 ${
+                            k.tren === 'naik' ? 'text-red-600' :
+                            k.tren === 'turun' ? 'text-green-600' : 'text-gray-600'
+                          }`}>
+                            {k.tren === 'naik' ? <ArrowUpRight className="w-3.5 h-3.5" /> :
+                             k.tren === 'turun' ? <TrendingDown className="w-3.5 h-3.5" /> : null}
+                            {k.tren}
+                          </span>
+                        </div>
+                        {k.harga && <p className="text-sm font-bold text-primary mb-1">{k.harga}</p>}
+                        <p className="text-xs text-muted-foreground">{k.keterangan}</p>
+                      </Card>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {/* News Sources */}
+              {newsArticles.length > 0 && (
+                <div>
+                  <h3 className="text-base font-semibold mb-3 flex items-center gap-2">
+                    <Newspaper className="w-5 h-5 text-gray-600" />Berita Pertanian Lombok ({newsArticles.length} artikel)
+                  </h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-[500px] overflow-y-auto pr-1">
+                    {newsArticles.map((n, i) => (
+                      <Card key={i} className="p-3 hover:shadow-md transition-shadow group" data-testid={`news-${i}`}>
+                        <div className="flex items-start gap-2">
+                          <div className="flex-1 min-w-0">
+                            <a href={n.link} target="_blank" rel="noopener noreferrer"
+                              className="text-sm font-medium hover:text-primary transition-colors line-clamp-2 flex items-start gap-1">
+                              {n.title}
+                              <ExternalLink className="w-3 h-3 shrink-0 mt-0.5 opacity-0 group-hover:opacity-100 transition-opacity" />
+                            </a>
+                            {n.description && (
+                              <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{n.description}</p>
+                            )}
+                            <div className="flex items-center gap-2 mt-1.5">
+                              {n.source && (
+                                <span className="text-[10px] px-2 py-0.5 bg-blue-50 text-blue-700 rounded-full font-medium">{n.source}</span>
+                              )}
+                              {n.date && (
+                                <span className="text-[10px] text-muted-foreground">{new Date(n.date).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      </Card>
+                    ))}
+                  </div>
                 </div>
               )}
 

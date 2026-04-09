@@ -83,7 +83,7 @@ Aplikasi web responsif untuk toko farmasi dan pertanian "UD. AQIN TANI" dengan s
 65. Bulk Add Product - Form "Tambah Barang dari Supplier" untuk input banyak barang sekaligus dari satu supplier, dengan integrasi hutang supplier (bayar di muka, invoice, jatuh tempo) dan search supplier
 66. Retur ke Mobil Box - Modal retur di Pesanan Kios Mitra kini bisa pilih tujuan: Gudang atau Mobil Box
 67. Oper Pesanan Merge Fix - Fix query oper pesanan agar handle kedua ejaan "cancelled"/"canceled"
-68. Info Pertanian Lombok - Tab baru di Analytics: cuaca real-time 4 wilayah Lombok (Open-Meteo API), rekomendasi tanaman, kebutuhan pupuk/obat, waspada hama/penyakit, dan tips musiman (AI GPT-4o). Menggantikan tab Prediksi Stok AI.
+68. Info Pertanian Lombok - Tab baru di Analytics: cuaca real-time 4 wilayah Lombok (Open-Meteo API), berita pertanian real dari Google News RSS + scraping portal berita NTB (LombokPost, insidelombok, ntbprov.go.id, ANTARA, dll), aktivitas pertanian terkini berdasarkan data berita, kondisi pasar komoditas, rekomendasi tanaman, kebutuhan pupuk/obat, waspada hama/penyakit (AI GPT-4o menganalisis data cuaca + berita real). Menggantikan tab Prediksi Stok AI.
 
 ## Credentials
 - Admin: admin@aqintani.com / admin123
