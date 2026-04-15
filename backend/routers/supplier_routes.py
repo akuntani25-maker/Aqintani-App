@@ -349,6 +349,8 @@ async def get_supplier_purchase_items(
                 "due_date": p.get("due_date", ""),
                 "purchase_remaining": p.get("remaining", 0),
             })
+    # Ensure sorted by date descending
+    result.sort(key=lambda x: x.get("date", ""), reverse=True)
     return result
 
 

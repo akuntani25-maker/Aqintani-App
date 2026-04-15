@@ -86,6 +86,7 @@ Aplikasi web responsif untuk toko farmasi dan pertanian "UD. AQIN TANI" dengan s
 68. Info Pertanian Lombok - Tab baru di Analytics: cuaca real-time 4 wilayah Lombok (Open-Meteo API), berita pertanian real dari Google News RSS + scraping portal berita NTB (LombokPost, insidelombok, ntbprov.go.id, ANTARA, dll), aktivitas pertanian terkini berdasarkan data berita, kondisi pasar komoditas, rekomendasi tanaman, kebutuhan pupuk/obat, waspada hama/penyakit (AI GPT-4o menganalisis data cuaca + berita real). Menggantikan tab Prediksi Stok AI.
 69. Redesign Halaman Hutang Supplier - Tabel detail pembelian per-item (tanggal, nama barang, qty dus+satuan, harga pokok, total, jatuh tempo per tanggal). Search nama barang + filter tanggal. Import riwayat pembelian dari CSV (hutang saja, tanpa stok).
 70. Redesign Detail Kios Mitra - Tabel detail pesanan per-item (tanggal, no order, nama barang terjual, qty dus, qty satuan, harga jual, total, setoran). Subtotal per tanggal + Grand Total. Search nama barang + filter tanggal. Import riwayat pesanan dari CSV (menambah piutang). Backend: GET /partner-stores/{id}/order-items, POST /partner-stores/{id}/import-orders-csv.
+71. Sorting & Pagination Hutang Supplier - Data pembelian di detail supplier disortir berdasarkan tanggal terbaru. Ditambahkan pagination per grup tanggal (10 grup per halaman) untuk data yang banyak.
 
 ## Credentials
 - Admin: admin@aqintani.com / admin123

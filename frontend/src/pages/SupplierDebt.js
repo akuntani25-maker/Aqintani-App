@@ -60,6 +60,8 @@ export const SupplierDebt = () => {
   const [importSupplierName, setImportSupplierName] = useState('');
   const [importRows, setImportRows] = useState([]);
   const [importSubmitting, setImportSubmitting] = useState(false);
+  const [purchaseItemPage, setPurchaseItemPage] = useState(1);
+  const purchaseItemPerPage = 10; // date groups per page
 
   const fetchData = useCallback(async () => {
     try {
@@ -124,6 +126,7 @@ export const SupplierDebt = () => {
     setPurchaseSearch('');
     setPurchaseDateFrom('');
     setPurchaseDateTo('');
+    setPurchaseItemPage(1);
     try {
       const [purchasesRes, paymentsRes, itemsRes] = await Promise.all([
         api.get(`/supplier-debts/${supplierId}/purchases?show_all=false`),
@@ -521,6 +524,7 @@ export const SupplierDebt = () => {
                               <Input placeholder="Cari nama barang..." value={purchaseSearch} className="pl-8 h-8 text-sm"
                                 onChange={(e) => {
                                   setPurchaseSearch(e.target.value);
+                                  setPurchaseItemPage(1);
                                   fetchPurchaseItems(s.supplier_id, e.target.value, purchaseDateFrom, purchaseDateTo);
                                 }} data-testid="purchase-item-search" />
                             </div>
@@ -528,17 +532,20 @@ export const SupplierDebt = () => {
                               <Input type="date" className="h-8 text-xs w-36" value={purchaseDateFrom} placeholder="Dari"
                                 onChange={(e) => {
                                   setPurchaseDateFrom(e.target.value);
+                                  setPurchaseItemPage(1);
                                   fetchPurchaseItems(s.supplier_id, purchaseSearch, e.target.value, purchaseDateTo);
                                 }} data-testid="purchase-date-from" />
                               <span className="text-xs text-muted-foreground">-</span>
                               <Input type="date" className="h-8 text-xs w-36" value={purchaseDateTo} placeholder="Sampai"
                                 onChange={(e) => {
                                   setPurchaseDateTo(e.target.value);
+                                  setPurchaseItemPage(1);
                                   fetchPurchaseItems(s.supplier_id, purchaseSearch, purchaseDateFrom, e.target.value);
                                 }} data-testid="purchase-date-to" />
                               {(purchaseSearch || purchaseDateFrom || purchaseDateTo) && (
                                 <Button size="sm" variant="ghost" className="h-8 px-2" onClick={() => {
                                   setPurchaseSearch(''); setPurchaseDateFrom(''); setPurchaseDateTo('');
+                                  setPurchaseItemPage(1);
                                   fetchPurchaseItems(s.supplier_id, '', '', '');
                                 }}><X className="w-3.5 h-3.5" /></Button>
                               )}
@@ -563,8 +570,10 @@ export const SupplierDebt = () => {
                               if (!grouped[d].due_date && item.due_date) grouped[d].due_date = item.due_date;
                               grouped[d].remaining = Math.max(grouped[d].remaining, item.purchase_remaining);
                             });
-                            const dates = Object.keys(grouped).sort((a, b) => b.localeCompare(a));
+                            const allDates = Object.keys(grouped).sort((a, b) => b.localeCompare(a));
                             const grandTotal = purchaseItems.reduce((s, i) => s + i.subtotal, 0);
+                            const totalDatePages = Math.ceil(allDates.length / purchaseItemPerPage);
+                            const dates = allDates.slice((purchaseItemPage - 1) * purchaseItemPerPage, purchaseItemPage * purchaseItemPerPage);
 
                             return (
                               <>
@@ -690,7 +699,8 @@ export const SupplierDebt = () => {
                                   </Card>
                                 </div>
 
-                                <p className="text-xs text-muted-foreground text-center">{purchaseItems.length} item dari {dates.length} tanggal pembelian</p>
+                                <p className="text-xs text-muted-foreground text-center">{purchaseItems.length} item dari {allDates.length} tanggal pembelian</p>
+                                <Pagination page={purchaseItemPage} totalPages={totalDatePages} total={allDates.length} perPage={purchaseItemPerPage} onChange={setPurchaseItemPage} />
                               </>
                             );
                           })()}
