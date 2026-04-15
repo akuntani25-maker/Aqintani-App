@@ -301,6 +301,117 @@ async def get_supplier_debts_summary(admin: dict = Depends(require_admin_panel_a
     }
 
 
+@router.get("/supplier-debts/{supplier_id}/purchase-items")
+async def get_supplier_purchase_items(
+    supplier_id: str, search: str = "", date_from: str = "", date_to: str = "",
+    admin: dict = Depends(require_admin_panel_access)
+):
+    """Flatten purchase items for detailed view with search/filter."""
+    query = {"supplier_id": supplier_id}
+    date_filter = {}
+    if date_from:
+        date_filter["$gte"] = date_from
+    if date_to:
+        date_filter["$lte"] = date_to
+    if date_filter:
+        query["date"] = date_filter
+
+    purchases = await db.purchases.find(query, {"_id": 0}).sort("date", -1).to_list(10000)
+
+    # Batch fetch products for items_per_box
+    all_pids = set()
+    for p in purchases:
+        for item in p.get("items", []):
+            pid = item.get("product_id", "")
+            if pid:
+                all_pids.add(pid)
+    products_map = {}
+    if all_pids:
+        prods = await db.products.find({"id": {"$in": list(all_pids)}}, {"_id": 0, "id": 1, "items_per_box": 1}).to_list(10000)
+        products_map = {pr["id"]: pr for pr in prods}
+
+    result = []
+    for p in purchases:
+        for item in p.get("items", []):
+            product_name = item.get("product_name", "")
+            if search and search.lower() not in product_name.lower():
+                continue
+            prod = products_map.get(item.get("product_id", ""), {})
+            ipb = item.get("items_per_box") or prod.get("items_per_box", 1) or 1
+            qty = item.get("quantity", 0)
+            result.append({
+                "purchase_id": p["id"], "date": p.get("date", ""),
+                "product_name": product_name,
+                "qty_dus": qty, "items_per_box": ipb,
+                "qty_satuan": int(qty * ipb),
+                "cost_price": item.get("cost_price", 0),
+                "subtotal": item.get("subtotal", qty * item.get("cost_price", 0)),
+                "due_date": p.get("due_date", ""),
+                "purchase_remaining": p.get("remaining", 0),
+            })
+    return result
+
+
+@router.post("/supplier-debts/{supplier_id}/import-csv")
+async def import_supplier_purchases_csv(supplier_id: str, request: Request, admin: dict = Depends(require_admin_panel_access)):
+    """Import riwayat pembelian dari CSV."""
+    body = await request.json()
+    rows = body.get("rows", [])
+    if not rows:
+        raise HTTPException(status_code=400, detail="Data import kosong")
+
+    supplier = await db.suppliers.find_one({"id": supplier_id}, {"_id": 0})
+    if not supplier:
+        raise HTTPException(status_code=404, detail="Supplier tidak ditemukan")
+
+    now = datetime.now(timezone.utc)
+
+    # Group rows by date
+    grouped = {}
+    for row in rows:
+        date = row.get("date", now.strftime("%Y-%m-%d"))
+        if date not in grouped:
+            grouped[date] = {"items": [], "due_date": row.get("due_date", "")}
+        if not grouped[date]["due_date"] and row.get("due_date"):
+            grouped[date]["due_date"] = row["due_date"]
+        grouped[date]["items"].append(row)
+
+    total_items = 0
+    for date, group in grouped.items():
+        items = []
+        total = 0
+        for row in group["items"]:
+            qty = int(row.get("qty_dus", 0) or 0)
+            cost = float(row.get("cost_price", 0) or 0)
+            ipb = float(row.get("items_per_box", 1) or 1)
+            subtotal = cost * qty
+            items.append({
+                "product_name": row.get("product_name", ""),
+                "product_id": "", "quantity": qty,
+                "items_per_box": ipb,
+                "cost_price": cost, "subtotal": subtotal
+            })
+            total += subtotal
+            total_items += 1
+
+        purchase_doc = {
+            "id": str(uuid.uuid4()), "supplier_id": supplier_id,
+            "supplier_name": supplier["name"], "items": items,
+            "total": total, "paid": 0, "remaining": total,
+            "due_date": group["due_date"], "date": date,
+            "notes": f"Import CSV - {len(items)} item",
+            "source": "csv_import", "created_at": now.isoformat()
+        }
+        await db.purchases.insert_one(purchase_doc)
+
+    from services import log_audit
+    await log_audit(admin, "import_csv", "purchases", supplier_id, {
+        "supplier": supplier["name"], "dates": len(grouped), "items": total_items
+    })
+
+    return {"message": f"Berhasil import {total_items} item dari {len(grouped)} tanggal pembelian"}
+
+
 @router.get("/supplier-debts/{supplier_id}/purchases")
 async def get_supplier_unpaid_purchases(supplier_id: str, show_all: bool = False, admin: dict = Depends(require_admin_panel_access)):
     query = {"supplier_id": supplier_id}

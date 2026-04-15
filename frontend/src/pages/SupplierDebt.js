@@ -8,13 +8,15 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../components/
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
 import {
   DollarSign, AlertTriangle, CreditCard, Users, Search, Download,
-  ChevronDown, ChevronUp, Clock, FileText, Bell, Banknote, CalendarDays, RotateCcw, Edit3
+  ChevronDown, ChevronUp, Clock, FileText, Bell, Banknote, CalendarDays, RotateCcw, Edit3,
+  Upload, X, Filter
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { CurrencyInput } from '../components/CurrencyInput';
 import { Pagination } from '../components/Pagination';
 
 const fmt = (v) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(v);
+const fmtNum = (v) => new Intl.NumberFormat('id-ID').format(v);
 
 export const SupplierDebt = () => {
   const [overview, setOverview] = useState([]);
@@ -47,6 +49,17 @@ export const SupplierDebt = () => {
   const [returnWarehouse, setReturnWarehouse] = useState('gudang_utama');
   const [page, setPage] = useState(1);
   const perPage = 15;
+  // Purchase items (flattened) states
+  const [purchaseItems, setPurchaseItems] = useState([]);
+  const [purchaseSearch, setPurchaseSearch] = useState('');
+  const [purchaseDateFrom, setPurchaseDateFrom] = useState('');
+  const [purchaseDateTo, setPurchaseDateTo] = useState('');
+  // Import CSV states
+  const [importModalOpen, setImportModalOpen] = useState(false);
+  const [importSupplierId, setImportSupplierId] = useState('');
+  const [importSupplierName, setImportSupplierName] = useState('');
+  const [importRows, setImportRows] = useState([]);
+  const [importSubmitting, setImportSubmitting] = useState(false);
 
   const fetchData = useCallback(async () => {
     try {
@@ -108,18 +121,34 @@ export const SupplierDebt = () => {
     setDetailLoading(true);
     setDetailTab('purchases');
     setShowAllPurchases(false);
+    setPurchaseSearch('');
+    setPurchaseDateFrom('');
+    setPurchaseDateTo('');
     try {
-      const [purchasesRes, paymentsRes] = await Promise.all([
+      const [purchasesRes, paymentsRes, itemsRes] = await Promise.all([
         api.get(`/supplier-debts/${supplierId}/purchases?show_all=false`),
-        api.get(`/suppliers/${supplierId}/payments`)
+        api.get(`/suppliers/${supplierId}/payments`),
+        api.get(`/supplier-debts/${supplierId}/purchase-items`)
       ]);
       setSupplierPurchases(purchasesRes.data);
       setSupplierPayments(paymentsRes.data);
+      setPurchaseItems(itemsRes.data);
     } catch (error) {
       toast.error('Gagal memuat detail supplier');
     } finally {
       setDetailLoading(false);
     }
+  };
+
+  const fetchPurchaseItems = async (supplierId, search = '', dateFrom = '', dateTo = '') => {
+    try {
+      const params = new URLSearchParams();
+      if (search) params.append('search', search);
+      if (dateFrom) params.append('date_from', dateFrom);
+      if (dateTo) params.append('date_to', dateTo);
+      const res = await api.get(`/supplier-debts/${supplierId}/purchase-items?${params.toString()}`);
+      setPurchaseItems(res.data);
+    } catch { toast.error('Gagal memuat data pembelian'); }
   };
 
   const fetchPurchases = async (supplierId, showAll) => {
@@ -184,6 +213,90 @@ export const SupplierDebt = () => {
     setCorrectAmount(String(supplier.outstanding));
     setCorrectNotes('');
     setCorrectModalOpen(true);
+  };
+
+  const openImportModal = (supplier) => {
+    setImportSupplierId(supplier.supplier_id);
+    setImportSupplierName(supplier.supplier_name);
+    setImportRows([]);
+    setImportModalOpen(true);
+  };
+
+  const handleCSVFile = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      try {
+        const text = evt.target.result;
+        const lines = text.split('\n').filter(l => l.trim());
+        if (lines.length < 2) { toast.error('CSV harus memiliki header dan minimal 1 baris data'); return; }
+        const headers = lines[0].split(',').map(h => h.trim().toLowerCase().replace(/"/g, ''));
+        const rows = [];
+        for (let i = 1; i < lines.length; i++) {
+          const vals = lines[i].split(',').map(v => v.trim().replace(/"/g, ''));
+          if (vals.length < 3) continue;
+          const row = {};
+          headers.forEach((h, idx) => { row[h] = vals[idx] || ''; });
+          // Map common column names
+          const dateVal = row['tanggal'] || row['date'] || row['tgl'] || '';
+          const nameVal = row['nama barang'] || row['nama_barang'] || row['product_name'] || row['barang'] || row['nama'] || '';
+          const qtyVal = row['qty'] || row['qty (dus)'] || row['qty_dus'] || row['jumlah'] || row['quantity'] || '0';
+          const ipbVal = row['isi/dus'] || row['isi_per_dus'] || row['items_per_box'] || row['isi'] || '1';
+          const costVal = row['harga'] || row['harga supplier'] || row['harga_supplier'] || row['harga pokok'] || row['cost_price'] || row['harga supplier/dus'] || '0';
+          const dueVal = row['jatuh tempo'] || row['due_date'] || row['jatuh_tempo'] || '';
+          // Parse date: support DD/MM/YYYY and YYYY-MM-DD
+          let parsedDate = dateVal;
+          if (dateVal.includes('/')) {
+            const parts = dateVal.split('/');
+            if (parts.length === 3) {
+              parsedDate = parts[2].length === 4
+                ? `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`
+                : dateVal;
+            }
+          }
+          let parsedDue = dueVal;
+          if (dueVal.includes('/')) {
+            const parts = dueVal.split('/');
+            if (parts.length === 3) {
+              parsedDue = parts[2].length === 4
+                ? `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`
+                : dueVal;
+            }
+          }
+          if (nameVal) {
+            rows.push({
+              date: parsedDate, product_name: nameVal,
+              qty_dus: parseInt(qtyVal) || 0, items_per_box: parseFloat(ipbVal) || 1,
+              cost_price: parseFloat(costVal.replace(/[^0-9.-]/g, '')) || 0,
+              due_date: parsedDue
+            });
+          }
+        }
+        setImportRows(rows);
+        if (rows.length === 0) toast.error('Tidak ada data valid yang ditemukan di CSV');
+        else toast.success(`${rows.length} baris data berhasil dibaca`);
+      } catch { toast.error('Gagal membaca file CSV'); }
+    };
+    reader.readAsText(file);
+    e.target.value = '';
+  };
+
+  const handleImportSubmit = async () => {
+    if (importRows.length === 0) return;
+    setImportSubmitting(true);
+    try {
+      const res = await api.post(`/supplier-debts/${importSupplierId}/import-csv`, { rows: importRows });
+      toast.success(res.data.message);
+      setImportModalOpen(false);
+      fetchData();
+      if (expandedSupplier === importSupplierId) {
+        setExpandedSupplier(null);
+        setTimeout(() => toggleSupplier(importSupplierId), 200);
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Gagal import data');
+    } finally { setImportSubmitting(false); }
   };
 
   const handleCorrection = async () => {
@@ -398,122 +511,189 @@ export const SupplierDebt = () => {
                         </Button>
                       </div>
 
-                      {/* Purchases Tab */}
+                      {/* Purchases Tab - Detailed Items View */}
                       {detailTab === 'purchases' && (
                         <div className="space-y-3">
-                          {supplierPurchases.length === 0 ? (
-                            <p className="text-center text-muted-foreground py-4 text-sm">{showAllPurchases ? 'Tidak ada pembelian.' : 'Tidak ada pembelian yang belum lunas.'}</p>
-                          ) : (
-                            <>
-                              {/* Desktop Table */}
-                              <div className="hidden md:block rounded-lg border overflow-hidden">
-                                <Table>
-                                  <TableHeader>
-                                    <TableRow>
-                                      <TableHead>Tanggal</TableHead>
-                                      <TableHead>Total</TableHead>
-                                      <TableHead>Dibayar</TableHead>
-                                      <TableHead>Sisa</TableHead>
-                                      <TableHead>Jatuh Tempo</TableHead>
-                                      <TableHead>Status</TableHead>
-                                      <TableHead>Catatan</TableHead>
-                                    </TableRow>
-                                  </TableHeader>
-                                  <TableBody>
-                                    {supplierPurchases.map(p => {
-                                      const age = Math.floor((new Date(today) - new Date(p.date)) / 86400000);
-                                      const isOld = p.remaining > 0 && age > 30;
-                                      const handleDueDate = async (e) => {
-                                        try {
-                                          await api.put(`/purchases/${p.id}/due-date?due_date=${e.target.value}`);
-                                          toast.success('Jatuh tempo diperbarui');
-                                          const res = await api.get(`/supplier-debts/${expandedSupplier}/purchases?show_all=${showAllPurchases}`);
-                                          setSupplierPurchases(res.data);
-                                        } catch { toast.error('Gagal update jatuh tempo'); }
-                                      };
-                                      return (
-                                        <TableRow key={p.id} className={isOld ? 'bg-yellow-50' : ''}>
-                                          <TableCell>{new Date(p.date).toLocaleDateString('id-ID')}</TableCell>
-                                          <TableCell>{fmt(p.total)}</TableCell>
-                                          <TableCell className="text-green-600">{fmt(p.paid)}</TableCell>
-                                          <TableCell className="font-semibold text-red-600">{fmt(p.remaining)}</TableCell>
-                                          <TableCell>
-                                            {p.remaining > 0 ? (
-                                              <input
-                                                type="date"
-                                                className="text-xs border rounded px-1.5 py-0.5 w-32"
-                                                value={p.due_date || ''}
-                                                onChange={handleDueDate}
-                                                data-testid={`due-date-${p.id}`}
-                                              />
-                                            ) : (
-                                              <span className="text-xs text-muted-foreground">-</span>
-                                            )}
-                                          </TableCell>
-                                          <TableCell>
-                                            {p.remaining <= 0
-                                              ? <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">Lunas</span>
-                                              : isOld
-                                                ? <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-0.5 rounded-full">{age}hr</span>
-                                                : <span className="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full">Tempo</span>
-                                            }
-                                          </TableCell>
-                                          <TableCell className="text-muted-foreground text-xs max-w-[150px] truncate">{p.notes || '-'}</TableCell>
-                                        </TableRow>
-                                      );
-                                    })}
-                                  </TableBody>
-                                </Table>
-                              </div>
+                          {/* Search & Filter */}
+                          <div className="flex flex-col md:flex-row gap-2">
+                            <div className="relative flex-1">
+                              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+                              <Input placeholder="Cari nama barang..." value={purchaseSearch} className="pl-8 h-8 text-sm"
+                                onChange={(e) => {
+                                  setPurchaseSearch(e.target.value);
+                                  fetchPurchaseItems(s.supplier_id, e.target.value, purchaseDateFrom, purchaseDateTo);
+                                }} data-testid="purchase-item-search" />
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <Input type="date" className="h-8 text-xs w-36" value={purchaseDateFrom} placeholder="Dari"
+                                onChange={(e) => {
+                                  setPurchaseDateFrom(e.target.value);
+                                  fetchPurchaseItems(s.supplier_id, purchaseSearch, e.target.value, purchaseDateTo);
+                                }} data-testid="purchase-date-from" />
+                              <span className="text-xs text-muted-foreground">-</span>
+                              <Input type="date" className="h-8 text-xs w-36" value={purchaseDateTo} placeholder="Sampai"
+                                onChange={(e) => {
+                                  setPurchaseDateTo(e.target.value);
+                                  fetchPurchaseItems(s.supplier_id, purchaseSearch, purchaseDateFrom, e.target.value);
+                                }} data-testid="purchase-date-to" />
+                              {(purchaseSearch || purchaseDateFrom || purchaseDateTo) && (
+                                <Button size="sm" variant="ghost" className="h-8 px-2" onClick={() => {
+                                  setPurchaseSearch(''); setPurchaseDateFrom(''); setPurchaseDateTo('');
+                                  fetchPurchaseItems(s.supplier_id, '', '', '');
+                                }}><X className="w-3.5 h-3.5" /></Button>
+                              )}
+                            </div>
+                            <Button size="sm" variant="outline" className="h-8 gap-1" onClick={() => openImportModal(s)} data-testid="import-csv-btn">
+                              <Upload className="w-3.5 h-3.5" /> Import CSV
+                            </Button>
+                          </div>
 
-                              {/* Mobile Cards */}
-                              <div className="md:hidden space-y-2">
-                                {supplierPurchases.map(p => {
-                                  const age = Math.floor((new Date(today) - new Date(p.date)) / 86400000);
-                                  const isOld = p.remaining > 0 && age > 30;
-                                  const handleMobileDueDate = async (e) => {
-                                    try {
-                                      await api.put(`/purchases/${p.id}/due-date?due_date=${e.target.value}`);
-                                      toast.success('Jatuh tempo diperbarui');
-                                      const res = await api.get(`/supplier-debts/${expandedSupplier}/purchases?show_all=${showAllPurchases}`);
-                                      setSupplierPurchases(res.data);
-                                    } catch { toast.error('Gagal update'); }
-                                  };
-                                  return (
-                                    <Card key={p.id} className={`p-3 text-sm ${isOld ? 'bg-yellow-50 border-yellow-200' : ''}`}>
-                                      <div className="flex justify-between items-start">
-                                        <span className="text-muted-foreground">{new Date(p.date).toLocaleDateString('id-ID')}</span>
-                                        {p.remaining > 0
-                                          ? isOld
-                                            ? <span className="text-[10px] bg-yellow-100 text-yellow-800 px-2 py-0.5 rounded-full">{age}hr jatuh tempo</span>
-                                            : <span className="text-[10px] bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full">Tempo</span>
-                                          : <span className="text-[10px] bg-green-100 text-green-700 px-2 py-0.5 rounded-full">Lunas</span>
-                                        }
-                                      </div>
-                                      <div className="flex justify-between mt-1">
-                                        <span>Total: {fmt(p.total)}</span>
-                                        <span className="font-bold text-red-600">Sisa: {fmt(p.remaining)}</span>
-                                      </div>
-                                      {p.remaining > 0 && (
-                                        <div className="flex items-center gap-2 mt-2">
-                                          <CalendarDays className="w-3.5 h-3.5 text-muted-foreground" />
-                                          <input type="date" className="text-xs border rounded px-1.5 py-0.5 flex-1" value={p.due_date || ''} onChange={handleMobileDueDate} />
+                          {purchaseItems.length === 0 ? (
+                            <p className="text-center text-muted-foreground py-4 text-sm">
+                              {purchaseSearch || purchaseDateFrom || purchaseDateTo ? 'Tidak ada data yang cocok dengan filter.' : 'Tidak ada data pembelian.'}
+                            </p>
+                          ) : (() => {
+                            // Group items by date
+                            const grouped = {};
+                            purchaseItems.forEach(item => {
+                              const d = item.date || 'tanpa-tanggal';
+                              if (!grouped[d]) grouped[d] = { items: [], due_date: item.due_date, total: 0, remaining: 0, purchase_id: item.purchase_id };
+                              grouped[d].items.push(item);
+                              grouped[d].total += item.subtotal;
+                              if (!grouped[d].due_date && item.due_date) grouped[d].due_date = item.due_date;
+                              grouped[d].remaining = Math.max(grouped[d].remaining, item.purchase_remaining);
+                            });
+                            const dates = Object.keys(grouped).sort((a, b) => b.localeCompare(a));
+                            const grandTotal = purchaseItems.reduce((s, i) => s + i.subtotal, 0);
+
+                            return (
+                              <>
+                                {/* Desktop Table */}
+                                <div className="hidden md:block rounded-lg border overflow-hidden">
+                                  <Table>
+                                    <TableHeader>
+                                      <TableRow>
+                                        <TableHead className="text-xs">Tanggal</TableHead>
+                                        <TableHead className="text-xs">Nama Barang</TableHead>
+                                        <TableHead className="text-xs text-right">Qty (Dus)</TableHead>
+                                        <TableHead className="text-xs text-right">Qty (Satuan)</TableHead>
+                                        <TableHead className="text-xs text-right">Harga Pokok/Dus</TableHead>
+                                        <TableHead className="text-xs text-right">Total</TableHead>
+                                        <TableHead className="text-xs">Jatuh Tempo</TableHead>
+                                      </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                      {dates.map(date => {
+                                        const group = grouped[date];
+                                        return group.items.map((item, idx) => (
+                                          <TableRow key={`${date}-${idx}`} className={group.remaining > 0 ? '' : 'opacity-60'}>
+                                            {idx === 0 ? (
+                                              <TableCell rowSpan={group.items.length + 1} className="text-xs font-medium align-top border-r bg-muted/30">
+                                                {date !== 'tanpa-tanggal' ? new Date(date).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }) : '-'}
+                                              </TableCell>
+                                            ) : null}
+                                            <TableCell className="text-sm">{item.product_name}</TableCell>
+                                            <TableCell className="text-sm text-right font-medium">{fmtNum(item.qty_dus)}</TableCell>
+                                            <TableCell className="text-xs text-right text-muted-foreground">{fmtNum(item.qty_satuan)} <span className="text-[10px]">({item.items_per_box}/dus)</span></TableCell>
+                                            <TableCell className="text-sm text-right">{fmt(item.cost_price)}</TableCell>
+                                            <TableCell className="text-sm text-right font-medium">{fmt(item.subtotal)}</TableCell>
+                                            {idx === 0 ? (
+                                              <TableCell rowSpan={group.items.length + 1} className="align-top border-l">
+                                                {group.remaining > 0 ? (
+                                                  <input type="date" className="text-xs border rounded px-1.5 py-0.5 w-32"
+                                                    value={group.due_date || ''}
+                                                    onChange={async (e) => {
+                                                      try {
+                                                        await api.put(`/purchases/${group.purchase_id}/due-date?due_date=${e.target.value}`);
+                                                        toast.success('Jatuh tempo diperbarui');
+                                                        fetchPurchaseItems(s.supplier_id, purchaseSearch, purchaseDateFrom, purchaseDateTo);
+                                                      } catch { toast.error('Gagal update'); }
+                                                    }}
+                                                    data-testid={`due-date-${date}`}
+                                                  />
+                                                ) : (
+                                                  <span className="text-xs text-green-600 font-medium">Lunas</span>
+                                                )}
+                                              </TableCell>
+                                            ) : null}
+                                          </TableRow>
+                                        )).concat([
+                                          <TableRow key={`${date}-subtotal`} className="bg-muted/50 border-b-2">
+                                            <TableCell colSpan={4} className="text-xs text-right font-semibold text-muted-foreground">Subtotal {new Date(date).toLocaleDateString('id-ID', { day: '2-digit', month: 'short' })}:</TableCell>
+                                            <TableCell className="text-sm text-right font-bold">{fmt(group.total)}</TableCell>
+                                          </TableRow>
+                                        ]);
+                                      })}
+                                      <TableRow className="bg-primary/5 font-bold">
+                                        <TableCell colSpan={2} className="text-sm">GRAND TOTAL</TableCell>
+                                        <TableCell className="text-sm text-right">{fmtNum(purchaseItems.reduce((s, i) => s + i.qty_dus, 0))}</TableCell>
+                                        <TableCell className="text-sm text-right">{fmtNum(purchaseItems.reduce((s, i) => s + i.qty_satuan, 0))}</TableCell>
+                                        <TableCell></TableCell>
+                                        <TableCell className="text-sm text-right">{fmt(grandTotal)}</TableCell>
+                                        <TableCell></TableCell>
+                                      </TableRow>
+                                    </TableBody>
+                                  </Table>
+                                </div>
+
+                                {/* Mobile Cards */}
+                                <div className="md:hidden space-y-3">
+                                  {dates.map(date => {
+                                    const group = grouped[date];
+                                    return (
+                                      <Card key={date} className={`p-3 ${group.remaining > 0 ? '' : 'opacity-60'}`}>
+                                        <div className="flex items-center justify-between mb-2">
+                                          <span className="text-xs font-semibold text-muted-foreground">
+                                            {date !== 'tanpa-tanggal' ? new Date(date).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }) : '-'}
+                                          </span>
+                                          {group.remaining > 0 ? (
+                                            <span className="text-xs text-red-600 font-medium">Belum lunas</span>
+                                          ) : (
+                                            <span className="text-xs text-green-600 font-medium">Lunas</span>
+                                          )}
                                         </div>
-                                      )}
-                                      {p.notes && <p className="text-xs text-muted-foreground mt-1">{p.notes}</p>}
-                                    </Card>
-                                  );
-                                })}
-                              </div>
-                            </>
-                          )}
-                          <Button size="sm" variant="ghost" className="text-xs" onClick={() => {
-                            const newVal = !showAllPurchases;
-                            setShowAllPurchases(newVal);
-                            fetchPurchases(s.supplier_id, newVal);
-                          }} data-testid="toggle-all-purchases">
-                            {showAllPurchases ? 'Tampilkan belum lunas saja' : 'Tampilkan semua pembelian'}
-                          </Button>
+                                        {group.items.map((item, idx) => (
+                                          <div key={idx} className="flex items-center justify-between py-1.5 border-t text-sm">
+                                            <div className="flex-1 min-w-0">
+                                              <p className="font-medium truncate">{item.product_name}</p>
+                                              <p className="text-xs text-muted-foreground">{fmtNum(item.qty_dus)} dus ({fmtNum(item.qty_satuan)} satuan) x {fmt(item.cost_price)}</p>
+                                            </div>
+                                            <p className="font-semibold ml-2 shrink-0">{fmt(item.subtotal)}</p>
+                                          </div>
+                                        ))}
+                                        <div className="flex justify-between mt-2 pt-2 border-t">
+                                          <span className="text-xs text-muted-foreground font-medium">Subtotal:</span>
+                                          <span className="text-sm font-bold">{fmt(group.total)}</span>
+                                        </div>
+                                        {group.remaining > 0 && (
+                                          <div className="flex items-center gap-2 mt-2">
+                                            <CalendarDays className="w-3.5 h-3.5 text-muted-foreground" />
+                                            <input type="date" className="text-xs border rounded px-1.5 py-0.5 flex-1"
+                                              value={group.due_date || ''}
+                                              onChange={async (e) => {
+                                                try {
+                                                  await api.put(`/purchases/${group.purchase_id}/due-date?due_date=${e.target.value}`);
+                                                  toast.success('Jatuh tempo diperbarui');
+                                                  fetchPurchaseItems(s.supplier_id, purchaseSearch, purchaseDateFrom, purchaseDateTo);
+                                                } catch { toast.error('Gagal update'); }
+                                              }} />
+                                          </div>
+                                        )}
+                                      </Card>
+                                    );
+                                  })}
+                                  <Card className="p-3 bg-primary/5">
+                                    <div className="flex justify-between">
+                                      <span className="font-semibold text-sm">Grand Total:</span>
+                                      <span className="font-bold text-sm">{fmt(grandTotal)}</span>
+                                    </div>
+                                  </Card>
+                                </div>
+
+                                <p className="text-xs text-muted-foreground text-center">{purchaseItems.length} item dari {dates.length} tanggal pembelian</p>
+                              </>
+                            );
+                          })()}
                         </div>
                       )}
 
@@ -678,6 +858,77 @@ export const SupplierDebt = () => {
               </div>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Import CSV Dialog */}
+      <Dialog open={importModalOpen} onOpenChange={setImportModalOpen}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto" data-testid="import-modal">
+          <DialogHeader>
+            <DialogTitle>Import Riwayat Pembelian</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <Card className="p-3 bg-muted/50">
+              <p className="font-semibold">{importSupplierName}</p>
+              <p className="text-xs text-muted-foreground mt-1">Upload file CSV dengan format kolom:</p>
+              <p className="text-xs font-mono bg-white rounded p-2 mt-1 border">Tanggal, Nama Barang, Qty, Isi/Dus, Harga Supplier, Jatuh Tempo</p>
+              <p className="text-[10px] text-muted-foreground mt-1">Format tanggal: DD/MM/YYYY atau YYYY-MM-DD. Kolom Jatuh Tempo opsional.</p>
+            </Card>
+
+            <div className="space-y-2">
+              <Label>Pilih File CSV</Label>
+              <Input type="file" accept=".csv" onChange={handleCSVFile} data-testid="import-file-input" />
+            </div>
+
+            {importRows.length > 0 && (
+              <>
+                <div className="rounded-lg border overflow-hidden max-h-60 overflow-y-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="text-xs">Tanggal</TableHead>
+                        <TableHead className="text-xs">Nama Barang</TableHead>
+                        <TableHead className="text-xs text-right">Qty (Dus)</TableHead>
+                        <TableHead className="text-xs text-right">Isi/Dus</TableHead>
+                        <TableHead className="text-xs text-right">Harga/Dus</TableHead>
+                        <TableHead className="text-xs text-right">Total</TableHead>
+                        <TableHead className="text-xs">Jatuh Tempo</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {importRows.map((row, i) => (
+                        <TableRow key={i}>
+                          <TableCell className="text-xs">{row.date}</TableCell>
+                          <TableCell className="text-sm">{row.product_name}</TableCell>
+                          <TableCell className="text-sm text-right">{fmtNum(row.qty_dus)}</TableCell>
+                          <TableCell className="text-sm text-right">{row.items_per_box}</TableCell>
+                          <TableCell className="text-sm text-right">{fmt(row.cost_price)}</TableCell>
+                          <TableCell className="text-sm text-right font-medium">{fmt(row.cost_price * row.qty_dus)}</TableCell>
+                          <TableCell className="text-xs">{row.due_date || '-'}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+                <Card className="p-3 bg-amber-50 border-amber-200">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-amber-900">Total import ({importRows.length} item):</span>
+                    <span className="font-bold text-amber-900">
+                      {fmt(importRows.reduce((s, r) => s + (r.cost_price * r.qty_dus), 0))}
+                    </span>
+                  </div>
+                  <p className="text-xs text-amber-700 mt-1">Semua item akan dicatat sebagai hutang (belum dibayar). Stok barang tidak akan berubah.</p>
+                </Card>
+              </>
+            )}
+
+            <div className="flex gap-2 justify-end pt-2">
+              <Button variant="outline" onClick={() => setImportModalOpen(false)}>Batal</Button>
+              <Button onClick={handleImportSubmit} disabled={importSubmitting || importRows.length === 0} data-testid="submit-import-btn">
+                {importSubmitting ? 'Mengimport...' : `Import ${importRows.length} Item`}
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
     </div>
