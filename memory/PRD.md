@@ -85,6 +85,7 @@ Aplikasi web responsif untuk toko farmasi dan pertanian "UD. AQIN TANI" dengan s
 67. Oper Pesanan Merge Fix - Fix query oper pesanan agar handle kedua ejaan "cancelled"/"canceled"
 68. Info Pertanian Lombok - Tab baru di Analytics: cuaca real-time 4 wilayah Lombok (Open-Meteo API), berita pertanian real dari Google News RSS + scraping portal berita NTB (LombokPost, insidelombok, ntbprov.go.id, ANTARA, dll), aktivitas pertanian terkini berdasarkan data berita, kondisi pasar komoditas, rekomendasi tanaman, kebutuhan pupuk/obat, waspada hama/penyakit (AI GPT-4o menganalisis data cuaca + berita real). Menggantikan tab Prediksi Stok AI.
 69. Redesign Halaman Hutang Supplier - Tabel detail pembelian per-item (tanggal, nama barang, qty dus+satuan, harga pokok, total, jatuh tempo per tanggal). Search nama barang + filter tanggal. Import riwayat pembelian dari CSV (hutang saja, tanpa stok).
+70. Redesign Detail Kios Mitra - Tabel detail pesanan per-item (tanggal, no order, nama barang terjual, qty dus, qty satuan, harga jual, total, setoran). Subtotal per tanggal + Grand Total. Search nama barang + filter tanggal. Import riwayat pesanan dari CSV (menambah piutang). Backend: GET /partner-stores/{id}/order-items, POST /partner-stores/{id}/import-orders-csv.
 
 ## Credentials
 - Admin: admin@aqintani.com / admin123
@@ -112,7 +113,9 @@ Aplikasi web responsif untuk toko farmasi dan pertanian "UD. AQIN TANI" dengan s
 - `/app/frontend/src/pages/PartnerOrders.js` - Partner orders with editable qty, harga satuan
 - `/app/frontend/src/pages/CanvasserDashboard.js` - Settlement, rekap, sisa bon
 - `/app/frontend/src/pages/Reports.js` - All reports + Rekap Kanvaser tab
-- `/app/backend/routers/partner_routes.py` - Settle endpoint, order_type
+- `/app/frontend/src/pages/PartnerStoreDetail.js` - Detail kios mitra: tabel pesanan per-item, search/filter, import CSV
+- `/app/frontend/src/pages/SupplierDebt.js` - Detail hutang supplier per-item, search/filter, import CSV
+- `/app/backend/routers/partner_routes.py` - Settle, order items, CSV import, transfer
 - `/app/backend/routers/report_routes.py` - Dashboard stats, canvasser recap
 - `/app/backend/routers/canvasser_routes.py` - My recap, enriched my-orders
 - `/app/backend/models.py` - supplier_cost_price, order_type, is_settled

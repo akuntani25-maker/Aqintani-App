@@ -721,3 +721,146 @@ async def transfer_partner_order(order_id: str, req: FastAPIRequest, current_use
         "total_transferred": total_transferred,
         "old_order_new_total": new_old_total
     }
+
+
+
+@router.get("/partner-stores/{store_id}/order-items")
+async def get_store_order_items(
+    store_id: str, search: str = "", date_from: str = "", date_to: str = "",
+    admin: dict = Depends(require_admin_panel_access)
+):
+    """Flatten order items for detailed view with search/filter."""
+    query = {"partner_store_id": store_id, "status": {"$nin": ["cancelled", "canceled"]}}
+    date_filter = {}
+    if date_from:
+        date_filter["$gte"] = date_from
+    if date_to:
+        date_filter["$lte"] = date_to + "T23:59:59"
+    if date_filter:
+        query["created_at"] = date_filter
+
+    orders = await db.partner_orders.find(query, {"_id": 0}).sort("created_at", -1).to_list(10000)
+
+    # Get payments for this store from payment_history collection
+    payments = await db.payment_history.find(
+        {"type": "partner_store", "reference_id": store_id}, {"_id": 0}
+    ).to_list(10000)
+    # Group payments by date
+    payments_by_date = {}
+    for p in payments:
+        pdate = p.get("date", p.get("created_at", "")[:10])
+        payments_by_date.setdefault(pdate, 0)
+        payments_by_date[pdate] += p.get("amount", 0)
+
+    # Batch fetch products for items_per_box
+    all_pids = set()
+    for o in orders:
+        for item in o.get("items", []):
+            pid = item.get("product_id", "")
+            if pid:
+                all_pids.add(pid)
+    products_map = {}
+    if all_pids:
+        prods = await db.products.find({"id": {"$in": list(all_pids)}}, {"_id": 0, "id": 1, "items_per_box": 1}).to_list(10000)
+        products_map = {pr["id"]: pr for pr in prods}
+
+    result = []
+    for o in orders:
+        order_date = o.get("created_at", "")[:10]
+        setoran = payments_by_date.get(order_date, 0)
+        for item in o.get("items", []):
+            product_name = item.get("product_name", "")
+            if search and search.lower() not in product_name.lower():
+                continue
+            prod = products_map.get(item.get("product_id", ""), {})
+            ipb = prod.get("items_per_box", 1) or 1
+            qty = item.get("quantity", 0)
+            unit = item.get("unit") or item.get("sell_unit") or "satuan"
+            result.append({
+                "order_id": o["id"],
+                "order_number": o.get("order_number", ""),
+                "date": order_date,
+                "product_name": product_name,
+                "qty": qty,
+                "unit": unit,
+                "qty_dus": qty if unit == "dus" else 0,
+                "qty_satuan": qty if unit != "dus" else int(qty * ipb),
+                "items_per_box": ipb,
+                "price": item.get("price", 0),
+                "subtotal": item.get("subtotal", qty * item.get("price", 0)),
+                "setoran": setoran,
+            })
+    return result
+
+
+@router.post("/partner-stores/{store_id}/import-orders-csv")
+async def import_store_orders_csv(store_id: str, req: FastAPIRequest, admin: dict = Depends(require_admin_panel_access)):
+    """Import riwayat pesanan dari CSV."""
+    body = await req.json()
+    rows = body.get("rows", [])
+    if not rows:
+        raise HTTPException(status_code=400, detail="Data import kosong")
+
+    store = await db.partner_stores.find_one({"id": store_id}, {"_id": 0})
+    if not store:
+        raise HTTPException(status_code=404, detail="Kios mitra tidak ditemukan")
+
+    now = datetime.now(timezone.utc)
+
+    # Group rows by date
+    grouped = {}
+    for row in rows:
+        date = row.get("date", now.strftime("%Y-%m-%d"))
+        grouped.setdefault(date, []).append(row)
+
+    total_items = 0
+    for date, items_list in grouped.items():
+        items = []
+        total = 0
+        for row in items_list:
+            qty = int(row.get("qty", 0) or 0)
+            price = float(row.get("price", 0) or 0)
+            unit = row.get("unit", "satuan").lower()
+            subtotal = price * qty
+            items.append({
+                "product_name": row.get("product_name", ""),
+                "product_id": "", "quantity": qty,
+                "unit": unit, "price": price, "subtotal": subtotal
+            })
+            total += subtotal
+            total_items += 1
+
+        order_doc = {
+            "id": str(uuid.uuid4()),
+            "order_number": f"IMP-{date.replace('-', '')}{len(items_list):02d}",
+            "partner_store_id": store_id,
+            "partner_store_name": store["name"],
+            "canvasser_id": "", "canvasser_name": "Import CSV",
+            "items": items,
+            "total": total, "subtotal": total, "discount": 0,
+            "paid": 0, "remaining": total,
+            "status": "delivered", "order_type": "reguler",
+            "notes": f"Import CSV - {len(items)} item",
+            "is_settled": False,
+            "date": date,
+            "delivery_date": date,
+            "warehouse_id": "",
+            "created_at": f"{date}T00:00:00",
+            "updated_at": now.isoformat()
+        }
+        await db.partner_orders.insert_one(order_doc)
+
+    # Update store debt
+    total_imported = sum(
+        float(r.get("price", 0) or 0) * int(r.get("qty", 0) or 0) for r in rows
+    )
+    await db.partner_stores.update_one(
+        {"id": store_id},
+        {"$inc": {"current_debt": total_imported}}
+    )
+
+    await log_audit(admin, "import_csv", "partner_orders", store_id, {
+        "store": store["name"], "dates": len(grouped), "items": total_items
+    })
+
+    return {"message": f"Berhasil import {total_items} item dari {len(grouped)} tanggal"}
