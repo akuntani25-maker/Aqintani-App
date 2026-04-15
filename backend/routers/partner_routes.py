@@ -790,6 +790,8 @@ async def get_store_order_items(
                 "subtotal": item.get("subtotal", qty * item.get("price", 0)),
                 "setoran": setoran,
             })
+    # Ensure sorted by date descending
+    result.sort(key=lambda x: x.get("date", ""), reverse=True)
     return result
 
 
@@ -864,3 +866,46 @@ async def import_store_orders_csv(store_id: str, req: FastAPIRequest, admin: dic
     })
 
     return {"message": f"Berhasil import {total_items} item dari {len(grouped)} tanggal"}
+
+
+
+@router.post("/partner-stores/{store_id}/import-payments-csv")
+async def import_store_payments_csv(store_id: str, req: FastAPIRequest, admin: dict = Depends(require_admin_panel_access)):
+    """Import riwayat setoran kios mitra dari CSV. Mengurangi piutang."""
+    body = await req.json()
+    rows = body.get("rows", [])
+    if not rows:
+        raise HTTPException(status_code=400, detail="Data import kosong")
+
+    store = await db.partner_stores.find_one({"id": store_id}, {"_id": 0})
+    if not store:
+        raise HTTPException(status_code=404, detail="Kios mitra tidak ditemukan")
+
+    total_paid = 0
+    for row in rows:
+        amount = float(row.get("amount", 0) or 0)
+        if amount <= 0:
+            continue
+        date = row.get("date", datetime.now(timezone.utc).strftime("%Y-%m-%d"))
+        notes = row.get("notes", "Import CSV")
+        payment_doc = {
+            "id": str(uuid.uuid4()), "type": "partner_store", "reference_id": store_id,
+            "partner_store_name": store["name"], "amount": amount,
+            "notes": notes,
+            "created_at": f"{date}T00:00:00", "date": date
+        }
+        await db.payment_history.insert_one(payment_doc)
+        total_paid += amount
+
+    # Reduce store debt
+    if total_paid > 0:
+        await db.partner_stores.update_one(
+            {"id": store_id},
+            {"$inc": {"current_debt": -total_paid}}
+        )
+
+    await log_audit(admin, "import_payments_csv", "partner_store", store_id, {
+        "store": store["name"], "count": len(rows), "total": total_paid
+    })
+
+    return {"message": f"Berhasil import {len([r for r in rows if float(r.get('amount',0) or 0) > 0])} pembayaran senilai Rp {total_paid:,.0f}"}

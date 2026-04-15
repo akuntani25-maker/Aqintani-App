@@ -87,6 +87,9 @@ Aplikasi web responsif untuk toko farmasi dan pertanian "UD. AQIN TANI" dengan s
 69. Redesign Halaman Hutang Supplier - Tabel detail pembelian per-item (tanggal, nama barang, qty dus+satuan, harga pokok, total, jatuh tempo per tanggal). Search nama barang + filter tanggal. Import riwayat pembelian dari CSV (hutang saja, tanpa stok).
 70. Redesign Detail Kios Mitra - Tabel detail pesanan per-item (tanggal, no order, nama barang terjual, qty dus, qty satuan, harga jual, total, setoran). Subtotal per tanggal + Grand Total. Search nama barang + filter tanggal. Import riwayat pesanan dari CSV (menambah piutang). Backend: GET /partner-stores/{id}/order-items, POST /partner-stores/{id}/import-orders-csv.
 71. Sorting & Pagination Hutang Supplier - Data pembelian di detail supplier disortir berdasarkan tanggal terbaru. Ditambahkan pagination per grup tanggal (10 grup per halaman) untuk data yang banyak.
+72. Pagination & Sorting Detail Kios Mitra - Data pesanan di detail kios mitra disortir tanggal terbaru + pagination per grup tanggal (10 per halaman).
+73. Import Riwayat Bayar Supplier - Fitur import CSV riwayat pembayaran di tab Riwayat Bayar supplier. Mengurangi hutang secara FIFO (dari pembelian terlama). Format: Tanggal, Jumlah, Catatan.
+74. Import Riwayat Setoran Kios Mitra - Fitur import CSV riwayat setoran di section Riwayat Setoran detail kios mitra. Mengurangi piutang. Format: Tanggal, Jumlah, Catatan. Section selalu ditampilkan + total setoran.
 
 ## Credentials
 - Admin: admin@aqintani.com / admin123

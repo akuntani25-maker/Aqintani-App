@@ -464,6 +464,65 @@ async def pay_supplier_debt(supplier_id: str, amount: float, notes: str = "", ad
     }
 
 
+@router.post("/supplier-debts/{supplier_id}/import-payments-csv")
+async def import_supplier_payments_csv(supplier_id: str, req: Request, admin: dict = Depends(require_admin_panel_access)):
+    """Import riwayat pembayaran supplier dari CSV. Mengurangi hutang (FIFO terlama dulu)."""
+    body = await req.json()
+    rows = body.get("rows", [])
+    if not rows:
+        raise HTTPException(status_code=400, detail="Data import kosong")
+
+    supplier = await db.suppliers.find_one({"id": supplier_id}, {"_id": 0})
+    if not supplier:
+        raise HTTPException(status_code=404, detail="Supplier tidak ditemukan")
+
+    total_paid = 0
+    for row in rows:
+        amount = float(row.get("amount", 0) or 0)
+        if amount <= 0:
+            continue
+        date = row.get("date", datetime.now(timezone.utc).strftime("%Y-%m-%d"))
+        notes = row.get("notes", "Import CSV")
+
+        # Reduce debt from oldest unpaid purchases (FIFO)
+        unpaid = await db.purchases.find(
+            {"supplier_id": supplier_id, "remaining": {"$gt": 0}}, {"_id": 0}
+        ).sort("date", 1).to_list(1000)
+
+        remaining_amount = amount
+        paid_purchases = []
+        for purchase in unpaid:
+            if remaining_amount <= 0:
+                break
+            purchase_remaining = purchase.get("remaining", 0)
+            pay_this = min(remaining_amount, purchase_remaining)
+            new_paid = purchase["paid"] + pay_this
+            new_remaining = purchase["total"] - new_paid
+            await db.purchases.update_one(
+                {"id": purchase["id"]},
+                {"$set": {"paid": new_paid, "remaining": max(0, new_remaining)}}
+            )
+            paid_purchases.append({"purchase_id": purchase["id"], "amount": pay_this})
+            remaining_amount -= pay_this
+
+        payment_doc = {
+            "id": str(uuid.uuid4()), "type": "supplier", "reference_id": supplier_id,
+            "supplier_id": supplier_id, "supplier_name": supplier["name"], "amount": amount,
+            "notes": notes,
+            "paid_purchases": paid_purchases,
+            "created_at": f"{date}T00:00:00", "date": date
+        }
+        await db.payment_history.insert_one(payment_doc)
+        total_paid += amount
+
+    from services import log_audit
+    await log_audit(admin, "import_payments_csv", "supplier", supplier_id, {
+        "supplier": supplier["name"], "count": len(rows), "total": total_paid
+    })
+
+    return {"message": f"Berhasil import {len([r for r in rows if float(r.get('amount',0) or 0) > 0])} pembayaran senilai Rp {total_paid:,.0f}"}
+
+
 @router.put("/supplier-debts/{supplier_id}/correct")
 async def correct_supplier_debt(supplier_id: str, req: Request, admin: dict = Depends(require_admin_panel_access)):
     """Koreksi manual hutang supplier: set nilai hutang baru."""

@@ -7,6 +7,7 @@ import { Label } from '../components/ui/label';
 import { Card } from '../components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
+import { Pagination } from '../components/Pagination';
 import { toast } from 'sonner';
 import { ArrowLeft, DollarSign, ShoppingBag, MapPin, Phone, User, CreditCard, Clock, Search, X, Upload } from 'lucide-react';
 
@@ -29,11 +30,18 @@ export const PartnerStoreDetail = () => {
   const [itemSearch, setItemSearch] = useState('');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
+  const [orderItemPage, setOrderItemPage] = useState(1);
+  const orderItemPerPage = 10;
 
-  // Import CSV
+  // Import CSV orders
   const [importOpen, setImportOpen] = useState(false);
   const [importRows, setImportRows] = useState([]);
   const [importSubmitting, setImportSubmitting] = useState(false);
+
+  // Import CSV setoran
+  const [importPayOpen, setImportPayOpen] = useState(false);
+  const [importPayRows, setImportPayRows] = useState([]);
+  const [importPaySubmitting, setImportPaySubmitting] = useState(false);
 
   useEffect(() => { fetchData(); }, [storeId]);
 
@@ -63,6 +71,7 @@ export const PartnerStoreDetail = () => {
       if (dt) params.append('date_to', dt);
       const res = await api.get(`/partner-stores/${storeId}/order-items?${params.toString()}`);
       setOrderItems(res.data);
+      setOrderItemPage(1);
     } catch { toast.error('Gagal memuat data pesanan'); }
   };
 
@@ -138,6 +147,60 @@ export const PartnerStoreDetail = () => {
     } finally { setImportSubmitting(false); }
   };
 
+  const handleCSVPayFile = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      try {
+        const text = evt.target.result;
+        const lines = text.split('\n').filter(l => l.trim());
+        if (lines.length < 2) { toast.error('CSV harus memiliki header dan minimal 1 baris data'); return; }
+        const headers = lines[0].split(',').map(h => h.trim().toLowerCase().replace(/"/g, ''));
+        const rows = [];
+        for (let i = 1; i < lines.length; i++) {
+          const vals = lines[i].split(',').map(v => v.trim().replace(/"/g, ''));
+          if (vals.length < 2) continue;
+          const row = {};
+          headers.forEach((h, idx) => { row[h] = vals[idx] || ''; });
+          const dateVal = row['tanggal'] || row['date'] || row['tgl'] || '';
+          const amountVal = row['jumlah'] || row['amount'] || row['nominal'] || row['bayar'] || '0';
+          const notesVal = row['catatan'] || row['notes'] || row['keterangan'] || '';
+          let parsedDate = dateVal;
+          if (dateVal.includes('/')) {
+            const parts = dateVal.split('/');
+            if (parts.length === 3 && parts[2].length === 4) {
+              parsedDate = `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+            }
+          }
+          const amount = parseFloat(amountVal.replace(/[^0-9.-]/g, '')) || 0;
+          if (amount > 0) {
+            rows.push({ date: parsedDate, amount, notes: notesVal || 'Import CSV' });
+          }
+        }
+        setImportPayRows(rows);
+        if (rows.length === 0) toast.error('Tidak ada data valid');
+        else toast.success(`${rows.length} baris data berhasil dibaca`);
+      } catch { toast.error('Gagal membaca file CSV'); }
+    };
+    reader.readAsText(file);
+    e.target.value = '';
+  };
+
+  const handleImportPaySubmit = async () => {
+    if (importPayRows.length === 0) return;
+    setImportPaySubmitting(true);
+    try {
+      const res = await api.post(`/partner-stores/${storeId}/import-payments-csv`, { rows: importPayRows });
+      toast.success(res.data.message);
+      setImportPayOpen(false);
+      setImportPayRows([]);
+      fetchData();
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Gagal import data');
+    } finally { setImportPaySubmitting(false); }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen">
@@ -161,8 +224,10 @@ export const PartnerStoreDetail = () => {
     // Use first non-zero setoran
     if (item.setoran > 0 && !grouped[d].setoran) grouped[d].setoran = item.setoran;
   });
-  const dates = Object.keys(grouped).sort((a, b) => b.localeCompare(a));
+  const allDates = Object.keys(grouped).sort((a, b) => b.localeCompare(a));
   const grandTotal = orderItems.reduce((s, i) => s + i.subtotal, 0);
+  const totalDatePages = Math.ceil(allDates.length / orderItemPerPage);
+  const dates = allDates.slice((orderItemPage - 1) * orderItemPerPage, orderItemPage * orderItemPerPage);
 
   return (
     <div className="p-4 md:p-6 lg:p-8 space-y-6" data-testid="partner-store-detail-page">
@@ -206,10 +271,17 @@ export const PartnerStoreDetail = () => {
         <p className="text-sm">{store.address}</p>
       </Card>
 
-      {/* Payment History */}
-      {payments.length > 0 && (
-        <Card className="p-6" data-testid="payment-history-card">
-          <div className="flex items-center gap-2 mb-4"><Clock className="w-5 h-5 text-green-600" /><h2 className="text-lg font-semibold">Riwayat Setoran</h2></div>
+      {/* Payment History - Riwayat Setoran */}
+      <Card className="p-6" data-testid="payment-history-card">
+        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2"><Clock className="w-5 h-5 text-green-600" /><h2 className="text-lg font-semibold">Riwayat Setoran</h2></div>
+          <Button size="sm" variant="outline" className="h-8 gap-1" onClick={() => { setImportPayRows([]); setImportPayOpen(true); }} data-testid="import-payments-csv-btn">
+            <Upload className="w-3.5 h-3.5" /> Import CSV
+          </Button>
+        </div>
+        {payments.length === 0 ? (
+          <p className="text-center text-muted-foreground py-4 text-sm">Belum ada riwayat setoran.</p>
+        ) : (
           <div className="rounded-lg border overflow-x-auto">
             <Table>
               <TableHeader><TableRow><TableHead>Tanggal</TableHead><TableHead className="text-right">Jumlah</TableHead><TableHead>Catatan</TableHead></TableRow></TableHeader>
@@ -221,11 +293,16 @@ export const PartnerStoreDetail = () => {
                     <TableCell>{p.notes || '-'}</TableCell>
                   </TableRow>
                 ))}
+                <TableRow className="bg-green-50 font-bold">
+                  <TableCell>Total Setoran</TableCell>
+                  <TableCell className="text-right text-green-600">{fmt(payments.reduce((s, p) => s + p.amount, 0))}</TableCell>
+                  <TableCell></TableCell>
+                </TableRow>
               </TableBody>
             </Table>
           </div>
-        </Card>
-      )}
+        )}
+      </Card>
 
       {/* Orders Detail - Flattened Items */}
       <Card className="p-6" data-testid="orders-history-card">
@@ -372,7 +449,8 @@ export const PartnerStoreDetail = () => {
               </Card>
             </div>
 
-            <p className="text-xs text-muted-foreground text-center mt-2">{orderItems.length} item dari {dates.length} tanggal</p>
+            <p className="text-xs text-muted-foreground text-center mt-2">{orderItems.length} item dari {allDates.length} tanggal</p>
+            <Pagination page={orderItemPage} totalPages={totalDatePages} total={allDates.length} perPage={orderItemPerPage} onChange={setOrderItemPage} />
           </>
         )}
       </Card>
@@ -461,6 +539,65 @@ export const PartnerStoreDetail = () => {
               <Button variant="outline" onClick={() => setImportOpen(false)}>Batal</Button>
               <Button onClick={handleImportSubmit} disabled={importSubmitting || importRows.length === 0} data-testid="submit-import-orders-btn">
                 {importSubmitting ? 'Mengimport...' : `Import ${importRows.length} Item`}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Import Setoran CSV Dialog */}
+      <Dialog open={importPayOpen} onOpenChange={setImportPayOpen}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto" data-testid="import-payments-modal">
+          <DialogHeader><DialogTitle>Import Riwayat Setoran</DialogTitle></DialogHeader>
+          <div className="space-y-4">
+            <Card className="p-3 bg-muted/50">
+              <p className="font-semibold">{store.name}</p>
+              <p className="text-xs text-muted-foreground mt-1">Format kolom CSV:</p>
+              <p className="text-xs font-mono bg-white rounded p-2 mt-1 border">Tanggal, Jumlah, Catatan</p>
+              <p className="text-[10px] text-muted-foreground mt-1">Format tanggal: DD/MM/YYYY atau YYYY-MM-DD. Kolom Catatan opsional.</p>
+            </Card>
+
+            <div className="space-y-2">
+              <Label>Pilih File CSV</Label>
+              <Input type="file" accept=".csv" onChange={handleCSVPayFile} data-testid="import-payments-file-input" />
+            </div>
+
+            {importPayRows.length > 0 && (
+              <>
+                <div className="rounded-lg border overflow-hidden max-h-60 overflow-y-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="text-xs">Tanggal</TableHead>
+                        <TableHead className="text-xs text-right">Jumlah</TableHead>
+                        <TableHead className="text-xs">Catatan</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {importPayRows.map((row, i) => (
+                        <TableRow key={i}>
+                          <TableCell className="text-xs">{row.date}</TableCell>
+                          <TableCell className="text-sm text-right font-medium text-green-600">{fmt(row.amount)}</TableCell>
+                          <TableCell className="text-xs">{row.notes || '-'}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+                <Card className="p-3 bg-green-50 border-green-200">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-green-900">Total setoran ({importPayRows.length} pembayaran):</span>
+                    <span className="font-bold text-green-900">{fmt(importPayRows.reduce((s, r) => s + r.amount, 0))}</span>
+                  </div>
+                  <p className="text-xs text-green-700 mt-1">Piutang kios akan dikurangi sesuai total setoran ini.</p>
+                </Card>
+              </>
+            )}
+
+            <div className="flex gap-2 justify-end pt-2">
+              <Button variant="outline" onClick={() => setImportPayOpen(false)}>Batal</Button>
+              <Button onClick={handleImportPaySubmit} disabled={importPaySubmitting || importPayRows.length === 0} data-testid="submit-import-payments-btn">
+                {importPaySubmitting ? 'Mengimport...' : `Import ${importPayRows.length} Setoran`}
               </Button>
             </div>
           </div>
