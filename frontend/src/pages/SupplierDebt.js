@@ -14,6 +14,7 @@ import {
 import { toast } from 'sonner';
 import { CurrencyInput } from '../components/CurrencyInput';
 import { Pagination } from '../components/Pagination';
+import { parseSpreadsheetFile, parseDate } from '../utils/fileParser';
 
 const fmt = (v) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(v);
 const fmtNum = (v) => new Intl.NumberFormat('id-ID').format(v);
@@ -231,63 +232,32 @@ export const SupplierDebt = () => {
     setImportModalOpen(true);
   };
 
-  const handleCSVFile = (e) => {
+  const handleCSVFile = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (evt) => {
-      try {
-        const text = evt.target.result;
-        const lines = text.split('\n').filter(l => l.trim());
-        if (lines.length < 2) { toast.error('CSV harus memiliki header dan minimal 1 baris data'); return; }
-        const headers = lines[0].split(',').map(h => h.trim().toLowerCase().replace(/"/g, ''));
-        const rows = [];
-        for (let i = 1; i < lines.length; i++) {
-          const vals = lines[i].split(',').map(v => v.trim().replace(/"/g, ''));
-          if (vals.length < 3) continue;
-          const row = {};
-          headers.forEach((h, idx) => { row[h] = vals[idx] || ''; });
-          // Map common column names
-          const dateVal = row['tanggal'] || row['date'] || row['tgl'] || '';
-          const nameVal = row['nama barang'] || row['nama_barang'] || row['product_name'] || row['barang'] || row['nama'] || '';
-          const qtyVal = row['qty'] || row['qty (dus)'] || row['qty_dus'] || row['jumlah'] || row['quantity'] || '0';
-          const ipbVal = row['isi/dus'] || row['isi_per_dus'] || row['items_per_box'] || row['isi'] || '1';
-          const costVal = row['harga'] || row['harga supplier'] || row['harga_supplier'] || row['harga pokok'] || row['cost_price'] || row['harga supplier/dus'] || '0';
-          const dueVal = row['jatuh tempo'] || row['due_date'] || row['jatuh_tempo'] || '';
-          // Parse date: support DD/MM/YYYY and YYYY-MM-DD
-          let parsedDate = dateVal;
-          if (dateVal.includes('/')) {
-            const parts = dateVal.split('/');
-            if (parts.length === 3) {
-              parsedDate = parts[2].length === 4
-                ? `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`
-                : dateVal;
-            }
-          }
-          let parsedDue = dueVal;
-          if (dueVal.includes('/')) {
-            const parts = dueVal.split('/');
-            if (parts.length === 3) {
-              parsedDue = parts[2].length === 4
-                ? `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`
-                : dueVal;
-            }
-          }
-          if (nameVal) {
-            rows.push({
-              date: parsedDate, product_name: nameVal,
-              qty_dus: parseInt(qtyVal) || 0, items_per_box: parseFloat(ipbVal) || 1,
-              cost_price: parseFloat(costVal.replace(/[^0-9.-]/g, '')) || 0,
-              due_date: parsedDue
-            });
-          }
+    try {
+      const rawRows = await parseSpreadsheetFile(file);
+      const rows = [];
+      for (const row of rawRows) {
+        const nameVal = row['nama barang'] || row['nama_barang'] || row['product_name'] || row['barang'] || row['nama'] || '';
+        const qtyVal = row['qty'] || row['qty (dus)'] || row['qty_dus'] || row['jumlah'] || row['quantity'] || '0';
+        const ipbVal = row['isi/dus'] || row['isi_per_dus'] || row['items_per_box'] || row['isi'] || '1';
+        const costVal = row['harga'] || row['harga supplier'] || row['harga_supplier'] || row['harga pokok'] || row['cost_price'] || row['harga supplier/dus'] || '0';
+        const dateVal = row['tanggal'] || row['date'] || row['tgl'] || '';
+        const dueVal = row['jatuh tempo'] || row['due_date'] || row['jatuh_tempo'] || '';
+        if (nameVal) {
+          rows.push({
+            date: parseDate(dateVal), product_name: nameVal,
+            qty_dus: parseInt(qtyVal) || 0, items_per_box: parseFloat(ipbVal) || 1,
+            cost_price: parseFloat(String(costVal).replace(/[^0-9.-]/g, '')) || 0,
+            due_date: parseDate(dueVal)
+          });
         }
-        setImportRows(rows);
-        if (rows.length === 0) toast.error('Tidak ada data valid yang ditemukan di CSV');
-        else toast.success(`${rows.length} baris data berhasil dibaca`);
-      } catch { toast.error('Gagal membaca file CSV'); }
-    };
-    reader.readAsText(file);
+      }
+      setImportRows(rows);
+      if (rows.length === 0) toast.error('Tidak ada data valid yang ditemukan');
+      else toast.success(`${rows.length} baris data berhasil dibaca`);
+    } catch (err) { toast.error(err.message || 'Gagal membaca file'); }
     e.target.value = '';
   };
 
@@ -315,43 +285,25 @@ export const SupplierDebt = () => {
     setImportPayModalOpen(true);
   };
 
-  const handleCSVPayFile = (e) => {
+  const handleCSVPayFile = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (evt) => {
-      try {
-        const text = evt.target.result;
-        const lines = text.split('\n').filter(l => l.trim());
-        if (lines.length < 2) { toast.error('CSV harus memiliki header dan minimal 1 baris data'); return; }
-        const headers = lines[0].split(',').map(h => h.trim().toLowerCase().replace(/"/g, ''));
-        const rows = [];
-        for (let i = 1; i < lines.length; i++) {
-          const vals = lines[i].split(',').map(v => v.trim().replace(/"/g, ''));
-          if (vals.length < 2) continue;
-          const row = {};
-          headers.forEach((h, idx) => { row[h] = vals[idx] || ''; });
-          const dateVal = row['tanggal'] || row['date'] || row['tgl'] || '';
-          const amountVal = row['jumlah'] || row['amount'] || row['nominal'] || row['bayar'] || '0';
-          const notesVal = row['catatan'] || row['notes'] || row['keterangan'] || '';
-          let parsedDate = dateVal;
-          if (dateVal.includes('/')) {
-            const parts = dateVal.split('/');
-            if (parts.length === 3 && parts[2].length === 4) {
-              parsedDate = `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
-            }
-          }
-          const amount = parseFloat(amountVal.replace(/[^0-9.-]/g, '')) || 0;
-          if (amount > 0) {
-            rows.push({ date: parsedDate, amount, notes: notesVal || 'Import CSV' });
-          }
+    try {
+      const rawRows = await parseSpreadsheetFile(file);
+      const rows = [];
+      for (const row of rawRows) {
+        const dateVal = row['tanggal'] || row['date'] || row['tgl'] || '';
+        const amountVal = row['jumlah'] || row['amount'] || row['nominal'] || row['bayar'] || '0';
+        const notesVal = row['catatan'] || row['notes'] || row['keterangan'] || '';
+        const amount = parseFloat(String(amountVal).replace(/[^0-9.-]/g, '')) || 0;
+        if (amount > 0) {
+          rows.push({ date: parseDate(dateVal), amount, notes: notesVal || 'Import CSV' });
         }
-        setImportPayRows(rows);
-        if (rows.length === 0) toast.error('Tidak ada data valid');
-        else toast.success(`${rows.length} baris data berhasil dibaca`);
-      } catch { toast.error('Gagal membaca file CSV'); }
-    };
-    reader.readAsText(file);
+      }
+      setImportPayRows(rows);
+      if (rows.length === 0) toast.error('Tidak ada data valid');
+      else toast.success(`${rows.length} baris data berhasil dibaca`);
+    } catch (err) { toast.error(err.message || 'Gagal membaca file'); }
     e.target.value = '';
   };
 
@@ -621,7 +573,7 @@ export const SupplierDebt = () => {
                               )}
                             </div>
                             <Button size="sm" variant="outline" className="h-8 gap-1" onClick={() => openImportModal(s)} data-testid="import-csv-btn">
-                              <Upload className="w-3.5 h-3.5" /> Import CSV
+                              <Upload className="w-3.5 h-3.5" /> Import
                             </Button>
                           </div>
 
@@ -782,7 +734,7 @@ export const SupplierDebt = () => {
                         <div className="space-y-2">
                           <div className="flex justify-end mb-2">
                             <Button size="sm" variant="outline" className="h-8 gap-1" onClick={() => openImportPayModal(s)} data-testid="import-payments-csv-btn">
-                              <Upload className="w-3.5 h-3.5" /> Import CSV
+                              <Upload className="w-3.5 h-3.5" /> Import
                             </Button>
                           </div>
                           {supplierPayments.length === 0 ? (
@@ -961,14 +913,14 @@ export const SupplierDebt = () => {
           <div className="space-y-4">
             <Card className="p-3 bg-muted/50">
               <p className="font-semibold">{importSupplierName}</p>
-              <p className="text-xs text-muted-foreground mt-1">Upload file CSV dengan format kolom:</p>
+              <p className="text-xs text-muted-foreground mt-1">Upload file CSV/XLSX dengan format kolom:</p>
               <p className="text-xs font-mono bg-white rounded p-2 mt-1 border">Tanggal, Nama Barang, Qty, Isi/Dus, Harga Supplier, Jatuh Tempo</p>
               <p className="text-[10px] text-muted-foreground mt-1">Format tanggal: DD/MM/YYYY atau YYYY-MM-DD. Kolom Jatuh Tempo opsional.</p>
             </Card>
 
             <div className="space-y-2">
-              <Label>Pilih File CSV</Label>
-              <Input type="file" accept=".csv" onChange={handleCSVFile} data-testid="import-file-input" />
+              <Label>Pilih File CSV/XLSX</Label>
+              <Input type="file" accept=".csv,.xlsx,.xls" onChange={handleCSVFile} data-testid="import-file-input" />
             </div>
 
             {importRows.length > 0 && (
@@ -1032,14 +984,14 @@ export const SupplierDebt = () => {
           <div className="space-y-4">
             <Card className="p-3 bg-muted/50">
               <p className="font-semibold">{importPaySupplierName}</p>
-              <p className="text-xs text-muted-foreground mt-1">Upload file CSV dengan format kolom:</p>
+              <p className="text-xs text-muted-foreground mt-1">Upload file CSV/XLSX dengan format kolom:</p>
               <p className="text-xs font-mono bg-white rounded p-2 mt-1 border">Tanggal, Jumlah, Catatan</p>
               <p className="text-[10px] text-muted-foreground mt-1">Format tanggal: DD/MM/YYYY atau YYYY-MM-DD. Kolom Catatan opsional.</p>
             </Card>
 
             <div className="space-y-2">
-              <Label>Pilih File CSV</Label>
-              <Input type="file" accept=".csv" onChange={handleCSVPayFile} data-testid="import-pay-file-input" />
+              <Label>Pilih File CSV/XLSX</Label>
+              <Input type="file" accept=".csv,.xlsx,.xls" onChange={handleCSVPayFile} data-testid="import-pay-file-input" />
             </div>
 
             {importPayRows.length > 0 && (

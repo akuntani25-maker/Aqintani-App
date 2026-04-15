@@ -8,6 +8,7 @@ import { Card } from '../components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
 import { Pagination } from '../components/Pagination';
+import { parseSpreadsheetFile, parseDate } from '../utils/fileParser';
 import { toast } from 'sonner';
 import { ArrowLeft, DollarSign, ShoppingBag, MapPin, Phone, User, CreditCard, Clock, Search, X, Upload } from 'lucide-react';
 
@@ -87,49 +88,31 @@ export const PartnerStoreDetail = () => {
     } catch (error) { toast.error('Gagal mencatat setoran'); }
   };
 
-  const handleCSVFile = (e) => {
+  const handleCSVFile = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (evt) => {
-      try {
-        const text = evt.target.result;
-        const lines = text.split('\n').filter(l => l.trim());
-        if (lines.length < 2) { toast.error('CSV harus memiliki header dan minimal 1 baris data'); return; }
-        const headers = lines[0].split(',').map(h => h.trim().toLowerCase().replace(/"/g, ''));
-        const rows = [];
-        for (let i = 1; i < lines.length; i++) {
-          const vals = lines[i].split(',').map(v => v.trim().replace(/"/g, ''));
-          if (vals.length < 3) continue;
-          const row = {};
-          headers.forEach((h, idx) => { row[h] = vals[idx] || ''; });
-          const dateVal = row['tanggal'] || row['date'] || row['tgl'] || '';
-          const nameVal = row['nama barang'] || row['nama_barang'] || row['product_name'] || row['barang'] || row['nama'] || '';
-          const qtyVal = row['qty'] || row['jumlah'] || row['quantity'] || '0';
-          const unitVal = row['unit'] || row['satuan'] || 'satuan';
-          const priceVal = row['harga'] || row['harga jual'] || row['price'] || '0';
-          let parsedDate = dateVal;
-          if (dateVal.includes('/')) {
-            const parts = dateVal.split('/');
-            if (parts.length === 3 && parts[2].length === 4) {
-              parsedDate = `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
-            }
-          }
-          if (nameVal) {
-            rows.push({
-              date: parsedDate, product_name: nameVal,
-              qty: parseInt(qtyVal) || 0,
-              unit: unitVal.toLowerCase().includes('dus') ? 'dus' : 'satuan',
-              price: parseFloat(priceVal.replace(/[^0-9.-]/g, '')) || 0
-            });
-          }
+    try {
+      const rawRows = await parseSpreadsheetFile(file);
+      const rows = [];
+      for (const row of rawRows) {
+        const nameVal = row['nama barang'] || row['nama_barang'] || row['product_name'] || row['barang'] || row['nama'] || '';
+        const qtyVal = row['qty'] || row['jumlah'] || row['quantity'] || '0';
+        const unitVal = row['unit'] || row['satuan'] || 'satuan';
+        const priceVal = row['harga'] || row['harga jual'] || row['price'] || '0';
+        const dateVal = row['tanggal'] || row['date'] || row['tgl'] || '';
+        if (nameVal) {
+          rows.push({
+            date: parseDate(dateVal), product_name: nameVal,
+            qty: parseInt(qtyVal) || 0,
+            unit: String(unitVal).toLowerCase().includes('dus') ? 'dus' : 'satuan',
+            price: parseFloat(String(priceVal).replace(/[^0-9.-]/g, '')) || 0
+          });
         }
-        setImportRows(rows);
-        if (rows.length === 0) toast.error('Tidak ada data valid');
-        else toast.success(`${rows.length} baris data berhasil dibaca`);
-      } catch { toast.error('Gagal membaca file CSV'); }
-    };
-    reader.readAsText(file);
+      }
+      setImportRows(rows);
+      if (rows.length === 0) toast.error('Tidak ada data valid');
+      else toast.success(`${rows.length} baris data berhasil dibaca`);
+    } catch (err) { toast.error(err.message || 'Gagal membaca file'); }
     e.target.value = '';
   };
 
@@ -147,43 +130,25 @@ export const PartnerStoreDetail = () => {
     } finally { setImportSubmitting(false); }
   };
 
-  const handleCSVPayFile = (e) => {
+  const handleCSVPayFile = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (evt) => {
-      try {
-        const text = evt.target.result;
-        const lines = text.split('\n').filter(l => l.trim());
-        if (lines.length < 2) { toast.error('CSV harus memiliki header dan minimal 1 baris data'); return; }
-        const headers = lines[0].split(',').map(h => h.trim().toLowerCase().replace(/"/g, ''));
-        const rows = [];
-        for (let i = 1; i < lines.length; i++) {
-          const vals = lines[i].split(',').map(v => v.trim().replace(/"/g, ''));
-          if (vals.length < 2) continue;
-          const row = {};
-          headers.forEach((h, idx) => { row[h] = vals[idx] || ''; });
-          const dateVal = row['tanggal'] || row['date'] || row['tgl'] || '';
-          const amountVal = row['jumlah'] || row['amount'] || row['nominal'] || row['bayar'] || '0';
-          const notesVal = row['catatan'] || row['notes'] || row['keterangan'] || '';
-          let parsedDate = dateVal;
-          if (dateVal.includes('/')) {
-            const parts = dateVal.split('/');
-            if (parts.length === 3 && parts[2].length === 4) {
-              parsedDate = `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
-            }
-          }
-          const amount = parseFloat(amountVal.replace(/[^0-9.-]/g, '')) || 0;
-          if (amount > 0) {
-            rows.push({ date: parsedDate, amount, notes: notesVal || 'Import CSV' });
-          }
+    try {
+      const rawRows = await parseSpreadsheetFile(file);
+      const rows = [];
+      for (const row of rawRows) {
+        const dateVal = row['tanggal'] || row['date'] || row['tgl'] || '';
+        const amountVal = row['jumlah'] || row['amount'] || row['nominal'] || row['bayar'] || '0';
+        const notesVal = row['catatan'] || row['notes'] || row['keterangan'] || '';
+        const amount = parseFloat(String(amountVal).replace(/[^0-9.-]/g, '')) || 0;
+        if (amount > 0) {
+          rows.push({ date: parseDate(dateVal), amount, notes: notesVal || 'Import CSV' });
         }
-        setImportPayRows(rows);
-        if (rows.length === 0) toast.error('Tidak ada data valid');
-        else toast.success(`${rows.length} baris data berhasil dibaca`);
-      } catch { toast.error('Gagal membaca file CSV'); }
-    };
-    reader.readAsText(file);
+      }
+      setImportPayRows(rows);
+      if (rows.length === 0) toast.error('Tidak ada data valid');
+      else toast.success(`${rows.length} baris data berhasil dibaca`);
+    } catch (err) { toast.error(err.message || 'Gagal membaca file'); }
     e.target.value = '';
   };
 
@@ -276,7 +241,7 @@ export const PartnerStoreDetail = () => {
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2"><Clock className="w-5 h-5 text-green-600" /><h2 className="text-lg font-semibold">Riwayat Setoran</h2></div>
           <Button size="sm" variant="outline" className="h-8 gap-1" onClick={() => { setImportPayRows([]); setImportPayOpen(true); }} data-testid="import-payments-csv-btn">
-            <Upload className="w-3.5 h-3.5" /> Import CSV
+            <Upload className="w-3.5 h-3.5" /> Import
           </Button>
         </div>
         {payments.length === 0 ? (
@@ -334,7 +299,7 @@ export const PartnerStoreDetail = () => {
             )}
           </div>
           <Button size="sm" variant="outline" className="h-8 gap-1" onClick={() => { setImportRows([]); setImportOpen(true); }} data-testid="import-orders-csv-btn">
-            <Upload className="w-3.5 h-3.5" /> Import CSV
+            <Upload className="w-3.5 h-3.5" /> Import
           </Button>
         </div>
 
@@ -487,14 +452,14 @@ export const PartnerStoreDetail = () => {
           <div className="space-y-4">
             <Card className="p-3 bg-muted/50">
               <p className="font-semibold">{store.name}</p>
-              <p className="text-xs text-muted-foreground mt-1">Format kolom CSV:</p>
+              <p className="text-xs text-muted-foreground mt-1">Format kolom CSV/XLSX:</p>
               <p className="text-xs font-mono bg-white rounded p-2 mt-1 border">Tanggal, Nama Barang, Qty, Unit, Harga</p>
               <p className="text-[10px] text-muted-foreground mt-1">Unit: "dus" atau "satuan". Format tanggal: DD/MM/YYYY atau YYYY-MM-DD.</p>
             </Card>
 
             <div className="space-y-2">
-              <Label>Pilih File CSV</Label>
-              <Input type="file" accept=".csv" onChange={handleCSVFile} data-testid="import-orders-file-input" />
+              <Label>Pilih File CSV/XLSX</Label>
+              <Input type="file" accept=".csv,.xlsx,.xls" onChange={handleCSVFile} data-testid="import-orders-file-input" />
             </div>
 
             {importRows.length > 0 && (
@@ -552,14 +517,14 @@ export const PartnerStoreDetail = () => {
           <div className="space-y-4">
             <Card className="p-3 bg-muted/50">
               <p className="font-semibold">{store.name}</p>
-              <p className="text-xs text-muted-foreground mt-1">Format kolom CSV:</p>
+              <p className="text-xs text-muted-foreground mt-1">Format kolom CSV/XLSX:</p>
               <p className="text-xs font-mono bg-white rounded p-2 mt-1 border">Tanggal, Jumlah, Catatan</p>
               <p className="text-[10px] text-muted-foreground mt-1">Format tanggal: DD/MM/YYYY atau YYYY-MM-DD. Kolom Catatan opsional.</p>
             </Card>
 
             <div className="space-y-2">
-              <Label>Pilih File CSV</Label>
-              <Input type="file" accept=".csv" onChange={handleCSVPayFile} data-testid="import-payments-file-input" />
+              <Label>Pilih File CSV/XLSX</Label>
+              <Input type="file" accept=".csv,.xlsx,.xls" onChange={handleCSVPayFile} data-testid="import-payments-file-input" />
             </div>
 
             {importPayRows.length > 0 && (

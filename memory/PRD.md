@@ -90,6 +90,7 @@ Aplikasi web responsif untuk toko farmasi dan pertanian "UD. AQIN TANI" dengan s
 72. Pagination & Sorting Detail Kios Mitra - Data pesanan di detail kios mitra disortir tanggal terbaru + pagination per grup tanggal (10 per halaman).
 73. Import Riwayat Bayar Supplier - Fitur import CSV riwayat pembayaran di tab Riwayat Bayar supplier. Mengurangi hutang secara FIFO (dari pembelian terlama). Format: Tanggal, Jumlah, Catatan.
 74. Import Riwayat Setoran Kios Mitra - Fitur import CSV riwayat setoran di section Riwayat Setoran detail kios mitra. Mengurangi piutang. Format: Tanggal, Jumlah, Catatan. Section selalu ditampilkan + total setoran.
+75. Support XLSX Import - Semua fitur import (pembelian supplier, pembayaran supplier, pesanan kios mitra, setoran kios mitra) sekarang mendukung format CSV dan XLSX. Menggunakan library SheetJS (xlsx). Parser terpusat di `utils/fileParser.js` dengan handle tanggal Excel numeric.
 
 ## Credentials
 - Admin: admin@aqintani.com / admin123
