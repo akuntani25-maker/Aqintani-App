@@ -5,6 +5,7 @@ import { Button } from '../components/ui/button';
 import { ArrowLeft, Bluetooth, Loader2, Printer } from 'lucide-react';
 import { toast } from 'sonner';
 import { thermalPrinter } from '../utils/ThermalPrinter';
+import { dotMatrixPrinter } from '../utils/DotMatrixPrinter';
 
 const SEP = '================================';
 const CHAR_W = 32;
@@ -41,6 +42,7 @@ export const PartnerOrderReceipt = () => {
   const [loading, setLoading] = useState(true);
   const [printStatus, setPrintStatus] = useState('idle');
   const [btStatus, setBtStatus] = useState('idle');
+  const [dmStatus, setDmStatus] = useState('idle');
   const [serverAvailable, setServerAvailable] = useState(null);
 
   useEffect(() => {
@@ -119,6 +121,21 @@ export const PartnerOrderReceipt = () => {
     finally { setBtStatus('idle'); }
   };
 
+  const handleDotMatrixPrint = async () => {
+    if (!order) return;
+    setDmStatus('printing');
+    try {
+      const result = await dotMatrixPrinter.printPartnerInvoice(order, storeSettings);
+      if (result.method === 'server') {
+        toast.success('Faktur berhasil dicetak via Print Server (Dot Matrix)!');
+      } else {
+        toast.success('Faktur dibuka untuk dicetak via browser.');
+      }
+    } catch (err) {
+      toast.error('Gagal mencetak faktur: ' + err.message);
+    } finally { setDmStatus('idle'); }
+  };
+
   useEffect(() => {
     const orderId = searchParams.get('id');
     if (orderId) fetchData(orderId);
@@ -157,6 +174,10 @@ export const PartnerOrderReceipt = () => {
             <Button variant="outline" onClick={handleBluetoothPrint} disabled={btStatus !== 'idle'} data-testid="bluetooth-print-button">
               {btStatus !== 'idle' ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Bluetooth className="w-4 h-4 mr-2" />}
               {btStatus === 'connecting' ? 'Menghubungkan...' : btStatus === 'printing' ? 'Mencetak...' : 'Cetak Bluetooth'}
+            </Button>
+            <Button variant="secondary" onClick={handleDotMatrixPrint} disabled={dmStatus !== 'idle'} data-testid="dotmatrix-print-button">
+              {dmStatus !== 'idle' ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Printer className="w-4 h-4 mr-2" />}
+              {dmStatus === 'printing' ? 'Mencetak...' : 'Cetak Faktur'}
             </Button>
           </div>
         </div>

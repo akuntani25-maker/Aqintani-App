@@ -91,6 +91,7 @@ Aplikasi web responsif untuk toko farmasi dan pertanian "UD. AQIN TANI" dengan s
 73. Import Riwayat Bayar Supplier - Fitur import CSV riwayat pembayaran di tab Riwayat Bayar supplier. Mengurangi hutang secara FIFO (dari pembelian terlama). Format: Tanggal, Jumlah, Catatan.
 74. Import Riwayat Setoran Kios Mitra - Fitur import CSV riwayat setoran di section Riwayat Setoran detail kios mitra. Mengurangi piutang. Format: Tanggal, Jumlah, Catatan. Section selalu ditampilkan + total setoran.
 75. Support XLSX Import - Semua fitur import (pembelian supplier, pembayaran supplier, pesanan kios mitra, setoran kios mitra) sekarang mendukung format CSV dan XLSX. Menggunakan library SheetJS (xlsx). Parser terpusat di `utils/fileParser.js` dengan handle tanggal Excel numeric.
+76. Cetak Faktur Dot Matrix (Epson LX-310) - Tombol "Cetak Faktur" di halaman struk kios mitra. Format faktur penjualan formal untuk kertas NCR 3-ply (9.5"x11") dengan: header toko, judul FAKTUR PENJUALAN, info 2 kolom, tabel item (No/Nama/Qty/Harga/Jumlah), ringkasan hutang, tanda tangan 3 kolom (Penerima/Sales/Hormat Kami), catatan kaki. Kirim ESC/P commands via print server (endpoint /print-dotmatrix) atau fallback browser print. DotMatrixPrinter.js sebagai utility terpisah dari ThermalPrinter.js.
 
 ## Credentials
 - Admin: admin@aqintani.com / admin123
@@ -113,9 +114,14 @@ Aplikasi web responsif untuk toko farmasi dan pertanian "UD. AQIN TANI" dengan s
 1. Rekap harian stok mobil box (muat, terjual, retur per hari per mobil)
 
 ## Key Files
-- `/app/print_server.py` - Local print server with auto-start
+- `/app/print_server.py` - Local print server with auto-start (thermal + dot matrix)
+- `/app/frontend/src/utils/ThermalPrinter.js` - ESC/POS thermal printer utility
+- `/app/frontend/src/utils/DotMatrixPrinter.js` - ESC/P dot matrix printer utility (Epson LX-310)
+- `/app/frontend/src/utils/fileParser.js` - Shared CSV/XLSX parser utility
 - `/app/frontend/src/pages/POS.js` - POS with editable qty, shift, retur/tukar
 - `/app/frontend/src/pages/PartnerOrders.js` - Partner orders with editable qty, harga satuan
+- `/app/frontend/src/pages/PartnerOrderReceipt.js` - Receipt page: thermal + bluetooth + dot matrix faktur
+- `/app/frontend/src/pages/CanvasserDashboard.js` - Settlement, rekap, sisa bon
 - `/app/frontend/src/pages/CanvasserDashboard.js` - Settlement, rekap, sisa bon
 - `/app/frontend/src/pages/Reports.js` - All reports + Rekap Kanvaser tab
 - `/app/frontend/src/pages/PartnerStoreDetail.js` - Detail kios mitra: tabel pesanan per-item, search/filter, import CSV
