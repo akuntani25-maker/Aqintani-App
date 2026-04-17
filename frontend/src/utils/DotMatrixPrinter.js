@@ -153,39 +153,42 @@ class DotMatrixPrinter {
         // Baris 1: INVOICE (kiri, bold+expanded) | NAMA TOKO (kanan, bold+expanded)
         d.push(...this.commands.BOLD_ON);
         d.push(...this.commands.EXPANDED_ON);
-        // Expanded = double width, so 80 cols becomes 40 char positions
         d.push(...this.textToBytes(this.pad('INVOICE', 20)));
         d.push(...this.textToBytes(this.pad(storeName, 20, 'right')));
         d.push(...this.commands.LF);
         d.push(...this.commands.EXPANDED_OFF);
         d.push(...this.commands.BOLD_OFF);
 
-        // Baris 2-3: Kepada (kiri) | Alamat+telp toko (kanan, rata kanan)
-        const rightStart = 40;
-        if (storeAddr) {
-          d.push(...this.textToBytes(this.pad('Kepada :', rightStart) + this.pad(storeAddr, W - rightStart, 'right')));
-          d.push(...this.commands.LF);
-        }
+        // Header kanan: alamat, telp, no invoice, tanggal - semua rata kiri mulai kolom 40
+        const R = 40; // kolom mulai sisi kanan
 
-        d.push(...this.commands.BOLD_ON);
-        d.push(...this.textToBytes(this.pad(order.partner_store_name, rightStart)));
-        d.push(...this.commands.BOLD_OFF);
-        if (storePhone) {
-          d.push(...this.textToBytes(this.pad('Telp: ' + storePhone, W - rightStart, 'right')));
-        }
+        // Baris 2: Kepada (kiri) | Alamat toko (kanan rata kiri)
+        d.push(...this.textToBytes(this.pad('Kepada :', R)));
+        if (storeAddr) d.push(...this.textToBytes(storeAddr));
         d.push(...this.commands.LF);
 
-        // Baris 4: Alamat kios (kiri) | No Invoice (kanan)
-        d.push(...this.textToBytes(this.pad(order.partner_address || '', rightStart)));
+        // Baris 3: Nama kios (kiri bold) | Telp (kanan rata kiri)
+        d.push(...this.commands.BOLD_ON);
+        d.push(...this.textToBytes(this.pad(order.partner_store_name, R)));
+        d.push(...this.commands.BOLD_OFF);
+        if (storePhone) d.push(...this.textToBytes('Telp: ' + storePhone));
+        d.push(...this.commands.LF);
+
+        // Baris 4: Alamat kios (kiri) | kosong (space pemisah)
+        d.push(...this.textToBytes(this.pad(order.partner_address || '', R)));
+        d.push(...this.commands.LF);
+
+        // Baris 5: kosong (kiri) | No Invoice (kanan rata kiri)
+        d.push(...this.textToBytes(this.pad('', R)));
         d.push(...this.textToBytes('No Invoice : ' + order.order_number));
         d.push(...this.commands.LF);
 
-        // Baris 5: kosong (kiri) | Tanggal (kanan)
-        d.push(...this.textToBytes(this.pad('', rightStart)));
+        // Baris 6: kosong (kiri) | Tanggal (kanan rata kiri)
+        d.push(...this.textToBytes(this.pad('', R)));
         d.push(...this.textToBytes('Tanggal    : ' + tgl));
         d.push(...this.commands.LF);
 
-        // Baris 6: Kode Sales
+        // Baris 7: Kode Sales
         if (order.canvasser_name) {
           d.push(...this.textToBytes('Kode Sales : ' + order.canvasser_name));
           d.push(...this.commands.LF);
@@ -209,7 +212,7 @@ class DotMatrixPrinter {
       d.push(...this.textToBytes(
         this.pad('No.', 4) +
         this.pad('Nama Barang', 28) +
-        this.pad('Jumlah', 12, 'center') +
+        this.pad('Jumlah CTN', 12, 'center') +
         this.pad('Quantity', 10, 'center') +
         this.pad('Harga', 12, 'right') +
         this.pad('Jumlah', 14, 'right')
@@ -223,15 +226,15 @@ class DotMatrixPrinter {
       for (const item of page.items) {
         globalItemIdx++;
         const isDus = item.unit === 'dus';
-        // Kolom Jumlah: detail unit (misal "3 DUS" atau "5 Satuan")
-        const jmlUnit = isDus ? item.qty + ' DUS' : item.qty + ' Satuan';
-        // Kolom Quantity: total quantity per item
+        // Kolom Jumlah CTN: jumlah dalam DUS (kalau satuan, tampilkan qty + "PCS")
+        const jmlCtn = isDus ? item.qty + ' DUS' : item.qty + ' PCS';
+        // Kolom Quantity: dus * isi per dus (total pcs), kalau satuan = qty langsung
         const totalQty = isDus ? this.fmtN(item.qty * (item.ipb || 1)) : this.fmtN(item.qty);
 
         d.push(...this.textToBytes(
           this.pad(String(globalItemIdx), 4) +
           this.pad(item.name, 28) +
-          this.pad(jmlUnit, 12, 'center') +
+          this.pad(jmlCtn, 12, 'center') +
           this.pad(totalQty, 10, 'center') +
           this.pad(this.fmtN(item.price), 12, 'right') +
           this.pad(this.fmtN(item.subtotal), 14, 'right')
@@ -274,7 +277,7 @@ class DotMatrixPrinter {
         const rightCol = W - leftCol;
 
         const remarkLines = [
-          'Remark :',
+          'Catatan :',
           '- Barang yg sudah dibeli tidak dapat',
           '  dikembalikan kecuali ada perjanjian.',
           '- Mohon diperiksa dengan teliti.',
@@ -294,24 +297,24 @@ class DotMatrixPrinter {
         const maxRows = Math.max(remarkLines.length, sumLines.length);
         for (let i = 0; i < maxRows; i++) {
           const left = remarkLines[i] || '';
-          const isRemarkHead = left === 'Remark :';
-          if (isRemarkHead) d.push(...this.commands.BOLD_ON);
+          const isHead = left === 'Catatan :';
+          if (isHead) d.push(...this.commands.BOLD_ON);
 
           if (i < sumLines.length) {
             const [label, val] = sumLines[i];
             const isBold = label === 'Total Tagihan';
             const padLeft = this.pad(left, leftCol);
-            if (isRemarkHead) d.push(...this.commands.BOLD_OFF);
+            if (isHead) d.push(...this.commands.BOLD_OFF);
             if (isBold) d.push(...this.commands.BOLD_ON);
             d.push(...this.textToBytes(
-              (isRemarkHead ? '' : '') + padLeft +
+              padLeft +
               this.pad(label, rightCol - val.length - 2) + ': ' + val
             ));
             if (isBold) d.push(...this.commands.BOLD_OFF);
           } else {
             d.push(...this.textToBytes(this.pad(left, W)));
           }
-          if (isRemarkHead) d.push(...this.commands.BOLD_OFF);
+          if (isHead) d.push(...this.commands.BOLD_OFF);
           d.push(...this.commands.LF);
         }
       } else {
@@ -357,12 +360,12 @@ class DotMatrixPrinter {
 
     const tableRows = items.map((item, i) => {
       const isDus = item.unit === 'dus';
-      const jmlUnit = isDus ? item.qty + ' DUS' : item.qty + ' Satuan';
+      const jmlCtn = isDus ? item.qty + ' DUS' : item.qty + ' PCS';
       const totalQty = isDus ? fN(item.qty * item.ipb) : fN(item.qty);
       return `<tr>
         <td class="c">${i + 1}</td>
         <td>${item.name}</td>
-        <td class="c">${jmlUnit}</td>
+        <td class="c">${jmlCtn}</td>
         <td class="c">${totalQty}</td>
         <td class="r">${fN(item.price)}</td>
         <td class="r">${fN(item.subtotal)}</td>
@@ -387,8 +390,8 @@ class DotMatrixPrinter {
   body { font: 10pt/1.3 'Courier New', monospace; color:#000; width:100%; }
   .head { display:flex; justify-content:space-between; margin-bottom:4pt; }
   .head-left { width:50%; }
-  .head-right { width:48%; text-align:right; }
-  .head-right table { margin-left:auto; text-align:left; font-size:9pt; }
+  .head-right { width:48%; }
+  .head-right table { text-align:left; font-size:9pt; }
   .head-right table td:first-child { padding-right:4pt; }
   .head-right table td:last-child { padding-left:4pt; }
   h1 { font-size:15pt; font-weight:bold; margin-bottom:2pt; }
@@ -432,7 +435,7 @@ class DotMatrixPrinter {
     <h2>${storeName}</h2>
     ${storeAddr ? `<div style="font-size:8.5pt">${storeAddr}</div>` : ''}
     ${storePhone ? `<div style="font-size:8.5pt">Telp: ${storePhone}</div>` : ''}
-    <table style="margin-top:3pt">
+    <table style="margin-top:6pt">
       <tr><td>No Invoice</td><td>: <strong>${order.order_number}</strong></td></tr>
       <tr><td>Tanggal</td><td>: ${tgl}</td></tr>
     </table>
@@ -446,7 +449,7 @@ ${order.canvasser_name ? `<div class="sales">Kode Sales: <strong>${order.canvass
     <tr>
       <th style="width:5%;" class="c">No.</th>
       <th style="width:31%;">Nama Barang</th>
-      <th style="width:13%;" class="c">Jumlah</th>
+      <th style="width:13%;" class="c">Jumlah CTN</th>
       <th style="width:11%;" class="c">Quantity</th>
       <th style="width:17%;" class="r">Harga</th>
       <th style="width:23%;" class="r">Jumlah</th>
@@ -465,7 +468,7 @@ ${order.canvasser_name ? `<div class="sales">Kode Sales: <strong>${order.canvass
 
 <div class="bottom">
   <div class="remark">
-    <h3>Remark :</h3>
+    <h3>Catatan :</h3>
     <ul>
       <li>Barang yang sudah dibeli tidak dapat dikembalikan kecuali ada perjanjian.</li>
       <li>Mohon diperiksa dengan teliti (karena kami tidak menerima komplain setelah barang diterima).</li>
