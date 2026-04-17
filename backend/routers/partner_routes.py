@@ -143,6 +143,25 @@ async def get_partner_order(order_id: str, current_user: dict = Depends(get_curr
     order["partner_debt_total"] = partner_store.get("current_debt", 0) if partner_store else 0
     order["partner_phone"] = partner_store.get("phone", "") if partner_store else ""
     order["partner_address"] = partner_store.get("address", "") if partner_store else ""
+
+    # Enrich items with product info (items_per_box, sell_unit from warehouse)
+    pids = [it.get("product_id", "") for it in order.get("items", []) if it.get("product_id")]
+    if pids:
+        prods = await db.products.find({"id": {"$in": pids}}, {"_id": 0, "id": 1, "items_per_box": 1}).to_list(1000)
+        prod_map = {p["id"]: p for p in prods}
+        wh_ids = list(set(it.get("warehouse_id", "") for it in order.get("items", []) if it.get("warehouse_id")))
+        wh_map = {}
+        if wh_ids:
+            whs = await db.warehouses.find({"id": {"$in": wh_ids}}, {"_id": 0, "id": 1, "unit": 1}).to_list(100)
+            wh_map = {w["id"]: w for w in whs}
+        for item in order["items"]:
+            pid = item.get("product_id", "")
+            prod = prod_map.get(pid, {})
+            item["items_per_box"] = prod.get("items_per_box", 1) or 1
+            if not item.get("sell_unit"):
+                wh = wh_map.get(item.get("warehouse_id", ""), {})
+                item["sell_unit"] = wh.get("unit", "satuan") or "satuan"
+
     return order
 
 

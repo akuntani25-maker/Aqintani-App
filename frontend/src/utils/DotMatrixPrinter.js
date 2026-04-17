@@ -89,18 +89,21 @@ class DotMatrixPrinter {
     const previousDebt = Math.max(0, (order.partner_debt_total || 0) - (order.remaining || 0));
     const sep = '-'.repeat(W);
 
-    // Prepare items
+    // Prepare items - gunakan sell_unit dan items_per_box dari backend enrichment
     const items = (order.is_settled && order.settled_items)
       ? order.settled_items.filter(si => si.qty_sold > 0).map(si => ({
           name: si.product_name, qty: si.qty_sold, price: si.price,
           subtotal: si.qty_sold * si.price, unit: 'satuan', ipb: 1
         }))
-      : order.items.map(item => ({
-          name: item.product_name, qty: item.quantity, price: item.price,
-          subtotal: item.subtotal || (item.quantity * item.price),
-          unit: item.sell_unit || item.unit || 'satuan',
-          ipb: item.items_per_box || 1
-        }));
+      : order.items.map(item => {
+          const unit = item.sell_unit || item.unit || 'satuan';
+          const ipb = item.items_per_box || 1;
+          return {
+            name: item.product_name, qty: item.quantity, price: item.price,
+            subtotal: item.subtotal || (item.quantity * item.price),
+            unit, ipb
+          };
+        });
 
     // === PAGINATION: split items across pages ===
     const pages = [];
@@ -138,10 +141,13 @@ class DotMatrixPrinter {
     const totalPages = pages.length;
     let globalItemIdx = 0;
 
-    // Init printer
+    // Init printer + set page length untuk kertas 22x14cm
     d.push(...this.commands.INIT);
     d.push(...this.commands.CPI_10);
     d.push(...this.commands.LINE_SPACING_DEFAULT);
+    // ESC C n = Set page length to n lines
+    // 14cm = 5.51 inch, at 1/6" line spacing (6 LPI) = 33 lines
+    d.push(0x1B, 0x43, 33);
 
     for (let p = 0; p < totalPages; p++) {
       const page = pages[p];
@@ -351,12 +357,14 @@ class DotMatrixPrinter {
           name: si.product_name, qty: si.qty_sold, price: si.price,
           subtotal: si.qty_sold * si.price, unit: 'satuan', ipb: 1
         }))
-      : order.items.map(item => ({
-          name: item.product_name, qty: item.quantity, price: item.price,
-          subtotal: item.subtotal || (item.quantity * item.price),
-          unit: item.sell_unit || item.unit || 'satuan',
-          ipb: item.items_per_box || 1
-        }));
+      : order.items.map(item => {
+          const unit = item.sell_unit || item.unit || 'satuan';
+          const ipb = item.items_per_box || 1;
+          return {
+            name: item.product_name, qty: item.quantity, price: item.price,
+            subtotal: item.subtotal || (item.quantity * item.price), unit, ipb
+          };
+        });
 
     const tableRows = items.map((item, i) => {
       const isDus = item.unit === 'dus';
