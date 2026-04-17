@@ -1,6 +1,6 @@
 // Dot Matrix Printer Utility - Epson LX-310 (ESC/P)
-// Format: Invoice pada kertas continuous form 22cm x 14cm NCR 3-ply
-// Multi-page support: otomatis sambung ke kertas berikutnya
+// Format: Invoice pada kertas custom 22cm x 14cm NCR 3-ply
+// Page break dihandle oleh driver printer Windows (paper size sudah di-set di PC)
 
 const LOCAL_PRINT_SERVER = 'http://localhost:9100';
 
@@ -24,33 +24,19 @@ function terbilang(n) {
 class DotMatrixPrinter {
   commands = {
     INIT: [0x1B, 0x40],
-    CR: [0x0D],
     LF: [0x0A],
     FF: [0x0C],
     BOLD_ON: [0x1B, 0x45],
     BOLD_OFF: [0x1B, 0x46],
-    CONDENSED_ON: [0x0F],
-    CONDENSED_OFF: [0x12],
     EXPANDED_ON: [0x1B, 0x57, 0x01],
     EXPANDED_OFF: [0x1B, 0x57, 0x00],
-    UNDERLINE_ON: [0x1B, 0x2D, 0x01],
-    UNDERLINE_OFF: [0x1B, 0x2D, 0x00],
     ITALIC_ON: [0x1B, 0x34],
     ITALIC_OFF: [0x1B, 0x35],
     CPI_10: [0x1B, 0x50],
-    CPI_12: [0x1B, 0x4D],
     LINE_SPACING_DEFAULT: [0x1B, 0x32],
   };
 
-  W = 80;
-  // 14cm ≈ 5.5in, 6 lines/inch = 33 lines per page
-  LINES_PER_PAGE = 33;
-  // First page: header(9) + table header(3) = 12 lines overhead
-  ITEMS_FIRST_PAGE = 18;
-  // Continuation page: mini header(3) + table header(3) = 6 lines overhead
-  ITEMS_CONT_PAGE = 25;
-  // Footer: terbilang(3) + remark/summary(8) = 11 lines
-  FOOTER_LINES = 11;
+  W = 80; // 80 kolom pada 10 CPI
 
   textToBytes(text) {
     const bytes = [];
@@ -75,284 +61,8 @@ class DotMatrixPrinter {
     return new Date(dateStr).toLocaleDateString('id-ID', { day: '2-digit', month: '2-digit', year: 'numeric' });
   }
 
-  // ============================================================
-  // BUILD INVOICE - ESC/P raw data for Epson LX-310
-  // Multi-page: otomatis sambung jika item melebihi 1 halaman
-  // ============================================================
-  buildPartnerInvoice(order, storeSettings = {}) {
-    const d = [];
-    const W = this.W;
-    const storeName = storeSettings?.store_name || 'UD. AQIN TANI';
-    const storeAddr = storeSettings?.address || '';
-    const storePhone = storeSettings?.phone || '';
-    const tgl = this.fmtDate(order.created_at);
-    const previousDebt = Math.max(0, (order.partner_debt_total || 0) - (order.remaining || 0));
-    const sep = '-'.repeat(W);
-
-    // Prepare items - gunakan sell_unit dan items_per_box dari backend enrichment
-    const items = (order.is_settled && order.settled_items)
-      ? order.settled_items.filter(si => si.qty_sold > 0).map(si => ({
-          name: si.product_name, qty: si.qty_sold, price: si.price,
-          subtotal: si.qty_sold * si.price, unit: 'satuan', ipb: 1
-        }))
-      : order.items.map(item => {
-          const unit = item.sell_unit || item.unit || 'satuan';
-          const ipb = item.items_per_box || 1;
-          return {
-            name: item.product_name, qty: item.quantity, price: item.price,
-            subtotal: item.subtotal || (item.quantity * item.price),
-            unit, ipb
-          };
-        });
-
-    // === PAGINATION: split items across pages ===
-    const pages = [];
-    let remaining = [...items];
-    let pageNum = 0;
-
-    while (remaining.length > 0) {
-      const isFirst = pageNum === 0;
-      const capacity = isFirst ? this.ITEMS_FIRST_PAGE : this.ITEMS_CONT_PAGE;
-      // If this could be the last page, reserve space for footer
-      if (remaining.length <= capacity) {
-        pages.push({ items: remaining, isFirst, isLast: true });
-        remaining = [];
-      } else {
-        // Check if remaining after this page would fit on next page with footer
-        const takeCount = Math.min(capacity, remaining.length);
-        const leftAfter = remaining.length - takeCount;
-        const nextCapacity = this.ITEMS_CONT_PAGE - this.FOOTER_LINES;
-        if (leftAfter <= nextCapacity) {
-          // Everything after this page fits on one more page with footer
-          pages.push({ items: remaining.slice(0, takeCount), isFirst, isLast: false });
-          remaining = remaining.slice(takeCount);
-        } else {
-          pages.push({ items: remaining.slice(0, capacity), isFirst, isLast: false });
-          remaining = remaining.slice(capacity);
-        }
-      }
-      pageNum++;
-    }
-
-    if (pages.length === 0) {
-      pages.push({ items: [], isFirst: true, isLast: true });
-    }
-
-    const totalPages = pages.length;
-    let globalItemIdx = 0;
-
-    // Init printer + set page length untuk kertas 22x14cm
-    d.push(...this.commands.INIT);
-    d.push(...this.commands.CPI_10);
-    d.push(...this.commands.LINE_SPACING_DEFAULT);
-    // ESC C n = Set page length to n lines
-    // 14cm = 5.51 inch, at 1/6" line spacing (6 LPI) = 33 lines
-    d.push(0x1B, 0x43, 33);
-
-    for (let p = 0; p < totalPages; p++) {
-      const page = pages[p];
-      const pageLabel = totalPages > 1 ? `  Hal ${p + 1}/${totalPages}` : '';
-
-      if (page.isFirst) {
-        // === HEADER HALAMAN PERTAMA ===
-
-        // Baris 1: INVOICE (kiri, bold+expanded) | NAMA TOKO (kanan, bold+expanded)
-        d.push(...this.commands.BOLD_ON);
-        d.push(...this.commands.EXPANDED_ON);
-        d.push(...this.textToBytes(this.pad('INVOICE', 20)));
-        d.push(...this.textToBytes(this.pad(storeName, 20, 'right')));
-        d.push(...this.commands.LF);
-        d.push(...this.commands.EXPANDED_OFF);
-        d.push(...this.commands.BOLD_OFF);
-
-        // Header kanan: alamat, telp, no invoice, tanggal - semua rata kiri mulai kolom 40
-        const R = 40; // kolom mulai sisi kanan
-
-        // Baris 2: Kepada (kiri) | Alamat toko (kanan rata kiri)
-        d.push(...this.textToBytes(this.pad('Kepada :', R)));
-        if (storeAddr) d.push(...this.textToBytes(storeAddr));
-        d.push(...this.commands.LF);
-
-        // Baris 3: Nama kios (kiri bold) | Telp (kanan rata kiri)
-        d.push(...this.commands.BOLD_ON);
-        d.push(...this.textToBytes(this.pad(order.partner_store_name, R)));
-        d.push(...this.commands.BOLD_OFF);
-        if (storePhone) d.push(...this.textToBytes('Telp: ' + storePhone));
-        d.push(...this.commands.LF);
-
-        // Baris 4: Alamat kios (kiri) | kosong (space pemisah)
-        d.push(...this.textToBytes(this.pad(order.partner_address || '', R)));
-        d.push(...this.commands.LF);
-
-        // Baris 5: kosong (kiri) | No Invoice (kanan rata kiri)
-        d.push(...this.textToBytes(this.pad('', R)));
-        d.push(...this.textToBytes('No Invoice : ' + order.order_number));
-        d.push(...this.commands.LF);
-
-        // Baris 6: kosong (kiri) | Tanggal (kanan rata kiri)
-        d.push(...this.textToBytes(this.pad('', R)));
-        d.push(...this.textToBytes('Tanggal    : ' + tgl));
-        d.push(...this.commands.LF);
-
-        // Baris 7: Kode Sales
-        if (order.canvasser_name) {
-          d.push(...this.textToBytes('Kode Sales : ' + order.canvasser_name));
-          d.push(...this.commands.LF);
-        }
-
-        d.push(...this.commands.LF);
-      } else {
-        // === HEADER HALAMAN SAMBUNGAN ===
-        d.push(...this.commands.BOLD_ON);
-        d.push(...this.textToBytes(this.pad(storeName + ' - INVOICE ' + order.order_number, W - 12) + pageLabel));
-        d.push(...this.commands.LF);
-        d.push(...this.commands.BOLD_OFF);
-        d.push(...this.commands.LF);
-      }
-
-      // === TABEL HEADER ===
-      // No(4) | Nama Barang(28) | Jumlah(12) | Quantity(10) | Harga(12) | Jumlah(14) = 80
-      d.push(...this.textToBytes(sep));
-      d.push(...this.commands.LF);
-      d.push(...this.commands.BOLD_ON);
-      d.push(...this.textToBytes(
-        this.pad('No.', 4) +
-        this.pad('Nama Barang', 28) +
-        this.pad('Jumlah CTN', 12, 'center') +
-        this.pad('Quantity', 10, 'center') +
-        this.pad('Harga', 12, 'right') +
-        this.pad('Jumlah', 14, 'right')
-      ));
-      d.push(...this.commands.LF);
-      d.push(...this.commands.BOLD_OFF);
-      d.push(...this.textToBytes(sep));
-      d.push(...this.commands.LF);
-
-      // === TABEL ITEMS ===
-      for (const item of page.items) {
-        globalItemIdx++;
-        const isDus = item.unit === 'dus';
-        // Kolom Jumlah CTN: jumlah dalam DUS (kalau satuan, tampilkan qty + "PCS")
-        const jmlCtn = isDus ? item.qty + ' DUS' : item.qty + ' PCS';
-        // Kolom Quantity: dus * isi per dus (total pcs), kalau satuan = qty langsung
-        const totalQty = isDus ? this.fmtN(item.qty * (item.ipb || 1)) : this.fmtN(item.qty);
-
-        d.push(...this.textToBytes(
-          this.pad(String(globalItemIdx), 4) +
-          this.pad(item.name, 28) +
-          this.pad(jmlCtn, 12, 'center') +
-          this.pad(totalQty, 10, 'center') +
-          this.pad(this.fmtN(item.price), 12, 'right') +
-          this.pad(this.fmtN(item.subtotal), 14, 'right')
-        ));
-        d.push(...this.commands.LF);
-      }
-
-      d.push(...this.textToBytes(sep));
-      d.push(...this.commands.LF);
-
-      if (page.isLast) {
-        // === FOOTER: hanya di halaman terakhir ===
-
-        // Sub Total row
-        d.push(...this.commands.BOLD_ON);
-        d.push(...this.textToBytes(
-          this.pad('', 4) +
-          this.pad('', 28) +
-          this.pad('', 12) +
-          this.pad('', 10) +
-          this.pad('Sub Total', 12, 'right') +
-          this.pad(this.fmtN(order.total), 14, 'right')
-        ));
-        d.push(...this.commands.LF);
-        d.push(...this.commands.BOLD_OFF);
-
-        d.push(...this.textToBytes(sep));
-        d.push(...this.commands.LF);
-
-        // Terbilang
-        d.push(...this.commands.ITALIC_ON);
-        d.push(...this.textToBytes('Terbilang: ' + terbilang(order.total) + ' Rupiah'));
-        d.push(...this.commands.LF);
-        d.push(...this.commands.ITALIC_OFF);
-        d.push(...this.textToBytes(sep));
-        d.push(...this.commands.LF);
-
-        // Remark (kiri) + Ringkasan (kanan)
-        const leftCol = 44;
-        const rightCol = W - leftCol;
-
-        const remarkLines = [
-          'Catatan :',
-          '- Barang yg sudah dibeli tidak dapat',
-          '  dikembalikan kecuali ada perjanjian.',
-          '- Mohon diperiksa dengan teliti.',
-          '- Terima kasih.',
-        ];
-
-        const sumLines = [];
-        if (previousDebt > 0) {
-          sumLines.push(['Total Pesanan Ini', this.fmtN(order.total)]);
-          sumLines.push(['Bon Sebelumnya', this.fmtN(previousDebt)]);
-        }
-        // Total Tagihan (bold) - ini jadi total utama
-        sumLines.push(['Total Tagihan', this.fmtN(previousDebt > 0 ? previousDebt + order.total : order.total)]);
-        if (order.paid > 0) sumLines.push(['Dibayar', '(' + this.fmtN(order.paid) + ')']);
-        if (order.paid > 0) sumLines.push(['Sisa Hutang', this.fmtN(order.partner_debt_total || 0)]);
-
-        const maxRows = Math.max(remarkLines.length, sumLines.length);
-        for (let i = 0; i < maxRows; i++) {
-          const left = remarkLines[i] || '';
-          const isHead = left === 'Catatan :';
-          if (isHead) d.push(...this.commands.BOLD_ON);
-
-          if (i < sumLines.length) {
-            const [label, val] = sumLines[i];
-            const isBold = label === 'Total Tagihan';
-            const padLeft = this.pad(left, leftCol);
-            if (isHead) d.push(...this.commands.BOLD_OFF);
-            if (isBold) d.push(...this.commands.BOLD_ON);
-            d.push(...this.textToBytes(
-              padLeft +
-              this.pad(label, rightCol - val.length - 2) + ': ' + val
-            ));
-            if (isBold) d.push(...this.commands.BOLD_OFF);
-          } else {
-            d.push(...this.textToBytes(this.pad(left, W)));
-          }
-          if (isHead) d.push(...this.commands.BOLD_OFF);
-          d.push(...this.commands.LF);
-        }
-      } else {
-        // Halaman belum selesai - tulis "Bersambung..."
-        d.push(...this.commands.ITALIC_ON);
-        d.push(...this.textToBytes(this.pad('Bersambung ke halaman berikutnya...' + pageLabel, W, 'right')));
-        d.push(...this.commands.LF);
-        d.push(...this.commands.ITALIC_OFF);
-      }
-
-      // Form feed ke halaman berikutnya
-      d.push(...this.commands.LF);
-      d.push(...this.commands.FF);
-    }
-
-    return d;
-  }
-
-  // ============================================================
-  // BROWSER PRINT FALLBACK - HTML invoice preview
-  // Multi-page via CSS page-break
-  // ============================================================
-  browserPrintFallback(order, storeSettings = {}) {
-    const storeName = storeSettings?.store_name || 'UD. AQIN TANI';
-    const storeAddr = storeSettings?.address || '';
-    const storePhone = storeSettings?.phone || '';
-    const tgl = this.fmtDate(order.created_at);
-    const fN = (v) => new Intl.NumberFormat('id-ID').format(v);
-    const previousDebt = Math.max(0, (order.partner_debt_total || 0) - (order.remaining || 0));
-    const totalWords = terbilang(order.total) + ' Rupiah';
-
-    const items = (order.is_settled && order.settled_items)
+  prepareItems(order) {
+    return (order.is_settled && order.settled_items)
       ? order.settled_items.filter(si => si.qty_sold > 0).map(si => ({
           name: si.product_name, qty: si.qty_sold, price: si.price,
           subtotal: si.qty_sold * si.price, unit: 'satuan', ipb: 1
@@ -365,6 +75,201 @@ class DotMatrixPrinter {
             subtotal: item.subtotal || (item.quantity * item.price), unit, ipb
           };
         });
+  }
+
+  // ============================================================
+  // BUILD INVOICE - ESC/P raw
+  // Layout IDENTIK dengan HTML preview
+  // Page break dihandle driver Windows (paper size di-set di PC)
+  // ============================================================
+  buildPartnerInvoice(order, storeSettings = {}) {
+    const d = [];
+    const W = this.W;
+    const storeName = storeSettings?.store_name || 'UD. AQIN TANI';
+    const storeAddr = storeSettings?.address || '';
+    const storePhone = storeSettings?.phone || '';
+    const tgl = this.fmtDate(order.created_at);
+    const previousDebt = Math.max(0, (order.partner_debt_total || 0) - (order.remaining || 0));
+    const sep = '-'.repeat(W);
+    const items = this.prepareItems(order);
+
+    // Init printer - TANPA ESC C (page length diatur driver Windows)
+    d.push(...this.commands.INIT);
+    d.push(...this.commands.CPI_10);
+    d.push(...this.commands.LINE_SPACING_DEFAULT);
+
+    // ========== HEADER ==========
+    // Baris 1: INVOICE (kiri) + NAMA TOKO (kanan) - bold expanded
+    const R = 40; // kolom mulai sisi kanan
+    d.push(...this.commands.BOLD_ON);
+    d.push(...this.commands.EXPANDED_ON);
+    d.push(...this.textToBytes(this.pad('INVOICE', 20)));
+    d.push(...this.textToBytes(this.pad(storeName, 20, 'right')));
+    d.push(...this.commands.LF);
+    d.push(...this.commands.EXPANDED_OFF);
+    d.push(...this.commands.BOLD_OFF);
+
+    // Baris 2: Kepada : (kiri) + Alamat toko (kanan rata kiri)
+    d.push(...this.textToBytes(this.pad('Kepada :', R)));
+    d.push(...this.textToBytes(storeAddr));
+    d.push(...this.commands.LF);
+
+    // Baris 3: Nama kios bold (kiri) + Telp (kanan rata kiri)
+    d.push(...this.commands.BOLD_ON);
+    d.push(...this.textToBytes(this.pad(order.partner_store_name, R)));
+    d.push(...this.commands.BOLD_OFF);
+    d.push(...this.textToBytes('Telp: ' + storePhone));
+    d.push(...this.commands.LF);
+
+    // Baris 4: Alamat kios (kiri) + spasi
+    d.push(...this.textToBytes(this.pad(order.partner_address || '', W)));
+    d.push(...this.commands.LF);
+
+    // Baris 5: spasi (kiri) + No Invoice (kanan rata kiri)
+    d.push(...this.textToBytes(this.pad('', R)));
+    d.push(...this.textToBytes('No Invoice : ' + order.order_number));
+    d.push(...this.commands.LF);
+
+    // Baris 6: spasi (kiri) + Tanggal (kanan rata kiri)
+    d.push(...this.textToBytes(this.pad('', R)));
+    d.push(...this.textToBytes('Tanggal    : ' + tgl));
+    d.push(...this.commands.LF);
+
+    // Baris 7: Kode Sales
+    if (order.canvasser_name) {
+      d.push(...this.textToBytes('Kode Sales : ' + order.canvasser_name));
+      d.push(...this.commands.LF);
+    }
+    d.push(...this.commands.LF);
+
+    // ========== TABEL ==========
+    d.push(...this.textToBytes(sep));
+    d.push(...this.commands.LF);
+
+    // Header kolom: No(4) Nama Barang(28) Jumlah CTN(12) Quantity(10) Harga(12) Jumlah(14)
+    d.push(...this.commands.BOLD_ON);
+    d.push(...this.textToBytes(
+      this.pad('No.', 4) +
+      this.pad('Nama Barang', 28) +
+      this.pad('Jumlah CTN', 12, 'center') +
+      this.pad('Quantity', 10, 'center') +
+      this.pad('Harga', 12, 'right') +
+      this.pad('Jumlah', 14, 'right')
+    ));
+    d.push(...this.commands.LF);
+    d.push(...this.commands.BOLD_OFF);
+
+    d.push(...this.textToBytes(sep));
+    d.push(...this.commands.LF);
+
+    // Item rows
+    items.forEach((item, idx) => {
+      const isDus = item.unit === 'dus';
+      const jmlCtn = isDus ? item.qty + ' DUS' : item.qty + ' PCS';
+      const totalQty = isDus ? this.fmtN(item.qty * (item.ipb || 1)) : this.fmtN(item.qty);
+
+      d.push(...this.textToBytes(
+        this.pad(String(idx + 1), 4) +
+        this.pad(item.name, 28) +
+        this.pad(jmlCtn, 12, 'center') +
+        this.pad(totalQty, 10, 'center') +
+        this.pad(this.fmtN(item.price), 12, 'right') +
+        this.pad(this.fmtN(item.subtotal), 14, 'right')
+      ));
+      d.push(...this.commands.LF);
+    });
+
+    // ========== SUB TOTAL ==========
+    d.push(...this.textToBytes(sep));
+    d.push(...this.commands.LF);
+
+    d.push(...this.commands.BOLD_ON);
+    d.push(...this.textToBytes(
+      this.pad('', 54) +
+      this.pad('Sub Total', 12, 'right') +
+      this.pad(this.fmtN(order.total), 14, 'right')
+    ));
+    d.push(...this.commands.LF);
+    d.push(...this.commands.BOLD_OFF);
+
+    d.push(...this.textToBytes(sep));
+    d.push(...this.commands.LF);
+
+    // ========== TERBILANG ==========
+    d.push(...this.commands.ITALIC_ON);
+    d.push(...this.textToBytes('Terbilang: ' + terbilang(order.total) + ' Rupiah'));
+    d.push(...this.commands.LF);
+    d.push(...this.commands.ITALIC_OFF);
+
+    d.push(...this.textToBytes(sep));
+    d.push(...this.commands.LF);
+
+    // ========== CATATAN (kiri) + RINGKASAN (kanan) ==========
+    const leftCol = 44;
+    const rightCol = W - leftCol;
+
+    const catatanLines = [
+      'Catatan :',
+      '- Barang yg sudah dibeli tidak dapat',
+      '  dikembalikan kecuali ada perjanjian.',
+      '- Mohon diperiksa dengan teliti.',
+      '- Terima kasih.',
+    ];
+
+    const sumLines = [];
+    if (previousDebt > 0) {
+      sumLines.push({ label: 'Total Pesanan Ini', val: this.fmtN(order.total), bold: false });
+      sumLines.push({ label: 'Bon Sebelumnya', val: this.fmtN(previousDebt), bold: false });
+    }
+    sumLines.push({ label: 'Total Tagihan', val: this.fmtN(previousDebt > 0 ? previousDebt + order.total : order.total), bold: true });
+    if (order.paid > 0) {
+      sumLines.push({ label: 'Dibayar', val: '(' + this.fmtN(order.paid) + ')', bold: false });
+      sumLines.push({ label: 'Sisa Hutang', val: this.fmtN(order.partner_debt_total || 0), bold: false });
+    }
+
+    const maxRows = Math.max(catatanLines.length, sumLines.length);
+    for (let i = 0; i < maxRows; i++) {
+      const leftText = catatanLines[i] || '';
+      const isHead = leftText === 'Catatan :';
+
+      if (isHead) {
+        d.push(...this.commands.BOLD_ON);
+        d.push(...this.textToBytes(this.pad(leftText, leftCol)));
+        d.push(...this.commands.BOLD_OFF);
+      } else {
+        d.push(...this.textToBytes(this.pad(leftText, leftCol)));
+      }
+
+      if (i < sumLines.length) {
+        const s = sumLines[i];
+        if (s.bold) d.push(...this.commands.BOLD_ON);
+        d.push(...this.textToBytes(this.pad(s.label, rightCol - s.val.length - 2) + ': ' + s.val));
+        if (s.bold) d.push(...this.commands.BOLD_OFF);
+      }
+
+      d.push(...this.commands.LF);
+    }
+
+    // Form feed - eject halaman
+    d.push(...this.commands.LF);
+    d.push(...this.commands.FF);
+
+    return d;
+  }
+
+  // ============================================================
+  // BROWSER PRINT FALLBACK - HTML preview
+  // Layout IDENTIK dengan ESC/P di atas
+  // ============================================================
+  browserPrintFallback(order, storeSettings = {}) {
+    const storeName = storeSettings?.store_name || 'UD. AQIN TANI';
+    const storeAddr = storeSettings?.address || '';
+    const storePhone = storeSettings?.phone || '';
+    const tgl = this.fmtDate(order.created_at);
+    const fN = (v) => new Intl.NumberFormat('id-ID').format(v);
+    const previousDebt = Math.max(0, (order.partner_debt_total || 0) - (order.remaining || 0));
+    const totalWords = terbilang(order.total) + ' Rupiah';
+    const items = this.prepareItems(order);
 
     const tableRows = items.map((item, i) => {
       const isDus = item.unit === 'dus';
@@ -417,11 +322,11 @@ class DotMatrixPrinter {
   .sub-row td { font-weight:bold; border-top:1.5pt solid #000; border-bottom:none; }
   .terbilang { font-size:8.5pt; font-style:italic; padding:3pt 0; border-top:1pt solid #000; border-bottom:1pt solid #000; margin:2pt 0; }
   .bottom { display:flex; justify-content:space-between; margin-top:3pt; font-size:8.5pt; }
-  .remark { width:52%; }
-  .remark h3 { font-size:9pt; font-weight:bold; margin-bottom:2pt; }
-  .remark ul { list-style:none; padding:0; }
-  .remark li { margin-bottom:1pt; }
-  .remark li:before { content:"- "; }
+  .catatan { width:52%; }
+  .catatan h3 { font-size:9pt; font-weight:bold; margin-bottom:2pt; }
+  .catatan ul { list-style:none; padding:0; }
+  .catatan li { margin-bottom:1pt; }
+  .catatan li:before { content:"- "; }
   .summary { width:44%; }
   .summary table { width:100%; font-size:9pt; border-collapse:collapse; }
   .summary td { padding:1pt 2pt; }
@@ -475,7 +380,7 @@ ${order.canvasser_name ? `<div class="sales">Kode Sales: <strong>${order.canvass
 <div class="terbilang">Terbilang: <em>${totalWords}</em></div>
 
 <div class="bottom">
-  <div class="remark">
+  <div class="catatan">
     <h3>Catatan :</h3>
     <ul>
       <li>Barang yang sudah dibeli tidak dapat dikembalikan kecuali ada perjanjian.</li>
