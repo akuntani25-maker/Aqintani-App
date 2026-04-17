@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from '../context/AuthContext';
 import { Button } from '../components/ui/button';
-import { ArrowLeft, Bluetooth, Loader2, Printer, Eye } from 'lucide-react';
+import { ArrowLeft, Bluetooth, Loader2, Printer } from 'lucide-react';
 import { toast } from 'sonner';
 import { thermalPrinter } from '../utils/ThermalPrinter';
 import { dotMatrixPrinter } from '../utils/DotMatrixPrinter';
@@ -42,7 +42,6 @@ export const PartnerOrderReceipt = () => {
   const [loading, setLoading] = useState(true);
   const [printStatus, setPrintStatus] = useState('idle');
   const [btStatus, setBtStatus] = useState('idle');
-  const [dmStatus, setDmStatus] = useState('idle');
   const [serverAvailable, setServerAvailable] = useState(null);
 
   useEffect(() => {
@@ -121,27 +120,11 @@ export const PartnerOrderReceipt = () => {
     finally { setBtStatus('idle'); }
   };
 
-  const handleDotMatrixPrint = async () => {
+  const handleDotMatrixPrint = () => {
     if (!order) return;
-    setDmStatus('printing');
-    try {
-      const serverOk = await dotMatrixPrinter.checkLocalServer();
-      if (!serverOk) {
-        toast.error('Print Server tidak aktif. Jalankan print_server.py di PC untuk cetak faktur dot matrix.', { duration: 5000 });
-        setDmStatus('idle');
-        return;
-      }
-      const data = dotMatrixPrinter.buildPartnerInvoice(order, storeSettings);
-      await dotMatrixPrinter.printViaServer(data);
-      toast.success('Faktur berhasil dicetak via Print Server (font bawaan printer)!');
-    } catch (err) {
-      toast.error('Gagal mencetak: ' + err.message);
-    } finally { setDmStatus('idle'); }
-  };
-
-  const handlePreviewInvoice = () => {
-    if (!order) return;
+    // Langsung buka print dialog browser - user pilih printer & paper size
     dotMatrixPrinter.browserPrintFallback(order, storeSettings);
+    toast.success('Faktur dibuka. Pilih printer Epson LX-310 dan ukuran kertas 22x14cm.', { duration: 5000 });
   };
 
   useEffect(() => {
@@ -183,12 +166,8 @@ export const PartnerOrderReceipt = () => {
               {btStatus !== 'idle' ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Bluetooth className="w-4 h-4 mr-2" />}
               {btStatus === 'connecting' ? 'Menghubungkan...' : btStatus === 'printing' ? 'Mencetak...' : 'Cetak Bluetooth'}
             </Button>
-            <Button variant="secondary" onClick={handleDotMatrixPrint} disabled={dmStatus !== 'idle'} data-testid="dotmatrix-print-button">
-              {dmStatus !== 'idle' ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Printer className="w-4 h-4 mr-2" />}
-              {dmStatus === 'printing' ? 'Mencetak...' : 'Cetak Faktur'}
-            </Button>
-            <Button variant="ghost" size="sm" onClick={handlePreviewInvoice} data-testid="preview-invoice-button">
-              <Eye className="w-4 h-4 mr-1" />Preview
+            <Button variant="secondary" onClick={handleDotMatrixPrint} data-testid="dotmatrix-print-button">
+              <Printer className="w-4 h-4 mr-2" />Cetak Faktur
             </Button>
           </div>
         </div>
@@ -239,16 +218,14 @@ export const PartnerOrderReceipt = () => {
         </div>
         <div className={`mt-4 p-3 rounded-lg border text-sm ${serverAvailable ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-amber-50 border-amber-200 text-amber-800'}`} data-testid="print-server-status">
           {serverAvailable ? (
-            <div>
-              <p><strong>Print Server terdeteksi.</strong> Struk thermal & faktur dot matrix siap dicetak menggunakan font bawaan printer.</p>
-            </div>
+            <p><strong>Print Server terdeteksi.</strong> Struk thermal siap dicetak menggunakan font bawaan printer.</p>
           ) : (
             <div>
-              <p><strong>Print Server tidak aktif.</strong></p>
-              <p className="mt-1">"Cetak Struk" thermal akan menggunakan browser print. <strong>"Cetak Faktur" dot matrix membutuhkan Print Server</strong> agar font terbaca (menggunakan font bawaan Epson LX-310).</p>
-              <p className="mt-1">Download <a href={`${process.env.REACT_APP_BACKEND_URL}/api/download/print-server`} download="print_server.py" className="underline font-semibold hover:text-amber-900">print_server.py</a> dan jalankan di PC.</p>
+              <p><strong>Print Server tidak aktif.</strong> "Cetak Struk" thermal akan menggunakan browser print.</p>
+              <p className="mt-1">Download <a href={`${process.env.REACT_APP_BACKEND_URL}/api/download/print-server`} download="print_server.py" className="underline font-semibold hover:text-amber-900">print_server.py</a> dan jalankan di PC untuk kualitas thermal terbaik.</p>
             </div>
           )}
+          <p className="mt-1 text-xs opacity-75">"Cetak Faktur" membuka print dialog browser. Pilih printer <strong>Epson LX-310</strong> dan paper size <strong>22 x 14 cm</strong>.</p>
         </div>
       </div>
     </div>
