@@ -154,14 +154,14 @@ class DotMatrixPrinter {
         d.push(...this.commands.BOLD_ON);
         d.push(...this.commands.EXPANDED_ON);
         d.push(...this.textToBytes(this.pad('INVOICE', 20)));
-        d.push(...this.textToBytes(this.pad(storeName, 20, 'right')));
+        d.push(...this.textToBytes(storeName));
         d.push(...this.commands.LF);
         d.push(...this.commands.EXPANDED_OFF);
         d.push(...this.commands.BOLD_OFF);
 
         // Kepada (kiri) | Alamat toko rata kiri (kanan)
         d.push(...this.textToBytes(this.pad('Kepada :', R)));
-        d.push(...this.textToBytes(storeAddr));
+        d.push(...this.textToBytes('Jl. Raya Labuhan Lombok, Wanasaba'));
         d.push(...this.commands.LF);
 
         // Nama kios bold (kiri) | Telp (kanan)
@@ -223,7 +223,7 @@ class DotMatrixPrinter {
         d.push(...this.commands.LF);
         d.push(...this.commands.ITALIC_OFF);
 
-        // Form feed ke halaman berikutnya
+        // Form feed langsung ke halaman berikutnya (tanpa LF ekstra)
         d.push(...this.commands.FF);
 
       } else {
@@ -297,7 +297,6 @@ class DotMatrixPrinter {
         }
 
         // Form feed akhir
-        d.push(...this.commands.LF);
         d.push(...this.commands.FF);
       }
     }
@@ -372,7 +371,7 @@ class DotMatrixPrinter {
           </div>
           <div class="head-right">
             <h2>${storeName}</h2>
-            <div style="font-size:8.5pt">${storeAddr}</div>
+            <div style="font-size:8.5pt">Jl. Raya Labuhan Lombok, Wanasaba</div>
             ${storePhone ? `<div style="font-size:8.5pt">Telp: ${storePhone}</div>` : ''}
             <table style="margin-top:6pt">
               <tr><td>No Invoice</td><td>: <strong>${order.order_number}</strong></td></tr>
