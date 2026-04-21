@@ -158,9 +158,12 @@ async def get_partner_order(order_id: str, current_user: dict = Depends(get_curr
             pid = item.get("product_id", "")
             prod = prod_map.get(pid, {})
             item["items_per_box"] = prod.get("items_per_box", 1) or 1
-            if not item.get("sell_unit"):
-                wh = wh_map.get(item.get("warehouse_id", ""), {})
-                item["sell_unit"] = wh.get("unit", "satuan") or "satuan"
+            # Tentukan unit dari warehouse_id: gudang_toko = satuan, lainnya = dus
+            wh_id = item.get("warehouse_id", "")
+            if wh_id:
+                item["sell_unit"] = "satuan" if wh_id == "gudang_toko" else "dus"
+            elif not item.get("sell_unit"):
+                item["sell_unit"] = "satuan"
 
     return order
 
@@ -773,20 +776,29 @@ async def get_store_order_items(
 
     # Batch fetch products for items_per_box
     all_pids = set()
+    all_wh_ids = set()
     for o in orders:
         for item in o.get("items", []):
             pid = item.get("product_id", "")
+            wh = item.get("warehouse_id", "")
             if pid:
                 all_pids.add(pid)
+            if wh:
+                all_wh_ids.add(wh)
     products_map = {}
     if all_pids:
         prods = await db.products.find({"id": {"$in": list(all_pids)}}, {"_id": 0, "id": 1, "items_per_box": 1}).to_list(10000)
         products_map = {pr["id"]: pr for pr in prods}
+    warehouses_map = {}
+    if all_wh_ids:
+        whs = await db.warehouses.find({"id": {"$in": list(all_wh_ids)}}, {"_id": 0, "id": 1, "unit": 1}).to_list(100)
+        warehouses_map = {w["id"]: w for w in whs}
 
     result = []
     for o in orders:
         order_date = o.get("created_at", "")[:10]
         setoran = payments_by_date.get(order_date, 0)
+        payment_type = o.get("payment_type", "bon")
         for item in o.get("items", []):
             product_name = item.get("product_name", "")
             if search and search.lower() not in product_name.lower():
@@ -794,7 +806,13 @@ async def get_store_order_items(
             prod = products_map.get(item.get("product_id", ""), {})
             ipb = prod.get("items_per_box", 1) or 1
             qty = item.get("quantity", 0)
-            unit = item.get("unit") or item.get("sell_unit") or "satuan"
+            # Tentukan unit dari warehouse_id: gudang_toko = satuan, lainnya = dus
+            wh_id = item.get("warehouse_id", "")
+            if wh_id:
+                wh = warehouses_map.get(wh_id, {})
+                unit = wh.get("unit", "dus") if wh_id != "gudang_toko" else "satuan"
+            else:
+                unit = item.get("unit") or item.get("sell_unit") or "satuan"
             result.append({
                 "order_id": o["id"],
                 "order_number": o.get("order_number", ""),
@@ -808,6 +826,7 @@ async def get_store_order_items(
                 "price": item.get("price", 0),
                 "subtotal": item.get("subtotal", qty * item.get("price", 0)),
                 "setoran": setoran,
+                "payment_type": payment_type,
             })
     # Ensure sorted by date descending
     result.sort(key=lambda x: x.get("date", ""), reverse=True)

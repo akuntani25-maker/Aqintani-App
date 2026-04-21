@@ -334,7 +334,10 @@ export const PartnerStoreDetail = () => {
                             {date !== 'tanpa-tanggal' ? new Date(date).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }) : '-'}
                           </TableCell>
                         ) : null}
-                        <TableCell className="text-xs font-mono text-muted-foreground">{item.order_number}</TableCell>
+                        <TableCell className="text-xs font-mono text-muted-foreground">
+                          {item.order_number}
+                          {item.payment_type === 'cash' && <span className="ml-1 px-1.5 py-0.5 bg-emerald-100 text-emerald-700 text-[10px] rounded font-sans font-semibold">CASH</span>}
+                        </TableCell>
                         <TableCell className="text-sm">{item.product_name}</TableCell>
                         <TableCell className="text-sm text-right font-medium">
                           {item.unit === 'dus' ? fmtNum(item.qty) : <span className="text-muted-foreground">-</span>}

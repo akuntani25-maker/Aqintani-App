@@ -243,14 +243,20 @@ class DotMatrixPrinter {
         ];
 
         const sumLines = [];
-        if (previousDebt > 0) {
-          sumLines.push({ label: 'Total Pesanan Ini', val: this.fmtN(order.total), bold: false });
-          sumLines.push({ label: 'Bon Sebelumnya', val: this.fmtN(previousDebt), bold: false });
-        }
-        sumLines.push({ label: 'Total Tagihan', val: this.fmtN(previousDebt > 0 ? previousDebt + order.total : order.total), bold: true });
-        if (order.paid > 0) {
-          sumLines.push({ label: 'Dibayar', val: '(' + this.fmtN(order.paid) + ')', bold: false });
-          sumLines.push({ label: 'Sisa Hutang', val: this.fmtN(order.partner_debt_total || 0), bold: false });
+        const isCash = order.payment_type === 'cash';
+        if (isCash) {
+          sumLines.push({ label: 'Total Pesanan', val: this.fmtN(order.total), bold: true });
+          sumLines.push({ label: 'Pembayaran', val: 'CASH', bold: true });
+        } else {
+          if (previousDebt > 0) {
+            sumLines.push({ label: 'Total Pesanan Ini', val: this.fmtN(order.total), bold: false });
+            sumLines.push({ label: 'Bon Sebelumnya', val: this.fmtN(previousDebt), bold: false });
+          }
+          sumLines.push({ label: 'Total Tagihan', val: this.fmtN(previousDebt > 0 ? previousDebt + order.total : order.total), bold: true });
+          if (order.paid > 0) {
+            sumLines.push({ label: 'Dibayar', val: '(' + this.fmtN(order.paid) + ')', bold: false });
+            sumLines.push({ label: 'Sisa Hutang', val: this.fmtN(order.partner_debt_total || 0), bold: false });
+          }
         }
 
         const maxRows = Math.max(catatanLines.length, sumLines.length);
@@ -316,14 +322,20 @@ class DotMatrixPrinter {
     const totalPages = pages.length;
 
     let summaryRows = '';
-    if (previousDebt > 0) {
-      summaryRows += `<tr><td>Total Pesanan Ini</td><td class="r">${fN(order.total)}</td></tr>`;
-      summaryRows += `<tr><td>Bon Sebelumnya</td><td class="r">${fN(previousDebt)}</td></tr>`;
-    }
-    summaryRows += `<tr class="grand"><td><strong>Total Tagihan</strong></td><td class="r"><strong>${fN(previousDebt > 0 ? previousDebt + order.total : order.total)}</strong></td></tr>`;
-    if (order.paid > 0) {
-      summaryRows += `<tr><td>Dibayar</td><td class="r">(${fN(order.paid)})</td></tr>`;
-      summaryRows += `<tr><td>Sisa Hutang</td><td class="r">${fN(order.partner_debt_total || 0)}</td></tr>`;
+    const isCash = order.payment_type === 'cash';
+    if (isCash) {
+      summaryRows += `<tr class="grand"><td><strong>Total Pesanan</strong></td><td class="r"><strong>${fN(order.total)}</strong></td></tr>`;
+      summaryRows += `<tr class="grand"><td><strong>Pembayaran</strong></td><td class="r"><strong>CASH</strong></td></tr>`;
+    } else {
+      if (previousDebt > 0) {
+        summaryRows += `<tr><td>Total Pesanan Ini</td><td class="r">${fN(order.total)}</td></tr>`;
+        summaryRows += `<tr><td>Bon Sebelumnya</td><td class="r">${fN(previousDebt)}</td></tr>`;
+      }
+      summaryRows += `<tr class="grand"><td><strong>Total Tagihan</strong></td><td class="r"><strong>${fN(previousDebt > 0 ? previousDebt + order.total : order.total)}</strong></td></tr>`;
+      if (order.paid > 0) {
+        summaryRows += `<tr><td>Dibayar</td><td class="r">(${fN(order.paid)})</td></tr>`;
+        summaryRows += `<tr><td>Sisa Hutang</td><td class="r">${fN(order.partner_debt_total || 0)}</td></tr>`;
+      }
     }
 
     let pagesHtml = '';
