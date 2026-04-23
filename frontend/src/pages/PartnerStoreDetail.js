@@ -44,6 +44,11 @@ export const PartnerStoreDetail = () => {
   const [importPayRows, setImportPayRows] = useState([]);
   const [importPaySubmitting, setImportPaySubmitting] = useState(false);
 
+  // Riwayat Setoran state
+  const [setoranOpen, setSetoranOpen] = useState(false);
+  const [setoranPage, setSetoranPage] = useState(1);
+  const setoranPerPage = 10;
+
   useEffect(() => { fetchData(); }, [storeId]);
 
   const fetchData = async () => {
@@ -236,35 +241,55 @@ export const PartnerStoreDetail = () => {
         <p className="text-sm">{store.address}</p>
       </Card>
 
-      {/* Payment History - Riwayat Setoran */}
-      <Card className="p-6" data-testid="payment-history-card">
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-2"><Clock className="w-5 h-5 text-green-600" /><h2 className="text-lg font-semibold">Riwayat Setoran</h2></div>
-          <Button size="sm" variant="outline" className="h-8 gap-1" onClick={() => { setImportPayRows([]); setImportPayOpen(true); }} data-testid="import-payments-csv-btn">
-            <Upload className="w-3.5 h-3.5" /> Import
-          </Button>
+      {/* Payment History - Riwayat Setoran (Collapsible) */}
+      <Card className="overflow-hidden" data-testid="payment-history-card">
+        <div
+          className="flex items-center justify-between p-4 cursor-pointer hover:bg-muted/30 transition-colors"
+          onClick={() => setSetoranOpen(!setoranOpen)}
+          data-testid="setoran-toggle"
+        >
+          <div className="flex items-center gap-2">
+            <Clock className="w-5 h-5 text-green-600" />
+            <h2 className="text-lg font-semibold">Riwayat Setoran</h2>
+            <span className="text-xs text-muted-foreground">({payments.length} transaksi)</span>
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="text-sm font-bold text-green-600">{fmt(payments.reduce((s, p) => s + p.amount, 0))}</span>
+            <svg className={`w-4 h-4 text-muted-foreground transition-transform ${setoranOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
+          </div>
         </div>
-        {payments.length === 0 ? (
-          <p className="text-center text-muted-foreground py-4 text-sm">Belum ada riwayat setoran.</p>
-        ) : (
-          <div className="rounded-lg border overflow-x-auto">
-            <Table>
-              <TableHeader><TableRow><TableHead>Tanggal</TableHead><TableHead className="text-right">Jumlah</TableHead><TableHead>Catatan</TableHead></TableRow></TableHeader>
-              <TableBody>
-                {payments.map(p => (
-                  <TableRow key={p.id}>
-                    <TableCell>{new Date(p.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}</TableCell>
-                    <TableCell className="text-right font-semibold text-green-600">{fmt(p.amount)}</TableCell>
-                    <TableCell>{p.notes || '-'}</TableCell>
-                  </TableRow>
-                ))}
-                <TableRow className="bg-green-50 font-bold">
-                  <TableCell>Total Setoran</TableCell>
-                  <TableCell className="text-right text-green-600">{fmt(payments.reduce((s, p) => s + p.amount, 0))}</TableCell>
-                  <TableCell></TableCell>
-                </TableRow>
-              </TableBody>
-            </Table>
+        {setoranOpen && (
+          <div className="px-4 pb-4 border-t">
+            <div className="flex justify-end mt-3 mb-2">
+              <Button size="sm" variant="outline" className="h-8 gap-1" onClick={(e) => { e.stopPropagation(); setImportPayRows([]); setImportPayOpen(true); }} data-testid="import-payments-csv-btn">
+                <Upload className="w-3.5 h-3.5" /> Import
+              </Button>
+            </div>
+            {payments.length === 0 ? (
+              <p className="text-center text-muted-foreground py-4 text-sm">Belum ada riwayat setoran.</p>
+            ) : (() => {
+              const totalPages = Math.ceil(payments.length / setoranPerPage);
+              const paged = payments.slice((setoranPage - 1) * setoranPerPage, setoranPage * setoranPerPage);
+              return (
+                <>
+                  <div className="rounded-lg border overflow-x-auto">
+                    <Table>
+                      <TableHeader><TableRow><TableHead>Tanggal</TableHead><TableHead className="text-right">Jumlah</TableHead><TableHead>Catatan</TableHead></TableRow></TableHeader>
+                      <TableBody>
+                        {paged.map(p => (
+                          <TableRow key={p.id}>
+                            <TableCell>{new Date(p.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}</TableCell>
+                            <TableCell className="text-right font-semibold text-green-600">{fmt(p.amount)}</TableCell>
+                            <TableCell>{p.notes || '-'}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                  <Pagination page={setoranPage} totalPages={totalPages} total={payments.length} perPage={setoranPerPage} onChange={setSetoranPage} />
+                </>
+              );
+            })()}
           </div>
         )}
       </Card>
