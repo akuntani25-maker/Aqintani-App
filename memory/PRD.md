@@ -91,7 +91,8 @@ Aplikasi web responsif untuk toko farmasi dan pertanian "UD. AQIN TANI" dengan s
 73. Import Riwayat Bayar Supplier - Fitur import CSV riwayat pembayaran di tab Riwayat Bayar supplier. Mengurangi hutang secara FIFO (dari pembelian terlama). Format: Tanggal, Jumlah, Catatan.
 74. Import Riwayat Setoran Kios Mitra - Fitur import CSV riwayat setoran di section Riwayat Setoran detail kios mitra. Mengurangi piutang. Format: Tanggal, Jumlah, Catatan. Section selalu ditampilkan + total setoran.
 75. Support XLSX Import - Semua fitur import (pembelian supplier, pembayaran supplier, pesanan kios mitra, setoran kios mitra) sekarang mendukung format CSV dan XLSX. Menggunakan library SheetJS (xlsx). Parser terpusat di `utils/fileParser.js` dengan handle tanggal Excel numeric.
-76. Cetak Faktur Dot Matrix (Epson LX-310) - Tombol "Cetak Faktur" di halaman struk kios mitra. Format INVOICE untuk kertas NCR 3-ply (22x14cm) dengan layout: INVOICE+nama toko (2 kolom header), kepada/alamat kios, no faktur/tanggal/jatuh tempo, kode sales, tabel item (No/Nama/Jml CTN/Quantity/Harga/Jumlah), terbilang (angka ke kata Indonesia), remark+ringkasan keuangan (2 kolom: Sub Total/Bon/Grand Total), tanda tangan Penerima+Hormat Kami. Kirim ESC/P commands via print server (endpoint /print-dotmatrix) atau fallback browser print HTML.
+76. Cetak Faktur Dot Matrix (Epson LX-310) - Tombol "Cetak Faktur" di halaman struk kios mitra. Format INVOICE untuk kertas NCR 3-ply (22x14cm) dengan layout: INVOICE+nama toko (2 kolom header), kepada/alamat kios, no invoice/tanggal, kode sales, tabel item (No/Nama/Jml CTN/Quantity/Harga/Jumlah), terbilang (angka ke kata Indonesia), catatan+ringkasan keuangan (2 kolom: Sub Total/Bon/Total Tagihan). Continuous form printing (33 baris/halaman, tanpa FF). Max 10 item/halaman. Cash invoice tanpa sisa hutang.
+77. Fix Retur ke Gudang saat Settlement - Bug: retur dari settlement selalu masuk vehicle_stock meskipun user pilih retur ke gudang. Fix: tambah field `return_to` di SettlementRequest ("vehicle" atau "warehouse"). Jika "warehouse": retur masuk ke gudang asal (gudang_toko=satuan, gudang_utama=dus) + recalculate_product_stock dipanggil. UI: radio button "Stok Mobil Box" / "Gudang" di dialog settlement canvasser.
 
 ## Credentials
 - Admin: admin@aqintani.com / admin123
@@ -121,7 +122,7 @@ Aplikasi web responsif untuk toko farmasi dan pertanian "UD. AQIN TANI" dengan s
 - `/app/frontend/src/pages/POS.js` - POS with editable qty, shift, retur/tukar
 - `/app/frontend/src/pages/PartnerOrders.js` - Partner orders with editable qty, harga satuan
 - `/app/frontend/src/pages/PartnerOrderReceipt.js` - Receipt page: thermal + bluetooth + dot matrix faktur
-- `/app/frontend/src/pages/CanvasserDashboard.js` - Settlement, rekap, sisa bon
+- `/app/frontend/src/pages/CanvasserDashboard.js` - Settlement with return_to option (vehicle/warehouse)
 - `/app/frontend/src/pages/CanvasserDashboard.js` - Settlement, rekap, sisa bon
 - `/app/frontend/src/pages/Reports.js` - All reports + Rekap Kanvaser tab
 - `/app/frontend/src/pages/PartnerStoreDetail.js` - Detail kios mitra: tabel pesanan per-item, search/filter, import CSV

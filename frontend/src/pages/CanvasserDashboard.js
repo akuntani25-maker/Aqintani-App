@@ -31,6 +31,7 @@ export const CanvasserDashboard = () => {
   // Settlement (partial return)
   const [settleDialog, setSettleDialog] = useState(null);
   const [settleItems, setSettleItems] = useState([]);
+  const [settleReturnTo, setSettleReturnTo] = useState('vehicle');
 
   // My Recap
   const [myRecap, setMyRecap] = useState(null);
@@ -140,6 +141,7 @@ export const CanvasserDashboard = () => {
 
   const openSettlement = (order) => {
     setSettleDialog(order);
+    setSettleReturnTo('vehicle');
     setSettleItems(order.items.map(item => ({
       product_id: item.product_id,
       product_name: item.product_name,
@@ -162,7 +164,8 @@ export const CanvasserDashboard = () => {
           qty_sold: si.qty_sold,
           original_qty: si.original_qty,
           price: si.price
-        }))
+        })),
+        return_to: settleReturnTo
       });
       const { return_items, new_total, debt_reduced } = res.data;
       const returnMsg = return_items.length > 0
@@ -738,7 +741,7 @@ export const CanvasserDashboard = () => {
                       </div>
                       {remaining > 0 && (
                         <div className="text-xs text-amber-700 bg-amber-50 p-2 rounded">
-                          Sisa kembali ke stok mobil box: <span className="font-semibold">{remaining} pcs</span>
+                          Sisa retur: <span className="font-semibold">{remaining} pcs</span>
                         </div>
                       )}
                       <p className="text-xs text-right font-semibold">
@@ -759,6 +762,29 @@ export const CanvasserDashboard = () => {
                   <span className="text-primary">{formatCurrency(settleItems.reduce((s, i) => s + (i.qty_sold * i.price), 0))}</span>
                 </div>
               </div>
+
+              {settleItems.some(i => {
+                const isDus = i.warehouse_unit === 'dus';
+                const ipb = i.items_per_box || 1;
+                const totalPcs = isDus ? i.original_qty * ipb : i.original_qty;
+                return totalPcs - i.qty_sold > 0;
+              }) && (
+                <div className="p-3 border rounded-lg space-y-2 bg-muted/30">
+                  <Label className="text-xs font-semibold">Tujuan retur barang sisa:</Label>
+                  <div className="flex gap-3">
+                    <label className="flex items-center gap-1.5 cursor-pointer text-sm">
+                      <input type="radio" name="return_to" value="vehicle" checked={settleReturnTo === 'vehicle'}
+                        onChange={() => setSettleReturnTo('vehicle')} className="accent-primary" data-testid="return-to-vehicle" />
+                      Stok Mobil Box
+                    </label>
+                    <label className="flex items-center gap-1.5 cursor-pointer text-sm">
+                      <input type="radio" name="return_to" value="warehouse" checked={settleReturnTo === 'warehouse'}
+                        onChange={() => setSettleReturnTo('warehouse')} className="accent-primary" data-testid="return-to-warehouse" />
+                      Gudang
+                    </label>
+                  </div>
+                </div>
+              )}
 
               <div className="flex gap-2 justify-end pt-2">
                 <Button variant="outline" onClick={() => setSettleDialog(null)}>Batal</Button>

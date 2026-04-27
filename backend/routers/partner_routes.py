@@ -451,6 +451,7 @@ class SettlementItem(PydanticBaseModel):
 
 class SettlementRequest(PydanticBaseModel):
     items: TypingList[SettlementItem]
+    return_to: str = "vehicle"  # "vehicle" atau "warehouse"
 
 
 @router.post("/partner-orders/{order_id}/settle")
@@ -485,7 +486,7 @@ async def settle_partner_order(order_id: str, data: SettlementRequest, current_u
                 order_item = oi
                 break
 
-        original_wh_id = order_item.get("warehouse_id", order.get("warehouse_id", "gudang_utama")) if order_item else "gudang_utama"
+        original_wh_id = order_item.get("warehouse_id", order.get("warehouse_id", "gudang_toko")) if order_item else order.get("warehouse_id", "gudang_toko")
         original_wh = await db.warehouses.find_one({"id": original_wh_id}, {"_id": 0})
         original_unit = original_wh.get("unit", "satuan") if original_wh else "satuan"
 
@@ -502,7 +503,9 @@ async def settle_partner_order(order_id: str, data: SettlementRequest, current_u
         new_total += sold_total
 
         if remaining_satuan > 0:
-            if vehicle_id and vehicle:
+            return_to_warehouse = data.return_to == "warehouse"
+
+            if not return_to_warehouse and vehicle_id and vehicle:
                 # Return to vehicle stock
                 existing_vs = await db.vehicle_stock.find_one(
                     {"vehicle_id": vehicle_id, "product_id": settle_item.product_id, "remaining_qty": {"$gt": 0}}
@@ -540,34 +543,48 @@ async def settle_partner_order(order_id: str, data: SettlementRequest, current_u
                     "vehicle_name": vehicle.get("name", "")
                 })
             else:
-                # Fallback: return to warehouse if no vehicle found
-                full_boxes = int(remaining_satuan // items_per_box) if items_per_box > 0 else 0
-                partial_pcs = remaining_satuan - (full_boxes * items_per_box)
+                # Return to warehouse - pakai gudang asal
+                if original_unit == "dus":
+                    full_boxes = int(remaining_satuan // items_per_box) if items_per_box > 0 else 0
+                    partial_pcs = remaining_satuan - (full_boxes * items_per_box)
 
-                if full_boxes > 0:
+                    if full_boxes > 0:
+                        await db.warehouse_stock.update_one(
+                            {"product_id": settle_item.product_id, "warehouse_id": "gudang_utama"},
+                            {"$inc": {"stock": full_boxes}}, upsert=True
+                        )
+                        return_items.append({
+                            "product_id": settle_item.product_id,
+                            "product_name": settle_item.product_name,
+                            "quantity": full_boxes,
+                            "unit": "dus",
+                            "warehouse_id": "gudang_utama"
+                        })
+
+                    if partial_pcs > 0:
+                        await db.warehouse_stock.update_one(
+                            {"product_id": settle_item.product_id, "warehouse_id": "gudang_toko"},
+                            {"$inc": {"stock": partial_pcs}}, upsert=True
+                        )
+                        return_items.append({
+                            "product_id": settle_item.product_id,
+                            "product_name": settle_item.product_name,
+                            "quantity": partial_pcs,
+                            "unit": "satuan",
+                            "warehouse_id": "gudang_toko"
+                        })
+                else:
+                    # Asal dari gudang_toko (satuan) → kembalikan ke gudang_toko
                     await db.warehouse_stock.update_one(
-                        {"product_id": settle_item.product_id, "warehouse_id": "gudang_utama"},
-                        {"$inc": {"stock": full_boxes}}, upsert=True
+                        {"product_id": settle_item.product_id, "warehouse_id": original_wh_id},
+                        {"$inc": {"stock": remaining_satuan}}, upsert=True
                     )
                     return_items.append({
                         "product_id": settle_item.product_id,
                         "product_name": settle_item.product_name,
-                        "quantity": full_boxes,
-                        "unit": "dus",
-                        "warehouse_id": "gudang_utama"
-                    })
-
-                if partial_pcs > 0:
-                    await db.warehouse_stock.update_one(
-                        {"product_id": settle_item.product_id, "warehouse_id": "gudang_toko"},
-                        {"$inc": {"stock": partial_pcs}}, upsert=True
-                    )
-                    return_items.append({
-                        "product_id": settle_item.product_id,
-                        "product_name": settle_item.product_name,
-                        "quantity": partial_pcs,
+                        "quantity": remaining_satuan,
                         "unit": "satuan",
-                        "warehouse_id": "gudang_toko"
+                        "warehouse_id": original_wh_id
                     })
 
                 await recalculate_product_stock(settle_item.product_id)
