@@ -255,7 +255,9 @@ export const PartnerOrders = () => {
     setReturnDialog(order);
     setReturnItems(order.items.map(i => ({ ...i, return_qty: 0, reason: '' })));
     setReturnNotes('');
-    setReturnWarehouse('gudang_toko');
+    // Default gudang sesuai asal order
+    const orderWh = order.warehouse_id || order.items?.[0]?.warehouse_id || 'gudang_toko';
+    setReturnWarehouse(orderWh);
     setReturnToVehicle(false);
     setReturnVehicleId('');
   };
