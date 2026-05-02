@@ -179,20 +179,21 @@ export const VehicleStock = () => {
       const isNew = s.loaded_at?.slice(0, 10) === today;
       const prod = products.find(p => p.id === s.product_id);
       const ipb = prod?.items_per_box || 1;
-      const costPrice = prod?.cost_price || prod?.supplier_cost_price || 0;
+      const costPricePerDus = prod?.cost_price || 0;
+      const costPricePerPcs = ipb > 1 ? costPricePerDus / ipb : costPricePerDus;
       const dusFull = Math.floor(s.remaining_qty / ipb);
       const pcsSisa = s.remaining_qty % ipb;
-      const stokLabel = dusFull > 0 ? `${dusFull} dus${pcsSisa > 0 ? ` + ${pcsSisa} pcs` : ''}` : `${s.remaining_qty} pcs`;
       const nilai = s.remaining_qty * (s.price || 0);
-      const nilaiPokok = s.remaining_qty * costPrice;
+      const nilaiPokok = s.remaining_qty * costPricePerPcs;
       return `<tr class="${isNew ? 'new-item' : ''}">
         <td>${s.product_name}</td>
         <td class="c">${fN(s.quantity)}</td>
         <td class="c">${fN(s.sold_qty)}</td>
         <td class="c">${fN(s.returned_qty)}</td>
         <td class="c">${fN(s.remaining_qty)}</td>
-        <td class="c">${stokLabel}</td>
-        <td class="r">${fC(costPrice)}</td>
+        <td class="c">${dusFull > 0 ? dusFull : '-'}</td>
+        <td class="c">${pcsSisa > 0 ? pcsSisa : (dusFull === 0 ? s.remaining_qty : '-')}</td>
+        <td class="r">${fC(costPricePerPcs)}</td>
         <td class="r">${fC(s.price)}</td>
         <td class="r">${fC(nilaiPokok)}</td>
         <td class="r">${fC(nilai)}</td>
@@ -201,11 +202,12 @@ export const VehicleStock = () => {
 
     const orderRows = Object.values(todayItemsMap).map(item => {
       const prod = products.find(p => p.id === item.product_id);
-      const costPrice = prod?.cost_price || prod?.supplier_cost_price || 0;
+      const ipb = prod?.items_per_box || 1;
+      const cpPerPcs = ipb > 1 ? (prod?.cost_price || 0) / ipb : (prod?.cost_price || 0);
       return `<tr>
         <td>${item.product_name}</td>
         <td class="c">${fN(item.qty)}</td>
-        <td class="r">${fC(costPrice)}</td>
+        <td class="r">${fC(cpPerPcs)}</td>
         <td class="r">${fC(item.price)}</td>
         <td class="r">${fC(item.qty * item.price)}</td>
         <td>${item.stores.join(', ')}</td>
@@ -215,14 +217,16 @@ export const VehicleStock = () => {
     const totalNilai = activeStocks.reduce((s, st) => s + st.remaining_qty * (st.price || 0), 0);
     const totalNilaiPokok = activeStocks.reduce((s, st) => {
       const prod = products.find(p => p.id === st.product_id);
-      const cp = prod?.cost_price || prod?.supplier_cost_price || 0;
-      return s + st.remaining_qty * cp;
+      const ipb = prod?.items_per_box || 1;
+      const cpPerPcs = ipb > 1 ? (prod?.cost_price || 0) / ipb : (prod?.cost_price || 0);
+      return s + st.remaining_qty * cpPerPcs;
     }, 0);
     const totalNilaiPesanan = Object.values(todayItemsMap).reduce((s, item) => s + item.qty * item.price, 0);
     const totalNilaiPokokPesanan = Object.values(todayItemsMap).reduce((s, item) => {
       const prod = products.find(p => p.id === item.product_id);
-      const cp = prod?.cost_price || prod?.supplier_cost_price || 0;
-      return s + item.qty * cp;
+      const ipb = prod?.items_per_box || 1;
+      const cpPerPcs = ipb > 1 ? (prod?.cost_price || 0) / ipb : (prod?.cost_price || 0);
+      return s + item.qty * cpPerPcs;
     }, 0);
 
     const html = `<!DOCTYPE html><html><head><title>Stok ${activeVehicle.vehicle_name}</title>
@@ -275,19 +279,20 @@ export const VehicleStock = () => {
 <div class="section-title">Stok Kendaraan</div>
 <table>
   <thead><tr>
-    <th style="width:22%">Nama Barang</th>
+    <th style="width:20%">Nama Barang</th>
     <th class="c" style="width:6%">Muat</th>
     <th class="c" style="width:6%">Jual</th>
     <th class="c" style="width:6%">Retur</th>
-    <th class="c" style="width:7%">Sisa</th>
-    <th class="c" style="width:11%">Konversi</th>
+    <th class="c" style="width:6%">Sisa</th>
+    <th class="c" style="width:5%">Dus</th>
+    <th class="c" style="width:5%">Satuan</th>
     <th class="r" style="width:10%">Hrg Pokok</th>
     <th class="r" style="width:10%">Hrg Jual</th>
-    <th class="r" style="width:11%">Nilai Pokok</th>
-    <th class="r" style="width:11%">Nilai Jual</th>
+    <th class="r" style="width:13%">Nilai Pokok</th>
+    <th class="r" style="width:13%">Nilai Jual</th>
   </tr></thead>
   <tbody>${stockRows}
-    <tr class="total-row"><td colspan="8" style="text-align:right">TOTAL</td><td class="r">${fC(totalNilaiPokok)}</td><td class="r">${fC(totalNilai)}</td></tr>
+    <tr class="total-row"><td colspan="9" style="text-align:right">TOTAL</td><td class="r">${fC(totalNilaiPokok)}</td><td class="r">${fC(totalNilai)}</td></tr>
   </tbody>
 </table>
 
