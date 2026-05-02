@@ -95,6 +95,8 @@ Aplikasi web responsif untuk toko farmasi dan pertanian "UD. AQIN TANI" dengan s
 77. Fix Retur ke Gudang saat Settlement - Bug: retur dari settlement selalu masuk vehicle_stock meskipun user pilih retur ke gudang. Fix: tambah field `return_to` di SettlementRequest ("vehicle" atau "warehouse"). Jika "warehouse": retur masuk ke gudang asal (gudang_toko=satuan, gudang_utama=dus) + recalculate_product_stock dipanggil. UI: radio button "Stok Mobil Box" / "Gudang" di dialog settlement canvasser.
 
 ## Credentials
+78. Fix Retur Vehicle Stock ke Gudang - Input retur dalam unit gudang tujuan (DUS/PCS). Retur ke gudang dus: kurangi vehicle (qty*ipb) pcs, tambah warehouse qty dus. recalculate_product_stock dipanggil. UI: label dinamis, info konversi, max limit.
+79. Cetak Stok Mobil Box - Tombol "Cetak Stok": tabel stok (Muat/Jual/Retur/Sisa pcs/Sisa dus+pcs/Harga/Nilai), total nilai, highlight BARU untuk barang dimuat hari ini, tabel pesanan kios hari ini.
 - Admin: admin@aqintani.com / admin123
 - Office Staff: karyawan@aqintani.com / karyawan123
 - Cashier: kasir@aqintani.com / kasir123

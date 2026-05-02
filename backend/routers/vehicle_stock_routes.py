@@ -266,34 +266,40 @@ async def return_vehicle_stock(stock_id: str, data: dict, admin: dict = Depends(
     if not stock:
         raise HTTPException(status_code=404, detail="Stok kendaraan tidak ditemukan")
 
-    if quantity > stock["remaining_qty"]:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Jumlah retur melebihi sisa stok (tersedia: {stock['remaining_qty']})"
-        )
-
     product = await db.products.find_one({"id": stock["product_id"]}, {"_id": 0})
     ipb = product.get("items_per_box", 1) or 1 if product else 1
     warehouse_id = target_warehouse or stock.get("warehouse_id", "gudang_toko")
     wh = await db.warehouses.find_one({"id": warehouse_id}, {"_id": 0})
     wh_unit = wh.get("unit", "satuan") if wh else "satuan"
-    qty_in_wh_unit = quantity / ipb if wh_unit == "dus" else quantity
 
-    # Update vehicle stock
+    # quantity = jumlah yang diinput user, dalam unit gudang tujuan
+    # Jika gudang = dus: user input 1 = 1 dus → kurangi vehicle (1 * ipb) pcs
+    # Jika gudang = satuan: user input 1 = 1 pcs → kurangi vehicle 1 pcs
+    if wh_unit == "dus":
+        pcs_to_deduct = quantity * ipb
+        wh_qty = quantity  # tambah X dus ke warehouse
+    else:
+        pcs_to_deduct = quantity
+        wh_qty = quantity  # tambah X pcs ke warehouse
+
+    if pcs_to_deduct > stock["remaining_qty"]:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Jumlah retur melebihi sisa stok (tersedia: {stock['remaining_qty']} pcs, retur: {pcs_to_deduct} pcs = {quantity} {wh_unit})"
+        )
+
+    # Update vehicle stock (always in pcs)
     await db.vehicle_stock.update_one({"id": stock_id}, {
-        "$inc": {"remaining_qty": -quantity, "returned_qty": quantity}
+        "$inc": {"remaining_qty": -pcs_to_deduct, "returned_qty": pcs_to_deduct}
     })
 
-    # Return to warehouse
+    # Return to warehouse (in warehouse unit)
     await db.warehouse_stock.update_one(
         {"product_id": stock["product_id"], "warehouse_id": warehouse_id},
-        {"$inc": {"stock": qty_in_wh_unit}},
+        {"$inc": {"stock": wh_qty}},
         upsert=True
     )
-    await db.products.update_one(
-        {"id": stock["product_id"]},
-        {"$inc": {"stock": qty_in_wh_unit}}
-    )
+    await recalculate_product_stock(stock["product_id"])
 
     now = datetime.now(WITA)
     await log_audit(admin, "RETURN_VEHICLE_STOCK", "vehicle_stock", stock_id, {
@@ -303,8 +309,8 @@ async def return_vehicle_stock(stock_id: str, data: dict, admin: dict = Depends(
     })
 
     return {
-        "message": f"{quantity}x {stock['product_name']} dikembalikan ke gudang",
-        "new_remaining": stock["remaining_qty"] - quantity
+        "message": f"{quantity} {wh_unit} {stock['product_name']} dikembalikan ke {wh.get('name', warehouse_id) if wh else warehouse_id}",
+        "new_remaining": stock["remaining_qty"] - pcs_to_deduct
     }
 
 

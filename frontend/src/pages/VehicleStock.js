@@ -7,7 +7,7 @@ import { Label } from '../components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { toast } from 'sonner';
-import { Truck, Package, Plus, ShoppingCart, RotateCcw, Search, ArrowLeft, Pencil } from 'lucide-react';
+import { Truck, Package, Plus, ShoppingCart, RotateCcw, Search, ArrowLeft, Pencil, Printer } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { CurrencyInput } from '../components/CurrencyInput';
 
@@ -173,6 +173,113 @@ export const VehicleStock = () => {
   const activeVehicle = selectedVehicle ? summaries.find(s => s.vehicle_id === selectedVehicle) : null;
   const activeStocks = activeVehicle ? activeVehicle.stocks.filter(s => s.remaining_qty > 0) : [];
 
+  const handlePrintStock = async () => {
+    if (!activeVehicle) return;
+    // Fetch today's partner orders for this vehicle's canvasser
+    let todayOrders = [];
+    try {
+      const res = await api.get('/partner-orders');
+      const today = new Date().toISOString().slice(0, 10);
+      todayOrders = res.data.filter(o =>
+        o.created_at?.slice(0, 10) === today &&
+        o.status !== 'cancelled'
+      );
+    } catch {}
+
+    // Collect today's order items by product
+    const todayItemsMap = {};
+    for (const order of todayOrders) {
+      for (const item of order.items || []) {
+        const key = item.product_id;
+        if (!todayItemsMap[key]) {
+          todayItemsMap[key] = { product_name: item.product_name, qty: 0, stores: [] };
+        }
+        todayItemsMap[key].qty += item.quantity;
+        if (!todayItemsMap[key].stores.includes(order.partner_store_name)) {
+          todayItemsMap[key].stores.push(order.partner_store_name);
+        }
+      }
+    }
+
+    // Identify new items (loaded today)
+    const today = new Date().toISOString().slice(0, 10);
+    const fN = (v) => new Intl.NumberFormat('id-ID').format(v || 0);
+    const fC = (v) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(v || 0);
+
+    const stockRows = activeStocks.map(s => {
+      const isNew = s.loaded_at?.slice(0, 10) === today;
+      const orderInfo = todayItemsMap[s.product_id];
+      const prod = products.find(p => p.id === s.product_id);
+      const ipb = prod?.items_per_box || 1;
+      const dusFull = Math.floor(s.remaining_qty / ipb);
+      const pcsSisa = s.remaining_qty % ipb;
+      const stokLabel = dusFull > 0 ? `${dusFull} dus${pcsSisa > 0 ? ` + ${pcsSisa} pcs` : ''}` : `${s.remaining_qty} pcs`;
+      const nilai = s.remaining_qty * (s.price || 0);
+      return `<tr style="${isNew ? 'background:#e6ffe6;font-weight:bold;' : ''}">
+        <td>${s.product_name} ${isNew ? '<span style="color:green;font-size:8pt">BARU</span>' : ''}</td>
+        <td class="c">${fN(s.quantity)}</td>
+        <td class="c">${fN(s.sold_qty)}</td>
+        <td class="c">${fN(s.returned_qty)}</td>
+        <td class="c">${fN(s.remaining_qty)}</td>
+        <td class="c">${stokLabel}</td>
+        <td class="r">${fC(s.price)}</td>
+        <td class="r">${fC(nilai)}</td>
+      </tr>`;
+    }).join('');
+
+    const orderRows = Object.values(todayItemsMap).map(item =>
+      `<tr><td>${item.product_name}</td><td class="c">${fN(item.qty)}</td><td>${item.stores.join(', ')}</td></tr>`
+    ).join('');
+
+    const totalNilai = activeStocks.reduce((s, st) => s + st.remaining_qty * (st.price || 0), 0);
+
+    const html = `<!DOCTYPE html><html><head><title>Stok ${activeVehicle.vehicle_name}</title>
+<style>
+  @page { size: A4 landscape; margin: 8mm; }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font: 9pt/1.3 'Courier New', monospace; color:#000; }
+  h1 { font-size:13pt; margin-bottom:2pt; }
+  h2 { font-size:11pt; margin:6pt 0 2pt; }
+  .info { font-size:9pt; margin-bottom:6pt; }
+  table { width:100%; border-collapse:collapse; font-size:8.5pt; margin-bottom:6pt; }
+  th { text-align:left; padding:2pt 3pt; border-top:1.5pt solid #000; border-bottom:1.5pt solid #000; font-weight:bold; }
+  td { padding:2pt 3pt; border-bottom:0.5pt dotted #999; }
+  .c { text-align:center; } .r { text-align:right; }
+  th.c { text-align:center; } th.r { text-align:right; }
+  .total td { font-weight:bold; border-top:1.5pt solid #000; }
+  .legend { font-size:8pt; margin-top:4pt; }
+  .legend span { background:#e6ffe6; padding:1pt 4pt; font-weight:bold; }
+</style></head><body>
+<h1>STOK MOBIL BOX - ${activeVehicle.vehicle_name}</h1>
+<div class="info">${activeVehicle.plate_number} | Tanggal: ${new Date().toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' })} | Jenis: ${activeStocks.length} item</div>
+
+<table>
+  <thead><tr>
+    <th>Nama Barang</th><th class="c">Muat</th><th class="c">Jual</th><th class="c">Retur</th><th class="c">Sisa (pcs)</th><th class="c">Sisa (Dus/Pcs)</th><th class="r">Harga</th><th class="r">Nilai</th>
+  </tr></thead>
+  <tbody>${stockRows}
+    <tr class="total"><td colspan="7" style="text-align:right">TOTAL NILAI STOK</td><td class="r">${fC(totalNilai)}</td></tr>
+  </tbody>
+</table>
+
+<div class="legend"><span>BARU</span> = Barang baru dimuat hari ini</div>
+
+${orderRows ? `<h2>PESANAN KIOS HARI INI</h2>
+<table>
+  <thead><tr><th>Nama Barang</th><th class="c">Qty</th><th>Kios Mitra</th></tr></thead>
+  <tbody>${orderRows}</tbody>
+</table>` : ''}
+
+</body></html>`;
+
+    const win = window.open('', '_blank', 'width=1100,height=700');
+    if (!win) return;
+    win.document.write(html);
+    win.document.close();
+    win.focus();
+    setTimeout(() => win.print(), 500);
+  };
+
   if (loading) return <div className="p-8 text-center text-muted-foreground">Memuat data...</div>;
 
   return (
@@ -228,10 +335,15 @@ export const VehicleStock = () => {
       {/* Selected Vehicle Stock Detail */}
       {activeVehicle && (
         <Card className="p-4" data-testid="vehicle-stock-detail">
-          <h2 className="font-semibold text-lg mb-3 flex items-center gap-2">
-            <Package className="w-5 h-5" />
-            Stok di {activeVehicle.vehicle_name}
-          </h2>
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="font-semibold text-lg flex items-center gap-2">
+              <Package className="w-5 h-5" />
+              Stok di {activeVehicle.vehicle_name}
+            </h2>
+            <Button size="sm" variant="outline" onClick={handlePrintStock} data-testid="print-stock-btn">
+              <Printer className="w-4 h-4 mr-1.5" /> Cetak Stok
+            </Button>
+          </div>
           {activeStocks.length === 0 ? (
             <p className="text-muted-foreground text-sm py-4 text-center">Tidak ada stok aktif</p>
           ) : (
@@ -434,19 +546,32 @@ export const VehicleStock = () => {
       <Dialog open={!!returnModal} onOpenChange={() => setReturnModal(null)}>
         <DialogContent className="max-w-sm" data-testid="return-modal">
           <DialogHeader><DialogTitle>Retur ke Gudang</DialogTitle></DialogHeader>
-          {returnModal && (
+          {returnModal && (() => {
+            const selWh = warehouses.find(w => w.id === returnWarehouse);
+            const whUnit = selWh?.unit || 'satuan';
+            const product = products.find(p => p.id === returnModal.product_id);
+            const ipb = product?.items_per_box || 1;
+            const isDus = whUnit === 'dus';
+            const maxInUnit = isDus ? Math.floor(returnModal.remaining_qty / ipb) : returnModal.remaining_qty;
+            const pcsDeducted = isDus ? returnQty * ipb : returnQty;
+            return (
             <div className="space-y-4">
               <Card className="p-3 bg-muted/50">
                 <p className="font-semibold">{returnModal.product_name}</p>
-                <p className="text-sm text-muted-foreground">Sisa di mobil: {returnModal.remaining_qty} pcs</p>
+                <p className="text-sm text-muted-foreground">Sisa di mobil: {returnModal.remaining_qty} pcs {isDus && ipb > 1 ? `(= ${Math.floor(returnModal.remaining_qty / ipb)} dus + ${returnModal.remaining_qty % ipb} pcs)` : ''}</p>
               </Card>
               <div className="space-y-2">
-                <Label>Jumlah Retur</Label>
-                <Input type="number" min={1} max={returnModal.remaining_qty} value={returnQty} onChange={e => setReturnQty(parseInt(e.target.value) || 0)} data-testid="return-qty-input" />
+                <Label>Jumlah Retur ({whUnit === 'dus' ? 'DUS' : 'PCS'})</Label>
+                <Input type="number" min={1} max={maxInUnit} value={returnQty}
+                  onChange={e => setReturnQty(Math.min(parseInt(e.target.value) || 0, maxInUnit))}
+                  data-testid="return-qty-input" />
+                {isDus && returnQty > 0 && (
+                  <p className="text-xs text-muted-foreground">{returnQty} dus x {ipb} isi = {pcsDeducted} pcs akan dikurangi dari stok mobil</p>
+                )}
               </div>
               <div className="space-y-2">
                 <Label>Gudang Tujuan</Label>
-                <Select value={returnWarehouse} onValueChange={setReturnWarehouse}>
+                <Select value={returnWarehouse} onValueChange={(v) => { setReturnWarehouse(v); setReturnQty(0); }}>
                   <SelectTrigger data-testid="return-warehouse-select"><SelectValue placeholder="Pilih gudang" /></SelectTrigger>
                   <SelectContent>
                     {warehouses.map(wh => <SelectItem key={wh.id} value={wh.id}>{wh.name} ({wh.unit})</SelectItem>)}
@@ -459,12 +584,13 @@ export const VehicleStock = () => {
               </div>
               <div className="flex gap-2 justify-end">
                 <Button variant="outline" onClick={() => setReturnModal(null)}>Batal</Button>
-                <Button onClick={handleReturn} disabled={returnSubmitting} data-testid="submit-return-btn">
-                  {returnSubmitting ? 'Memproses...' : 'Retur'}
+                <Button onClick={handleReturn} disabled={returnSubmitting || returnQty <= 0} data-testid="submit-return-btn">
+                  {returnSubmitting ? 'Memproses...' : `Retur ${returnQty} ${isDus ? 'DUS' : 'PCS'}`}
                 </Button>
               </div>
             </div>
-          )}
+            );
+          })()}
         </DialogContent>
       </Dialog>
 
