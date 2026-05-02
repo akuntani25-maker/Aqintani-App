@@ -216,8 +216,8 @@ export const VehicleStock = () => {
       const stokLabel = dusFull > 0 ? `${dusFull} dus${pcsSisa > 0 ? ` + ${pcsSisa} pcs` : ''}` : `${s.remaining_qty} pcs`;
       const nilai = s.remaining_qty * (s.price || 0);
       const nilaiPokok = s.remaining_qty * costPrice;
-      return `<tr style="${isNew ? 'background:#e6ffe6;font-weight:bold;' : ''}">
-        <td>${s.product_name} ${isNew ? '<span style="color:green;font-size:8pt">BARU</span>' : ''}</td>
+      return `<tr class="${isNew ? 'new-item' : ''}">
+        <td>${s.product_name}</td>
         <td class="c">${fN(s.quantity)}</td>
         <td class="c">${fN(s.sold_qty)}</td>
         <td class="c">${fN(s.returned_qty)}</td>
@@ -258,42 +258,112 @@ export const VehicleStock = () => {
 
     const html = `<!DOCTYPE html><html><head><title>Stok ${activeVehicle.vehicle_name}</title>
 <style>
-  @page { size: A4 landscape; margin: 8mm; }
+  @page { size: A4 landscape; margin: 12mm 15mm; }
   * { margin:0; padding:0; box-sizing:border-box; }
-  body { font: 9pt/1.3 'Courier New', monospace; color:#000; }
-  h1 { font-size:13pt; margin-bottom:2pt; }
-  h2 { font-size:11pt; margin:6pt 0 2pt; }
-  .info { font-size:9pt; margin-bottom:6pt; }
-  table { width:100%; border-collapse:collapse; font-size:8.5pt; margin-bottom:6pt; }
-  th { text-align:left; padding:2pt 3pt; border-top:1.5pt solid #000; border-bottom:1.5pt solid #000; font-weight:bold; }
-  td { padding:2pt 3pt; border-bottom:0.5pt dotted #999; }
-  .c { text-align:center; } .r { text-align:right; }
-  th.c { text-align:center; } th.r { text-align:right; }
-  .total td { font-weight:bold; border-top:1.5pt solid #000; }
-  .legend { font-size:8pt; margin-top:4pt; }
-  .legend span { background:#e6ffe6; padding:1pt 4pt; font-weight:bold; }
-</style></head><body>
-<h1>STOK MOBIL BOX - ${activeVehicle.vehicle_name}</h1>
-<div class="info">${activeVehicle.plate_number} | Tanggal: ${new Date().toLocaleDateString('id-ID', { day: '2-digit', month: 'long', year: 'numeric' })} | Jenis: ${activeStocks.length} item</div>
+  body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color:#1a1a2e; font-size:9pt; line-height:1.4; }
 
+  .header { display:flex; justify-content:space-between; align-items:flex-end; padding-bottom:10pt; border-bottom:3pt solid #16213e; margin-bottom:12pt; }
+  .header h1 { font-size:16pt; color:#16213e; font-weight:800; letter-spacing:0.5pt; }
+  .header .subtitle { font-size:9pt; color:#555; margin-top:2pt; }
+  .header .date-box { text-align:right; }
+  .header .date-box .date { font-size:11pt; font-weight:700; color:#16213e; }
+  .header .date-box .plate { font-size:9pt; color:#666; }
+
+  .section-title { font-size:11pt; font-weight:700; color:#16213e; margin:14pt 0 6pt; padding-left:8pt; border-left:4pt solid #0f3460; }
+
+  table { width:100%; border-collapse:collapse; margin-bottom:10pt; }
+  thead th { background:#16213e; color:#fff; font-size:8pt; font-weight:600; text-transform:uppercase; letter-spacing:0.3pt; padding:6pt 8pt; text-align:left; }
+  thead th.c { text-align:center; }
+  thead th.r { text-align:right; }
+  tbody td { padding:5pt 8pt; font-size:8.5pt; border-bottom:1pt solid #e8e8e8; }
+  tbody tr:nth-child(even) { background:#f8f9fa; }
+  tbody td.c { text-align:center; }
+  tbody td.r { text-align:right; font-variant-numeric:tabular-nums; }
+  tbody tr.new-item { background:#e8f5e9 !important; }
+  tbody tr.new-item td:first-child::after { content:" BARU"; font-size:7pt; color:#2e7d32; font-weight:700; background:#c8e6c9; padding:1pt 4pt; border-radius:3pt; margin-left:4pt; }
+
+  .total-row td { background:#16213e !important; color:#fff !important; font-weight:700; font-size:9pt; padding:7pt 8pt; }
+
+  .summary-cards { display:flex; gap:12pt; margin:10pt 0; }
+  .summary-card { flex:1; background:linear-gradient(135deg,#16213e,#0f3460); color:#fff; padding:10pt 14pt; border-radius:6pt; }
+  .summary-card .label { font-size:7.5pt; text-transform:uppercase; letter-spacing:0.5pt; opacity:0.8; }
+  .summary-card .value { font-size:14pt; font-weight:800; margin-top:2pt; }
+
+  .legend { font-size:7.5pt; color:#666; margin-top:6pt; display:flex; align-items:center; gap:6pt; }
+  .legend .badge { background:#e8f5e9; color:#2e7d32; padding:2pt 6pt; border-radius:3pt; font-weight:700; font-size:7pt; }
+
+  .footer { margin-top:14pt; padding-top:8pt; border-top:1pt solid #ddd; font-size:7.5pt; color:#999; display:flex; justify-content:space-between; }
+
+  @media print { body { -webkit-print-color-adjust:exact; print-color-adjust:exact; } }
+</style></head><body>
+
+<div class="header">
+  <div>
+    <h1>STOK MOBIL BOX</h1>
+    <div class="subtitle">${activeVehicle.vehicle_name} &bull; ${activeStocks.length} jenis barang</div>
+  </div>
+  <div class="date-box">
+    <div class="date">${new Date().toLocaleDateString('id-ID', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })}</div>
+    <div class="plate">${activeVehicle.plate_number}</div>
+  </div>
+</div>
+
+<div class="summary-cards">
+  <div class="summary-card">
+    <div class="label">Total Nilai Pokok</div>
+    <div class="value">${fC(totalNilaiPokok)}</div>
+  </div>
+  <div class="summary-card">
+    <div class="label">Total Nilai Jual</div>
+    <div class="value">${fC(totalNilai)}</div>
+  </div>
+  <div class="summary-card">
+    <div class="label">Estimasi Margin</div>
+    <div class="value">${fC(totalNilai - totalNilaiPokok)}</div>
+  </div>
+</div>
+
+<div class="section-title">Stok Kendaraan</div>
 <table>
   <thead><tr>
-    <th>Nama Barang</th><th class="c">Muat</th><th class="c">Jual</th><th class="c">Retur</th><th class="c">Sisa (pcs)</th><th class="c">Sisa (Dus/Pcs)</th><th class="r">Hrg Pokok</th><th class="r">Hrg Jual</th><th class="r">Nilai Pokok</th><th class="r">Nilai Jual</th>
+    <th style="width:22%">Nama Barang</th>
+    <th class="c" style="width:6%">Muat</th>
+    <th class="c" style="width:6%">Jual</th>
+    <th class="c" style="width:6%">Retur</th>
+    <th class="c" style="width:7%">Sisa</th>
+    <th class="c" style="width:11%">Konversi</th>
+    <th class="r" style="width:10%">Hrg Pokok</th>
+    <th class="r" style="width:10%">Hrg Jual</th>
+    <th class="r" style="width:11%">Nilai Pokok</th>
+    <th class="r" style="width:11%">Nilai Jual</th>
   </tr></thead>
   <tbody>${stockRows}
-    <tr class="total"><td colspan="8" style="text-align:right">TOTAL</td><td class="r">${fC(totalNilaiPokok)}</td><td class="r">${fC(totalNilai)}</td></tr>
+    <tr class="total-row"><td colspan="8" style="text-align:right">TOTAL</td><td class="r">${fC(totalNilaiPokok)}</td><td class="r">${fC(totalNilai)}</td></tr>
   </tbody>
 </table>
 
-<div class="legend"><span>BARU</span> = Barang baru dimuat hari ini</div>
+<div class="legend"><span class="badge">BARU</span> Barang baru dimuat hari ini</div>
 
-${orderRows ? `<h2>PESANAN KIOS HARI INI</h2>
+${orderRows ? `
+<div class="section-title">Pesanan Kios Hari Ini</div>
 <table>
-  <thead><tr><th>Nama Barang</th><th class="c">Qty</th><th class="r">Hrg Pokok</th><th class="r">Hrg Jual</th><th class="r">Total</th><th>Kios Mitra</th></tr></thead>
+  <thead><tr>
+    <th style="width:28%">Nama Barang</th>
+    <th class="c" style="width:8%">Qty</th>
+    <th class="r" style="width:14%">Hrg Pokok</th>
+    <th class="r" style="width:14%">Hrg Jual</th>
+    <th class="r" style="width:14%">Total</th>
+    <th style="width:22%">Kios Mitra</th>
+  </tr></thead>
   <tbody>${orderRows}
-    <tr class="total"><td colspan="2" style="text-align:right">TOTAL</td><td class="r">${fC(totalNilaiPokokPesanan)}</td><td></td><td class="r">${fC(totalNilaiPesanan)}</td><td></td></tr>
+    <tr class="total-row"><td colspan="2" style="text-align:right">TOTAL</td><td class="r">${fC(totalNilaiPokokPesanan)}</td><td></td><td class="r">${fC(totalNilaiPesanan)}</td><td></td></tr>
   </tbody>
 </table>` : ''}
+
+<div class="footer">
+  <span>UD. AQIN TANI - Stok Mobil Box</span>
+  <span>Dicetak: ${new Date().toLocaleString('id-ID')}</span>
+</div>
 
 </body></html>`;
 
