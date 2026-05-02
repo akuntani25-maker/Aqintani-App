@@ -87,9 +87,10 @@ async def load_vehicle_stock(data: dict, admin: dict = Depends(require_admin_pan
         ipb = product.get("items_per_box", 1) or 1
         wh = await db.warehouses.find_one({"id": warehouse_id}, {"_id": 0})
         wh_unit = wh.get("unit", "satuan") if wh else "satuan"
-        qty_in_wh_unit = quantity / ipb if wh_unit == "dus" else quantity
+        # Frontend mengirim `quantity` dalam unit gudang (1 = 1 dus jika gudang unit=dus, 1 = 1 pcs jika satuan)
+        qty_in_wh_unit = quantity
 
-        # Convert quantity to satuan (pcs) for vehicle stock
+        # Konversi ke pcs untuk disimpan di vehicle_stock (selalu pcs)
         qty_in_pcs = quantity * ipb if wh_unit == "dus" else quantity
 
         if current < qty_in_wh_unit:
@@ -323,7 +324,6 @@ async def return_vehicle_stock(stock_id: str, data: dict, admin: dict = Depends(
 
     await recalculate_product_stock(stock["product_id"])
 
-    now = datetime.now(WITA)
     await log_audit(admin, "RETURN_VEHICLE_STOCK", "vehicle_stock", stock_id, {
         "product_name": stock["product_name"],
         "return_dus": return_dus, "return_pcs": return_pcs,
