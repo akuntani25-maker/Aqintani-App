@@ -37,10 +37,10 @@ export const VehicleStock = () => {
 
   // Return modal
   const [returnModal, setReturnModal] = useState(null);
-  const [returnQty, setReturnQty] = useState(0);
+  const [returnDus, setReturnDus] = useState(0);
+  const [returnPcs, setReturnPcs] = useState(0);
   const [returnNotes, setReturnNotes] = useState('');
   const [returnSubmitting, setReturnSubmitting] = useState(false);
-  const [returnWarehouse, setReturnWarehouse] = useState('');
 
   // Edit price
   const [editPriceModal, setEditPriceModal] = useState(null);
@@ -97,15 +97,26 @@ export const VehicleStock = () => {
   };
 
   const handleReturn = async () => {
-    if (returnQty <= 0) { toast.error('Jumlah retur harus > 0'); return; }
+    if (returnDus <= 0 && returnPcs <= 0) { toast.error('Masukkan jumlah retur'); return; }
     setReturnSubmitting(true);
     try {
-      await api.post(`/vehicle-stock/${returnModal.id}/return`, {
-        quantity: returnQty,
-        notes: returnNotes,
-        warehouse_id: returnWarehouse
-      });
-      toast.success('Barang berhasil diretur ke gudang');
+      // Retur dus ke gudang_utama
+      if (returnDus > 0) {
+        await api.post(`/vehicle-stock/${returnModal.id}/return`, {
+          quantity: returnDus,
+          notes: returnNotes || 'Retur dus',
+          warehouse_id: 'gudang_utama'
+        });
+      }
+      // Retur satuan ke gudang_toko
+      if (returnPcs > 0) {
+        await api.post(`/vehicle-stock/${returnModal.id}/return`, {
+          quantity: returnPcs,
+          notes: returnNotes || 'Retur satuan',
+          warehouse_id: 'gudang_toko'
+        });
+      }
+      toast.success(`Berhasil retur${returnDus > 0 ? ` ${returnDus} dus` : ''}${returnDus > 0 && returnPcs > 0 ? ' +' : ''}${returnPcs > 0 ? ` ${returnPcs} pcs` : ''}`);
       setReturnModal(null);
       fetchData();
     } catch (e) { toast.error(e.response?.data?.detail || 'Gagal meretur'); }
@@ -385,19 +396,28 @@ ${orderRows ? `
                     <th className="pb-2 font-medium text-center">Muat</th>
                     <th className="pb-2 font-medium text-center">Terjual</th>
                     <th className="pb-2 font-medium text-center">Retur</th>
-                    <th className="pb-2 font-medium text-center">Sisa</th>
+                    <th className="pb-2 font-medium text-center">Sisa<br/><span className="text-xs font-normal">(pcs)</span></th>
+                    <th className="pb-2 font-medium text-center">Dus</th>
+                    <th className="pb-2 font-medium text-center">Satuan</th>
                     <th className="pb-2 font-medium text-right">Harga</th>
                     <th className="pb-2 font-medium text-right">Aksi</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {activeStocks.map(s => (
+                  {activeStocks.map(s => {
+                    const prod = products.find(p => p.id === s.product_id);
+                    const ipb = prod?.items_per_box || 1;
+                    const dusFull = Math.floor(s.remaining_qty / ipb);
+                    const pcsSisa = s.remaining_qty % ipb;
+                    return (
                     <tr key={s.id} className="border-b last:border-0" data-testid={`stock-row-${s.id}`}>
                       <td className="py-2 font-medium">{s.product_name}</td>
                       <td className="py-2 text-center">{s.quantity}</td>
                       <td className="py-2 text-center text-green-600">{s.sold_qty}</td>
                       <td className="py-2 text-center text-orange-600">{s.returned_qty}</td>
                       <td className="py-2 text-center font-bold">{s.remaining_qty}</td>
+                      <td className="py-2 text-center font-semibold text-blue-700">{dusFull > 0 ? dusFull : '-'}</td>
+                      <td className="py-2 text-center font-semibold text-amber-700">{pcsSisa > 0 ? pcsSisa : (dusFull === 0 ? s.remaining_qty : '-')}</td>
                       <td className="py-2 text-right">{fmt(s.price)}</td>
                       <td className="py-2 text-right space-x-1">
                         <Button
@@ -409,14 +429,15 @@ ${orderRows ? `
                         </Button>
                         <Button
                           size="sm" variant="outline"
-                          onClick={() => { setReturnModal(s); setReturnQty(s.remaining_qty); setReturnNotes(''); setReturnWarehouse(warehouses[0]?.id || 'gudang_toko'); }}
+                          onClick={() => { setReturnModal(s); setReturnDus(0); setReturnPcs(0); setReturnNotes(''); }}
                           data-testid={`return-btn-${s.id}`}
                         >
                           <RotateCcw className="w-3 h-3 mr-1" /> Retur
                         </Button>
                       </td>
                     </tr>
-                  ))}
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
@@ -493,59 +514,66 @@ ${orderRows ? `
           {returnModal && (() => {
             const product = products.find(p => p.id === returnModal.product_id);
             const ipb = product?.items_per_box || 1;
-            const canReturnDus = returnModal.remaining_qty >= ipb; // bisa retur minimal 1 dus?
-            // Filter warehouses: gudang dus hanya muncul jika stok cukup 1 dus
-            const availableWarehouses = warehouses.filter(wh => {
-              if (wh.unit === 'dus' && !canReturnDus) return false;
-              return true;
-            });
-            const selWh = availableWarehouses.find(w => w.id === returnWarehouse) || availableWarehouses[0];
-            const whUnit = selWh?.unit || 'satuan';
-            const isDus = whUnit === 'dus';
-            const maxInUnit = isDus ? Math.floor(returnModal.remaining_qty / ipb) : returnModal.remaining_qty;
-            const pcsDeducted = isDus ? returnQty * ipb : returnQty;
-            // Auto-correct warehouse if current selection not available
-            if (selWh && selWh.id !== returnWarehouse) {
-              setTimeout(() => { setReturnWarehouse(selWh.id); setReturnQty(0); }, 0);
-            }
+            const maxDus = Math.floor(returnModal.remaining_qty / ipb);
+            const maxPcsAfterDus = returnModal.remaining_qty - (returnDus * ipb);
             return (
             <div className="space-y-4">
               <Card className="p-3 bg-muted/50">
                 <p className="font-semibold">{returnModal.product_name}</p>
-                <p className="text-sm text-muted-foreground">
-                  Sisa di mobil: {returnModal.remaining_qty} pcs
-                  {ipb > 1 ? ` (= ${Math.floor(returnModal.remaining_qty / ipb)} dus${returnModal.remaining_qty % ipb > 0 ? ` + ${returnModal.remaining_qty % ipb} pcs` : ''})` : ''}
-                </p>
-                {!canReturnDus && ipb > 1 && (
-                  <p className="text-xs text-amber-600 mt-1">Stok kurang dari 1 dus ({ipb} pcs), hanya bisa retur ke Gudang Toko (satuan).</p>
+                <p className="text-sm text-muted-foreground">Sisa di mobil: <span className="font-bold">{returnModal.remaining_qty} pcs</span></p>
+                {ipb > 1 && (
+                  <p className="text-xs text-muted-foreground mt-0.5">1 dus = {ipb} pcs &bull; Maks {maxDus} dus + {returnModal.remaining_qty - maxDus * ipb} pcs</p>
                 )}
               </Card>
-              <div className="space-y-2">
-                <Label>Jumlah Retur ({isDus ? 'DUS' : 'PCS'})</Label>
-                <Input type="number" min={1} max={maxInUnit} value={returnQty}
-                  onChange={e => setReturnQty(Math.min(parseInt(e.target.value) || 0, maxInUnit))}
-                  data-testid="return-qty-input" />
-                {isDus && returnQty > 0 && (
-                  <p className="text-xs text-muted-foreground">{returnQty} dus x {ipb} isi = {pcsDeducted} pcs akan dikurangi dari stok mobil</p>
-                )}
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1.5">
+                  <Label className="flex items-center gap-1.5">
+                    Retur Dus
+                    <span className="text-xs font-normal text-blue-600">&rarr; Gudang Utama</span>
+                  </Label>
+                  <Input type="number" min={0} max={maxDus} value={returnDus}
+                    onChange={e => {
+                      const v = Math.min(parseInt(e.target.value) || 0, maxDus);
+                      setReturnDus(v);
+                      // Auto-correct pcs if over limit
+                      const leftover = returnModal.remaining_qty - v * ipb;
+                      if (returnPcs > leftover) setReturnPcs(leftover);
+                    }}
+                    disabled={maxDus === 0}
+                    className={maxDus === 0 ? 'opacity-50' : ''}
+                    data-testid="return-dus-input" />
+                  {maxDus === 0 && <p className="text-[10px] text-amber-600">Stok kurang dari 1 dus ({ipb} pcs)</p>}
+                  {returnDus > 0 && <p className="text-[10px] text-muted-foreground">{returnDus} dus = {returnDus * ipb} pcs</p>}
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="flex items-center gap-1.5">
+                    Retur Satuan
+                    <span className="text-xs font-normal text-amber-600">&rarr; Gudang Toko</span>
+                  </Label>
+                  <Input type="number" min={0} max={Math.max(0, maxPcsAfterDus)} value={returnPcs}
+                    onChange={e => setReturnPcs(Math.min(parseInt(e.target.value) || 0, Math.max(0, maxPcsAfterDus)))}
+                    data-testid="return-pcs-input" />
+                  {returnPcs > 0 && <p className="text-[10px] text-muted-foreground">{returnPcs} pcs</p>}
+                </div>
               </div>
-              <div className="space-y-2">
-                <Label>Gudang Tujuan</Label>
-                <Select value={selWh?.id || ''} onValueChange={(v) => { setReturnWarehouse(v); setReturnQty(0); }}>
-                  <SelectTrigger data-testid="return-warehouse-select"><SelectValue placeholder="Pilih gudang" /></SelectTrigger>
-                  <SelectContent>
-                    {availableWarehouses.map(wh => <SelectItem key={wh.id} value={wh.id}>{wh.name} ({wh.unit})</SelectItem>)}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
+
+              {(returnDus > 0 || returnPcs > 0) && (
+                <Card className="p-2.5 bg-blue-50 border-blue-200 text-xs">
+                  <p className="font-medium text-blue-900">Total retur: {returnDus * ipb + returnPcs} pcs dari {returnModal.remaining_qty} pcs</p>
+                  {returnDus > 0 && <p className="text-blue-700">&bull; {returnDus} dus &rarr; Gudang Utama</p>}
+                  {returnPcs > 0 && <p className="text-blue-700">&bull; {returnPcs} pcs &rarr; Gudang Toko</p>}
+                </Card>
+              )}
+
+              <div className="space-y-1.5">
                 <Label>Catatan</Label>
                 <Input value={returnNotes} onChange={e => setReturnNotes(e.target.value)} placeholder="Opsional..." data-testid="return-notes-input" />
               </div>
               <div className="flex gap-2 justify-end">
                 <Button variant="outline" onClick={() => setReturnModal(null)}>Batal</Button>
-                <Button onClick={handleReturn} disabled={returnSubmitting || returnQty <= 0} data-testid="submit-return-btn">
-                  {returnSubmitting ? 'Memproses...' : `Retur ${returnQty} ${isDus ? 'DUS' : 'PCS'}`}
+                <Button onClick={handleReturn} disabled={returnSubmitting || (returnDus <= 0 && returnPcs <= 0)} data-testid="submit-return-btn">
+                  {returnSubmitting ? 'Memproses...' : 'Retur'}
                 </Button>
               </div>
             </div>
