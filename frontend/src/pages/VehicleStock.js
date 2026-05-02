@@ -50,16 +50,18 @@ export const VehicleStock = () => {
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const [sumRes, vehRes, storeRes, whRes] = await Promise.all([
+      const [sumRes, vehRes, storeRes, whRes, prodRes] = await Promise.all([
         api.get('/vehicle-stock/summary'),
         api.get('/vehicles'),
         api.get('/partner-stores'),
-        api.get('/warehouses')
+        api.get('/warehouses'),
+        api.get('/products')
       ]);
       setSummaries(sumRes.data);
       setVehicles(vehRes.data);
       setPartnerStores(storeRes.data);
       setWarehouses(whRes.data);
+      setProducts(prodRes.data);
     } catch { toast.error('Gagal memuat data'); }
     finally { setLoading(false); }
   }, []);
