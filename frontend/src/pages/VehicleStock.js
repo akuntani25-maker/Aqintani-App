@@ -258,7 +258,7 @@ export const VehicleStock = () => {
 
     const html = `<!DOCTYPE html><html><head><title>Stok ${activeVehicle.vehicle_name}</title>
 <style>
-  @page { size: A4 landscape; margin: 12mm 15mm; }
+  @page { size: A4 portrait; margin: 12mm 15mm; }
   * { margin:0; padding:0; box-sizing:border-box; }
   body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; color:#1a1a2e; font-size:9pt; line-height:1.4; }
 
@@ -272,22 +272,17 @@ export const VehicleStock = () => {
   .section-title { font-size:11pt; font-weight:700; color:#16213e; margin:14pt 0 6pt; padding-left:8pt; border-left:4pt solid #0f3460; }
 
   table { width:100%; border-collapse:collapse; margin-bottom:10pt; }
-  thead th { background:#16213e; color:#fff; font-size:8pt; font-weight:600; text-transform:uppercase; letter-spacing:0.3pt; padding:6pt 8pt; text-align:left; }
+  thead th { background:#16213e; color:#fff; font-size:7.5pt; font-weight:600; text-transform:uppercase; letter-spacing:0.3pt; padding:5pt 4pt; text-align:left; }
   thead th.c { text-align:center; }
   thead th.r { text-align:right; }
-  tbody td { padding:5pt 8pt; font-size:8.5pt; border-bottom:1pt solid #e8e8e8; }
+  tbody td { padding:4pt 4pt; font-size:8pt; border-bottom:1pt solid #e8e8e8; }
   tbody tr:nth-child(even) { background:#f8f9fa; }
   tbody td.c { text-align:center; }
   tbody td.r { text-align:right; font-variant-numeric:tabular-nums; }
   tbody tr.new-item { background:#e8f5e9 !important; }
-  tbody tr.new-item td:first-child::after { content:" BARU"; font-size:7pt; color:#2e7d32; font-weight:700; background:#c8e6c9; padding:1pt 4pt; border-radius:3pt; margin-left:4pt; }
+  tbody tr.new-item td:first-child::after { content:" BARU"; font-size:6.5pt; color:#2e7d32; font-weight:700; background:#c8e6c9; padding:1pt 3pt; border-radius:3pt; margin-left:3pt; }
 
-  .total-row td { background:#16213e !important; color:#fff !important; font-weight:700; font-size:9pt; padding:7pt 8pt; }
-
-  .summary-cards { display:flex; gap:12pt; margin:10pt 0; }
-  .summary-card { flex:1; background:linear-gradient(135deg,#16213e,#0f3460); color:#fff; padding:10pt 14pt; border-radius:6pt; }
-  .summary-card .label { font-size:7.5pt; text-transform:uppercase; letter-spacing:0.5pt; opacity:0.8; }
-  .summary-card .value { font-size:14pt; font-weight:800; margin-top:2pt; }
+  .total-row td { background:#16213e !important; color:#fff !important; font-weight:700; font-size:8pt; padding:6pt 4pt; }
 
   .legend { font-size:7.5pt; color:#666; margin-top:6pt; display:flex; align-items:center; gap:6pt; }
   .legend .badge { background:#e8f5e9; color:#2e7d32; padding:2pt 6pt; border-radius:3pt; font-weight:700; font-size:7pt; }
@@ -305,21 +300,6 @@ export const VehicleStock = () => {
   <div class="date-box">
     <div class="date">${new Date().toLocaleDateString('id-ID', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })}</div>
     <div class="plate">${activeVehicle.plate_number}</div>
-  </div>
-</div>
-
-<div class="summary-cards">
-  <div class="summary-card">
-    <div class="label">Total Nilai Pokok</div>
-    <div class="value">${fC(totalNilaiPokok)}</div>
-  </div>
-  <div class="summary-card">
-    <div class="label">Total Nilai Jual</div>
-    <div class="value">${fC(totalNilai)}</div>
-  </div>
-  <div class="summary-card">
-    <div class="label">Estimasi Margin</div>
-    <div class="value">${fC(totalNilai - totalNilaiPokok)}</div>
   </div>
 </div>
 
