@@ -97,6 +97,7 @@ Aplikasi web responsif untuk toko farmasi dan pertanian "UD. AQIN TANI" dengan s
 ## Credentials
 78. Fix Retur Vehicle Stock ke Gudang - Input retur dalam unit gudang tujuan (DUS/PCS). Retur ke gudang dus: kurangi vehicle (qty*ipb) pcs, tambah warehouse qty dus. recalculate_product_stock dipanggil. UI: label dinamis, info konversi, max limit.
 79. Cetak Stok Mobil Box - Tombol "Cetak Stok": tabel stok (Muat/Jual/Retur/Sisa pcs/Sisa dus+pcs/Harga/Nilai), total nilai, highlight BARU untuk barang dimuat hari ini, tabel pesanan kios hari ini.
+80. Fix Retur Batch Vehicle Stock (02 Feb 2026) - Bug: retur Dus + Satuan bersamaan menyebabkan race condition (frontend mengirim 2 request berurutan, request kedua gagal validasi karena stock sudah berkurang). Fix backend: endpoint `POST /vehicle-stock/{id}/return` menerima `return_dus` + `return_pcs` dalam satu payload, atomic update vehicle stock, lalu split ke `gudang_utama` (dus) dan `gudang_toko` (pcs). Fix frontend `VehicleStock.js` `handleReturn`: kirim 1 request batch + `await fetchData()` untuk refresh UI. Fix juga import `recalculate_product_stock` dari services di `vehicle_stock_routes.py` (sebelumnya NameError).
 - Admin: admin@aqintani.com / admin123
 - Office Staff: karyawan@aqintani.com / karyawan123
 - Cashier: kasir@aqintani.com / kasir123

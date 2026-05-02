@@ -102,25 +102,14 @@ export const VehicleStock = () => {
     if (returnDus <= 0 && returnPcs <= 0) { toast.error('Masukkan jumlah retur'); return; }
     setReturnSubmitting(true);
     try {
-      // Retur dus ke gudang_utama
-      if (returnDus > 0) {
-        await api.post(`/vehicle-stock/${returnModal.id}/return`, {
-          quantity: returnDus,
-          notes: returnNotes || 'Retur dus',
-          warehouse_id: 'gudang_utama'
-        });
-      }
-      // Retur satuan ke gudang_toko
-      if (returnPcs > 0) {
-        await api.post(`/vehicle-stock/${returnModal.id}/return`, {
-          quantity: returnPcs,
-          notes: returnNotes || 'Retur satuan',
-          warehouse_id: 'gudang_toko'
-        });
-      }
-      toast.success(`Berhasil retur${returnDus > 0 ? ` ${returnDus} dus` : ''}${returnDus > 0 && returnPcs > 0 ? ' +' : ''}${returnPcs > 0 ? ` ${returnPcs} pcs` : ''}`);
+      const res = await api.post(`/vehicle-stock/${returnModal.id}/return`, {
+        return_dus: returnDus,
+        return_pcs: returnPcs,
+        notes: returnNotes
+      });
+      toast.success(res.data?.message || 'Retur berhasil');
       setReturnModal(null);
-      fetchData();
+      await fetchData();
     } catch (e) { toast.error(e.response?.data?.detail || 'Gagal meretur'); }
     finally { setReturnSubmitting(false); }
   };

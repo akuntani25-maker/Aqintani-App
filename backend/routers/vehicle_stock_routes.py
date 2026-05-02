@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException, Depends
 from database import db
 from auth import get_current_user, require_admin_panel_access, require_pos_access
 from datetime import datetime, timezone, timedelta
-from services import log_audit
+from services import log_audit, recalculate_product_stock
 import uuid
 
 router = APIRouter()
@@ -254,12 +254,15 @@ async def sell_vehicle_stock(stock_id: str, data: dict, admin: dict = Depends(re
 
 @router.post("/vehicle-stock/{stock_id}/return")
 async def return_vehicle_stock(stock_id: str, data: dict, admin: dict = Depends(require_pos_access)):
-    """Return items from vehicle stock back to warehouse."""
-    quantity = int(data.get("quantity", 0))
+    """Return items from vehicle stock back to warehouse. Supports split return (dus + pcs)."""
+    # Support batch: return_dus dan return_pcs sekaligus
+    return_dus = int(data.get("return_dus", 0) or data.get("quantity", 0))
+    return_pcs = int(data.get("return_pcs", 0))
     notes = data.get("notes", "")
     target_warehouse = data.get("warehouse_id", "")
-
-    if quantity <= 0:
+    
+    # Backward compat: jika hanya quantity + warehouse_id (old format)
+    if return_dus == 0 and return_pcs == 0:
         raise HTTPException(status_code=400, detail="Jumlah retur harus > 0")
 
     stock = await db.vehicle_stock.find_one({"id": stock_id}, {"_id": 0})
@@ -268,49 +271,70 @@ async def return_vehicle_stock(stock_id: str, data: dict, admin: dict = Depends(
 
     product = await db.products.find_one({"id": stock["product_id"]}, {"_id": 0})
     ipb = product.get("items_per_box", 1) or 1 if product else 1
-    warehouse_id = target_warehouse or stock.get("warehouse_id", "gudang_toko")
-    wh = await db.warehouses.find_one({"id": warehouse_id}, {"_id": 0})
-    wh_unit = wh.get("unit", "satuan") if wh else "satuan"
 
-    # quantity = jumlah yang diinput user, dalam unit gudang tujuan
-    # Jika gudang = dus: user input 1 = 1 dus → kurangi vehicle (1 * ipb) pcs
-    # Jika gudang = satuan: user input 1 = 1 pcs → kurangi vehicle 1 pcs
-    if wh_unit == "dus":
-        pcs_to_deduct = quantity * ipb
-        wh_qty = quantity  # tambah X dus ke warehouse
-    else:
-        pcs_to_deduct = quantity
-        wh_qty = quantity  # tambah X pcs ke warehouse
+    # Kalkulasi total pcs yang akan dikurangi
+    total_pcs_deduct = (return_dus * ipb) + return_pcs
 
-    if pcs_to_deduct > stock["remaining_qty"]:
+    if total_pcs_deduct <= 0:
+        raise HTTPException(status_code=400, detail="Jumlah retur harus > 0")
+
+    if total_pcs_deduct > stock["remaining_qty"]:
         raise HTTPException(
             status_code=400,
-            detail=f"Jumlah retur melebihi sisa stok (tersedia: {stock['remaining_qty']} pcs, retur: {pcs_to_deduct} pcs = {quantity} {wh_unit})"
+            detail=f"Jumlah retur melebihi sisa stok (tersedia: {stock['remaining_qty']} pcs, retur: {total_pcs_deduct} pcs)"
         )
 
-    # Update vehicle stock (always in pcs)
+    # Update vehicle stock sekali saja
     await db.vehicle_stock.update_one({"id": stock_id}, {
-        "$inc": {"remaining_qty": -pcs_to_deduct, "returned_qty": pcs_to_deduct}
+        "$inc": {"remaining_qty": -total_pcs_deduct, "returned_qty": total_pcs_deduct}
     })
 
-    # Return to warehouse (in warehouse unit)
-    await db.warehouse_stock.update_one(
-        {"product_id": stock["product_id"], "warehouse_id": warehouse_id},
-        {"$inc": {"stock": wh_qty}},
-        upsert=True
-    )
+    # Return ke gudang
+    msg_parts = []
+    if return_dus > 0:
+        await db.warehouse_stock.update_one(
+            {"product_id": stock["product_id"], "warehouse_id": "gudang_utama"},
+            {"$inc": {"stock": return_dus}}, upsert=True
+        )
+        msg_parts.append(f"{return_dus} dus ke Gudang Utama")
+
+    if return_pcs > 0:
+        await db.warehouse_stock.update_one(
+            {"product_id": stock["product_id"], "warehouse_id": "gudang_toko"},
+            {"$inc": {"stock": return_pcs}}, upsert=True
+        )
+        msg_parts.append(f"{return_pcs} pcs ke Gudang Toko")
+
+    # Backward compat: jika pakai old format (quantity + warehouse_id)
+    if return_dus == 0 and return_pcs == 0 and target_warehouse:
+        wh = await db.warehouses.find_one({"id": target_warehouse}, {"_id": 0})
+        wh_unit = wh.get("unit", "satuan") if wh else "satuan"
+        quantity = int(data.get("quantity", 0))
+        if wh_unit == "dus":
+            await db.warehouse_stock.update_one(
+                {"product_id": stock["product_id"], "warehouse_id": target_warehouse},
+                {"$inc": {"stock": quantity}}, upsert=True
+            )
+        else:
+            await db.warehouse_stock.update_one(
+                {"product_id": stock["product_id"], "warehouse_id": target_warehouse},
+                {"$inc": {"stock": quantity}}, upsert=True
+            )
+
     await recalculate_product_stock(stock["product_id"])
 
     now = datetime.now(WITA)
     await log_audit(admin, "RETURN_VEHICLE_STOCK", "vehicle_stock", stock_id, {
         "product_name": stock["product_name"],
-        "quantity": quantity, "notes": notes,
+        "return_dus": return_dus, "return_pcs": return_pcs,
+        "total_pcs": total_pcs_deduct, "notes": notes,
         "vehicle_name": stock.get("vehicle_name", "")
     })
 
+    msg = f"{stock['product_name']}: " + " + ".join(msg_parts) if msg_parts else f"Retur {total_pcs_deduct} pcs"
     return {
-        "message": f"{quantity} {wh_unit} {stock['product_name']} dikembalikan ke {wh.get('name', warehouse_id) if wh else warehouse_id}",
-        "new_remaining": stock["remaining_qty"] - pcs_to_deduct
+        "message": msg,
+        "new_remaining": stock["remaining_qty"] - total_pcs_deduct
     }
 
 
