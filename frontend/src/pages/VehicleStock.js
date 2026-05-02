@@ -192,7 +192,7 @@ export const VehicleStock = () => {
       for (const item of order.items || []) {
         const key = item.product_id;
         if (!todayItemsMap[key]) {
-          todayItemsMap[key] = { product_name: item.product_name, qty: 0, stores: [] };
+          todayItemsMap[key] = { product_id: item.product_id, product_name: item.product_name, qty: 0, price: item.price || 0, stores: [] };
         }
         todayItemsMap[key].qty += item.quantity;
         if (!todayItemsMap[key].stores.includes(order.partner_store_name)) {
@@ -208,13 +208,14 @@ export const VehicleStock = () => {
 
     const stockRows = activeStocks.map(s => {
       const isNew = s.loaded_at?.slice(0, 10) === today;
-      const orderInfo = todayItemsMap[s.product_id];
       const prod = products.find(p => p.id === s.product_id);
       const ipb = prod?.items_per_box || 1;
+      const costPrice = prod?.cost_price || prod?.supplier_cost_price || 0;
       const dusFull = Math.floor(s.remaining_qty / ipb);
       const pcsSisa = s.remaining_qty % ipb;
       const stokLabel = dusFull > 0 ? `${dusFull} dus${pcsSisa > 0 ? ` + ${pcsSisa} pcs` : ''}` : `${s.remaining_qty} pcs`;
       const nilai = s.remaining_qty * (s.price || 0);
+      const nilaiPokok = s.remaining_qty * costPrice;
       return `<tr style="${isNew ? 'background:#e6ffe6;font-weight:bold;' : ''}">
         <td>${s.product_name} ${isNew ? '<span style="color:green;font-size:8pt">BARU</span>' : ''}</td>
         <td class="c">${fN(s.quantity)}</td>
@@ -222,16 +223,38 @@ export const VehicleStock = () => {
         <td class="c">${fN(s.returned_qty)}</td>
         <td class="c">${fN(s.remaining_qty)}</td>
         <td class="c">${stokLabel}</td>
+        <td class="r">${fC(costPrice)}</td>
         <td class="r">${fC(s.price)}</td>
+        <td class="r">${fC(nilaiPokok)}</td>
         <td class="r">${fC(nilai)}</td>
       </tr>`;
     }).join('');
 
-    const orderRows = Object.values(todayItemsMap).map(item =>
-      `<tr><td>${item.product_name}</td><td class="c">${fN(item.qty)}</td><td>${item.stores.join(', ')}</td></tr>`
-    ).join('');
+    const orderRows = Object.values(todayItemsMap).map(item => {
+      const prod = products.find(p => p.id === item.product_id);
+      const costPrice = prod?.cost_price || prod?.supplier_cost_price || 0;
+      return `<tr>
+        <td>${item.product_name}</td>
+        <td class="c">${fN(item.qty)}</td>
+        <td class="r">${fC(costPrice)}</td>
+        <td class="r">${fC(item.price)}</td>
+        <td class="r">${fC(item.qty * item.price)}</td>
+        <td>${item.stores.join(', ')}</td>
+      </tr>`;
+    }).join('');
 
     const totalNilai = activeStocks.reduce((s, st) => s + st.remaining_qty * (st.price || 0), 0);
+    const totalNilaiPokok = activeStocks.reduce((s, st) => {
+      const prod = products.find(p => p.id === st.product_id);
+      const cp = prod?.cost_price || prod?.supplier_cost_price || 0;
+      return s + st.remaining_qty * cp;
+    }, 0);
+    const totalNilaiPesanan = Object.values(todayItemsMap).reduce((s, item) => s + item.qty * item.price, 0);
+    const totalNilaiPokokPesanan = Object.values(todayItemsMap).reduce((s, item) => {
+      const prod = products.find(p => p.id === item.product_id);
+      const cp = prod?.cost_price || prod?.supplier_cost_price || 0;
+      return s + item.qty * cp;
+    }, 0);
 
     const html = `<!DOCTYPE html><html><head><title>Stok ${activeVehicle.vehicle_name}</title>
 <style>
@@ -255,10 +278,10 @@ export const VehicleStock = () => {
 
 <table>
   <thead><tr>
-    <th>Nama Barang</th><th class="c">Muat</th><th class="c">Jual</th><th class="c">Retur</th><th class="c">Sisa (pcs)</th><th class="c">Sisa (Dus/Pcs)</th><th class="r">Harga</th><th class="r">Nilai</th>
+    <th>Nama Barang</th><th class="c">Muat</th><th class="c">Jual</th><th class="c">Retur</th><th class="c">Sisa (pcs)</th><th class="c">Sisa (Dus/Pcs)</th><th class="r">Hrg Pokok</th><th class="r">Hrg Jual</th><th class="r">Nilai Pokok</th><th class="r">Nilai Jual</th>
   </tr></thead>
   <tbody>${stockRows}
-    <tr class="total"><td colspan="7" style="text-align:right">TOTAL NILAI STOK</td><td class="r">${fC(totalNilai)}</td></tr>
+    <tr class="total"><td colspan="8" style="text-align:right">TOTAL</td><td class="r">${fC(totalNilaiPokok)}</td><td class="r">${fC(totalNilai)}</td></tr>
   </tbody>
 </table>
 
@@ -266,8 +289,10 @@ export const VehicleStock = () => {
 
 ${orderRows ? `<h2>PESANAN KIOS HARI INI</h2>
 <table>
-  <thead><tr><th>Nama Barang</th><th class="c">Qty</th><th>Kios Mitra</th></tr></thead>
-  <tbody>${orderRows}</tbody>
+  <thead><tr><th>Nama Barang</th><th class="c">Qty</th><th class="r">Hrg Pokok</th><th class="r">Hrg Jual</th><th class="r">Total</th><th>Kios Mitra</th></tr></thead>
+  <tbody>${orderRows}
+    <tr class="total"><td colspan="2" style="text-align:right">TOTAL</td><td class="r">${fC(totalNilaiPokokPesanan)}</td><td></td><td class="r">${fC(totalNilaiPesanan)}</td><td></td></tr>
+  </tbody>
 </table>` : ''}
 
 </body></html>`;
@@ -547,21 +572,37 @@ ${orderRows ? `<h2>PESANAN KIOS HARI INI</h2>
         <DialogContent className="max-w-sm" data-testid="return-modal">
           <DialogHeader><DialogTitle>Retur ke Gudang</DialogTitle></DialogHeader>
           {returnModal && (() => {
-            const selWh = warehouses.find(w => w.id === returnWarehouse);
-            const whUnit = selWh?.unit || 'satuan';
             const product = products.find(p => p.id === returnModal.product_id);
             const ipb = product?.items_per_box || 1;
+            const canReturnDus = returnModal.remaining_qty >= ipb; // bisa retur minimal 1 dus?
+            // Filter warehouses: gudang dus hanya muncul jika stok cukup 1 dus
+            const availableWarehouses = warehouses.filter(wh => {
+              if (wh.unit === 'dus' && !canReturnDus) return false;
+              return true;
+            });
+            const selWh = availableWarehouses.find(w => w.id === returnWarehouse) || availableWarehouses[0];
+            const whUnit = selWh?.unit || 'satuan';
             const isDus = whUnit === 'dus';
             const maxInUnit = isDus ? Math.floor(returnModal.remaining_qty / ipb) : returnModal.remaining_qty;
             const pcsDeducted = isDus ? returnQty * ipb : returnQty;
+            // Auto-correct warehouse if current selection not available
+            if (selWh && selWh.id !== returnWarehouse) {
+              setTimeout(() => { setReturnWarehouse(selWh.id); setReturnQty(0); }, 0);
+            }
             return (
             <div className="space-y-4">
               <Card className="p-3 bg-muted/50">
                 <p className="font-semibold">{returnModal.product_name}</p>
-                <p className="text-sm text-muted-foreground">Sisa di mobil: {returnModal.remaining_qty} pcs {isDus && ipb > 1 ? `(= ${Math.floor(returnModal.remaining_qty / ipb)} dus + ${returnModal.remaining_qty % ipb} pcs)` : ''}</p>
+                <p className="text-sm text-muted-foreground">
+                  Sisa di mobil: {returnModal.remaining_qty} pcs
+                  {ipb > 1 ? ` (= ${Math.floor(returnModal.remaining_qty / ipb)} dus${returnModal.remaining_qty % ipb > 0 ? ` + ${returnModal.remaining_qty % ipb} pcs` : ''})` : ''}
+                </p>
+                {!canReturnDus && ipb > 1 && (
+                  <p className="text-xs text-amber-600 mt-1">Stok kurang dari 1 dus ({ipb} pcs), hanya bisa retur ke Gudang Toko (satuan).</p>
+                )}
               </Card>
               <div className="space-y-2">
-                <Label>Jumlah Retur ({whUnit === 'dus' ? 'DUS' : 'PCS'})</Label>
+                <Label>Jumlah Retur ({isDus ? 'DUS' : 'PCS'})</Label>
                 <Input type="number" min={1} max={maxInUnit} value={returnQty}
                   onChange={e => setReturnQty(Math.min(parseInt(e.target.value) || 0, maxInUnit))}
                   data-testid="return-qty-input" />
@@ -571,10 +612,10 @@ ${orderRows ? `<h2>PESANAN KIOS HARI INI</h2>
               </div>
               <div className="space-y-2">
                 <Label>Gudang Tujuan</Label>
-                <Select value={returnWarehouse} onValueChange={(v) => { setReturnWarehouse(v); setReturnQty(0); }}>
+                <Select value={selWh?.id || ''} onValueChange={(v) => { setReturnWarehouse(v); setReturnQty(0); }}>
                   <SelectTrigger data-testid="return-warehouse-select"><SelectValue placeholder="Pilih gudang" /></SelectTrigger>
                   <SelectContent>
-                    {warehouses.map(wh => <SelectItem key={wh.id} value={wh.id}>{wh.name} ({wh.unit})</SelectItem>)}
+                    {availableWarehouses.map(wh => <SelectItem key={wh.id} value={wh.id}>{wh.name} ({wh.unit})</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
