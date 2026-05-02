@@ -7,7 +7,7 @@ import { Label } from '../components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { toast } from 'sonner';
-import { Truck, Package, Plus, ShoppingCart, RotateCcw, Search, ArrowLeft, Pencil, Printer } from 'lucide-react';
+import { Truck, Package, ShoppingCart, RotateCcw, Search, ArrowLeft, Pencil, Printer } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { CurrencyInput } from '../components/CurrencyInput';
 
@@ -23,12 +23,7 @@ export const VehicleStock = () => {
   const [selectedVehicle, setSelectedVehicle] = useState(null);
   const [partnerStores, setPartnerStores] = useState([]);
 
-  // Load modal
-  const [loadModal, setLoadModal] = useState(false);
-  const [loadVehicleId, setLoadVehicleId] = useState('');
-  const [loadItems, setLoadItems] = useState([]);
-  const [loadNotes, setLoadNotes] = useState('');
-  const [loadSubmitting, setLoadSubmitting] = useState(false);
+  // Product search (masih dipakai oleh lainnya)
   const [productSearch, setProductSearch] = useState('');
   const [productResults, setProductResults] = useState([]);
 
@@ -78,43 +73,6 @@ export const VehicleStock = () => {
       const res = await api.get(`/products/search?q=${encodeURIComponent(q)}`);
       setProductResults(res.data);
     } catch { setProductResults([]); }
-  };
-
-  const addLoadItem = (product) => {
-    if (loadItems.find(i => i.product_id === product.id)) {
-      toast.error('Produk sudah ada di daftar');
-      return;
-    }
-    setLoadItems([...loadItems, {
-      product_id: product.id,
-      product_name: product.name,
-      quantity: 1,
-      price: product.sell_price || 0,
-      warehouse_id: warehouses.length > 0 ? warehouses[0].id : 'gudang_toko'
-    }]);
-    setProductSearch('');
-    setProductResults([]);
-  };
-
-  const handleLoad = async () => {
-    if (!loadVehicleId || loadItems.length === 0) {
-      toast.error('Pilih kendaraan dan tambahkan barang');
-      return;
-    }
-    setLoadSubmitting(true);
-    try {
-      await api.post('/vehicle-stock/load', {
-        vehicle_id: loadVehicleId,
-        items: loadItems,
-        notes: loadNotes
-      });
-      toast.success('Barang berhasil dimuat ke kendaraan');
-      setLoadModal(false);
-      setLoadItems([]);
-      setLoadNotes('');
-      fetchData();
-    } catch (e) { toast.error(e.response?.data?.detail || 'Gagal memuat barang'); }
-    finally { setLoadSubmitting(false); }
   };
 
   const handleSell = async () => {
@@ -364,9 +322,6 @@ ${orderRows ? `
           <h1 className="text-2xl font-bold" data-testid="vehicle-stock-title">Stok Mobil Box</h1>
           <p className="text-sm text-muted-foreground">Kelola barang kondisional di kendaraan</p>
         </div>
-        <Button onClick={() => { setLoadModal(true); setLoadVehicleId(vehicles[0]?.id || ''); }} data-testid="load-vehicle-btn">
-          <Plus className="w-4 h-4 mr-1" /> Muat Barang
-        </Button>
       </div>
 
       {/* Vehicle Summary Cards */}
@@ -470,92 +425,6 @@ ${orderRows ? `
       )}
 
       {/* Load Modal */}
-      <Dialog open={loadModal} onOpenChange={setLoadModal}>
-        <DialogContent className="max-w-lg" data-testid="load-modal">
-          <DialogHeader><DialogTitle>Muat Barang ke Kendaraan</DialogTitle></DialogHeader>
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label>Kendaraan</Label>
-              <Select value={loadVehicleId} onValueChange={setLoadVehicleId}>
-                <SelectTrigger data-testid="load-vehicle-select"><SelectValue placeholder="Pilih kendaraan" /></SelectTrigger>
-                <SelectContent>
-                  {vehicles.map(v => <SelectItem key={v.id} value={v.id}>{v.name} ({v.plate_number})</SelectItem>)}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div className="space-y-2">
-              <Label>Cari Produk</Label>
-              <div className="relative">
-                <Search className="absolute left-2 top-2.5 w-4 h-4 text-muted-foreground" />
-                <Input
-                  className="pl-8"
-                  placeholder="Ketik nama produk..."
-                  value={productSearch}
-                  onChange={e => searchProducts(e.target.value)}
-                  data-testid="load-product-search"
-                />
-              </div>
-              {productResults.length > 0 && (
-                <div className="border rounded-md max-h-40 overflow-y-auto">
-                  {productResults.map(p => (
-                    <div key={p.id} className="px-3 py-2 hover:bg-muted cursor-pointer text-sm" onClick={() => addLoadItem(p)} data-testid={`search-result-${p.id}`}>
-                      {p.name} — {fmt(p.sell_price)}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {loadItems.length > 0 && (
-              <div className="space-y-2">
-                <Label>Daftar Barang</Label>
-                {loadItems.map((item, i) => (
-                  <div key={item.product_id} className="flex items-center gap-2 p-2 border rounded-md text-sm">
-                    <span className="flex-1 font-medium">{item.product_name}</span>
-                    <Input
-                      type="number" min="1" className="w-20 text-center"
-                      value={item.quantity}
-                      onChange={e => {
-                        const ni = [...loadItems];
-                        ni[i].quantity = parseInt(e.target.value) || 1;
-                        setLoadItems(ni);
-                      }}
-                      data-testid={`load-qty-${item.product_id}`}
-                    />
-                    <span className="text-xs text-muted-foreground">pcs</span>
-                    <CurrencyInput
-                      value={item.price}
-                      onChange={v => {
-                        const ni = [...loadItems];
-                        ni[i].price = v;
-                        setLoadItems(ni);
-                      }}
-                      className="w-32"
-                    />
-                    <Button size="sm" variant="ghost" className="text-red-500 h-7 w-7 p-0" onClick={() => setLoadItems(loadItems.filter((_, j) => j !== i))}>
-                      &times;
-                    </Button>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            <div className="space-y-2">
-              <Label>Catatan</Label>
-              <Input value={loadNotes} onChange={e => setLoadNotes(e.target.value)} placeholder="Opsional..." />
-            </div>
-
-            <div className="flex gap-2 justify-end">
-              <Button variant="outline" onClick={() => setLoadModal(false)}>Batal</Button>
-              <Button onClick={handleLoad} disabled={loadSubmitting || loadItems.length === 0} data-testid="submit-load-btn">
-                {loadSubmitting ? 'Memuat...' : `Muat ${loadItems.length} Item`}
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-
       {/* Sell Modal */}
       <Dialog open={!!sellModal} onOpenChange={() => setSellModal(null)}>
         <DialogContent className="max-w-md" data-testid="sell-modal">
