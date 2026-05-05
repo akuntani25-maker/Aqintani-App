@@ -164,6 +164,10 @@ async def get_partner_order(order_id: str, current_user: dict = Depends(get_curr
                 item["sell_unit"] = "satuan" if wh_id == "gudang_toko" else "dus"
             elif not item.get("sell_unit"):
                 item["sell_unit"] = "satuan"
+            # Ensure `unit` field exists for receipt display ("dus" or "pcs")
+            if not item.get("unit"):
+                wh = wh_map.get(wh_id) if wh_id else None
+                item["unit"] = "dus" if (wh and wh.get("unit") == "dus") else "pcs"
 
     return order
 
@@ -180,6 +184,7 @@ async def create_partner_order(data: PartnerOrderCreate, current_user: dict = De
             canvasser_name = canvasser["name"]
 
     default_wh_id = data.warehouse_id or "gudang_utama"
+    enriched_items = []
     for item in data.items:
         item_wh_id = item.warehouse_id or default_wh_id
         wh = await db.warehouses.find_one({"id": item_wh_id}, {"_id": 0})
@@ -194,13 +199,17 @@ async def create_partner_order(data: PartnerOrderCreate, current_user: dict = De
                 {"$inc": {"stock": -item.quantity}}
             )
             await recalculate_product_stock(item.product_id)
+        item_dict = item.model_dump()
+        item_dict["warehouse_id"] = item_wh_id
+        item_dict["unit"] = "dus" if (wh and wh.get("unit") == "dus") else "pcs"
+        enriched_items.append(item_dict)
 
     now = datetime.now(timezone.utc)
     order_number = f"PO{now.strftime('%Y%m%d%H%M%S')}"
     order_doc = {
         "id": str(uuid.uuid4()), "order_number": order_number,
         "partner_store_id": data.partner_store_id, "partner_store_name": partner_store["name"],
-        "items": [item.model_dump() for item in data.items],
+        "items": enriched_items,
         "subtotal": data.subtotal, "discount": data.discount, "total": data.total,
         "paid": data.paid, "remaining": data.total - data.paid,
         "delivery_date": data.delivery_date or now.strftime("%Y-%m-%d"),
@@ -318,6 +327,7 @@ async def add_items_to_order(order_id: str, req: FastAPIRequest, current_user: d
             "product_id": product_id, "product_name": product_name,
             "quantity": quantity, "price": price, "subtotal": subtotal,
             "warehouse_id": warehouse_id,
+            "unit": "dus" if wh_unit == "dus" else "pcs",
             "is_addition": True, "source": source,
             "added_at": now.isoformat()
         }

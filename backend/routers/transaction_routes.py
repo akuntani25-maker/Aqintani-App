@@ -242,15 +242,57 @@ async def create_return(data: ReturnCreate, admin: dict = Depends(require_pos_ac
     if data.source_type == "transaction":
         await db.transactions.update_one({"id": data.source_id}, {"$set": {"has_return": True}})
     elif data.source_type == "partner_order":
-        await db.partner_orders.update_one({"id": data.source_id}, {"$set": {"has_return": True}})
         order = await db.partner_orders.find_one({"id": data.source_id}, {"_id": 0})
         if order:
-            return_total = sum(i.get("subtotal", 0) for i in data.items)
-            new_remaining = max(0, order.get("remaining", 0) - return_total)
-            await db.partner_orders.update_one({"id": data.source_id}, {"$set": {"remaining": new_remaining}})
+            # Build a map of warehouses (id -> unit) for ipb-aware subtotal calculation
+            warehouses_map = {w["id"]: w for w in await db.warehouses.find({}, {"_id": 0}).to_list(100)}
+
+            order_items = order.get("items", [])
+            return_total = 0
+
+            for r_item in data.items:
+                r_pid = r_item["product_id"]
+                r_qty = int(r_item.get("quantity", 0))
+                if r_qty <= 0:
+                    continue
+                # Find first matching order item (with positive remaining quantity)
+                target = next((oi for oi in order_items if oi.get("product_id") == r_pid and (oi.get("quantity", 0) or 0) > 0), None)
+                if not target:
+                    continue
+                qty_to_reduce = min(r_qty, target.get("quantity", 0))
+
+                # Compute actual subtotal of returned portion using ipb if warehouse unit is dus
+                wh_id = target.get("warehouse_id") or order.get("warehouse_id") or ""
+                wh = warehouses_map.get(wh_id)
+                wh_unit = (wh or {}).get("unit", "satuan")
+                product = await db.products.find_one({"id": r_pid}, {"_id": 0})
+                ipb = (product or {}).get("items_per_box", 1) or 1
+                price = float(target.get("price", 0))
+                portion_subtotal = price * qty_to_reduce * (ipb if wh_unit == "dus" else 1)
+
+                # Reduce qty + recompute item subtotal
+                new_qty = target["quantity"] - qty_to_reduce
+                target["quantity"] = new_qty
+                target["subtotal"] = price * new_qty * (ipb if wh_unit == "dus" else 1)
+                return_total += portion_subtotal
+
+            new_total = max(0, (order.get("total", 0) or 0) - return_total)
+            new_subtotal = max(0, (order.get("subtotal", order.get("total", 0)) or 0) - return_total)
+            new_remaining = max(0, (order.get("remaining", 0) or 0) - return_total)
+
+            await db.partner_orders.update_one(
+                {"id": data.source_id},
+                {"$set": {
+                    "has_return": True,
+                    "items": order_items,
+                    "total": new_total,
+                    "subtotal": new_subtotal,
+                    "remaining": new_remaining
+                }}
+            )
             partner_store = await db.partner_stores.find_one({"id": order["partner_store_id"]})
             if partner_store:
-                new_debt = partner_store.get("current_debt", 0) - return_total
+                new_debt = max(0, partner_store.get("current_debt", 0) - return_total)
                 await db.partner_stores.update_one({"id": order["partner_store_id"]}, {"$set": {"current_debt": new_debt}})
     return_doc.pop("_id", None)
     return return_doc

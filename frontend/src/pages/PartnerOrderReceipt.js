@@ -81,12 +81,15 @@ export const PartnerOrderReceipt = () => {
     if (order.is_settled && order.settled_items) {
       order.settled_items.filter(si => si.qty_sold > 0).forEach(si => {
         lines.push(`**${si.product_name}`);
-        lines.push(rightAlign(`  ${si.qty_sold} x ${fmtN(si.price)}`, fmtN(si.qty_sold * si.price)));
+        const u = si.unit ? ` ${si.unit}` : '';
+        lines.push(rightAlign(`  ${si.qty_sold}${u} x ${fmtN(si.price)}`, fmtN(si.qty_sold * si.price)));
       });
     } else {
       order.items.forEach(item => {
+        if ((item.quantity || 0) <= 0) return;
         lines.push(`**${item.product_name}`);
-        lines.push(rightAlign(`  ${item.quantity} x ${fmtN(item.price)}`, fmtN(item.subtotal)));
+        const u = item.unit ? ` ${item.unit}` : '';
+        lines.push(rightAlign(`  ${item.quantity}${u} x ${fmtN(item.price)}`, fmtN(item.subtotal)));
       });
     }
     lines.push(SEP);
@@ -200,13 +203,13 @@ export const PartnerOrderReceipt = () => {
             ? order.settled_items.filter(si => si.qty_sold > 0).map((si, i) => (
               <div key={i} className="mb-1 text-xs">
                 <div className="font-semibold">{si.product_name}</div>
-                <div className="flex justify-between"><span>{si.qty_sold} x {fmt(si.price)}</span><span className="font-semibold">{fmt(si.qty_sold * si.price)}</span></div>
+                <div className="flex justify-between"><span>{si.qty_sold}{si.unit ? ` ${si.unit}` : ''} x {fmt(si.price)}</span><span className="font-semibold">{fmt(si.qty_sold * si.price)}</span></div>
               </div>
             ))
-            : order.items.map((item, i) => (
+            : order.items.filter(item => (item.quantity || 0) > 0).map((item, i) => (
               <div key={i} className="mb-1 text-xs">
                 <div className="font-semibold">{item.product_name}</div>
-                <div className="flex justify-between"><span>{item.quantity} x {fmt(item.price)}</span><span className="font-semibold">{fmt(item.subtotal)}</span></div>
+                <div className="flex justify-between"><span>{item.quantity}{item.unit ? ` ${item.unit}` : ''} x {fmt(item.price)}</span><span className="font-semibold">{fmt(item.subtotal)}</span></div>
               </div>
             ))
           )}
