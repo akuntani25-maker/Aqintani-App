@@ -248,6 +248,8 @@ async def create_return(data: ReturnCreate, admin: dict = Depends(require_pos_ac
             warehouses_map = {w["id"]: w for w in await db.warehouses.find({}, {"_id": 0}).to_list(100)}
 
             order_items = order.get("items", [])
+            settled_items = order.get("settled_items", []) or []
+            is_settled = order.get("is_settled", False)
             return_total = 0
 
             for r_item in data.items:
@@ -276,19 +278,29 @@ async def create_return(data: ReturnCreate, admin: dict = Depends(require_pos_ac
                 target["subtotal"] = price * new_qty * (ipb if wh_unit == "dus" else 1)
                 return_total += portion_subtotal
 
+                # Juga update settled_items jika order sudah settled
+                if is_settled and settled_items:
+                    settled_target = next((si for si in settled_items if si.get("product_id") == r_pid and (si.get("qty_sold", 0) or 0) > 0), None)
+                    if settled_target:
+                        settled_target["qty_sold"] = max(0, (settled_target.get("qty_sold", 0) or 0) - qty_to_reduce)
+
             new_total = max(0, (order.get("total", 0) or 0) - return_total)
             new_subtotal = max(0, (order.get("subtotal", order.get("total", 0)) or 0) - return_total)
             new_remaining = max(0, (order.get("remaining", 0) or 0) - return_total)
 
+            update_doc = {
+                "has_return": True,
+                "items": order_items,
+                "total": new_total,
+                "subtotal": new_subtotal,
+                "remaining": new_remaining
+            }
+            if is_settled and settled_items:
+                update_doc["settled_items"] = settled_items
+
             await db.partner_orders.update_one(
                 {"id": data.source_id},
-                {"$set": {
-                    "has_return": True,
-                    "items": order_items,
-                    "total": new_total,
-                    "subtotal": new_subtotal,
-                    "remaining": new_remaining
-                }}
+                {"$set": update_doc}
             )
             partner_store = await db.partner_stores.find_one({"id": order["partner_store_id"]})
             if partner_store:
