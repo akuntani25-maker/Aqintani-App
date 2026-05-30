@@ -58,7 +58,7 @@ export const Canvassers = () => {
     try {
       const res = await api.get('/vehicles');
       setVehicles(res.data);
-    } catch {}
+    } catch (e) { console.error(e); }
   };
 
   const handleSubmit = async (e) => {

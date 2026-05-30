@@ -276,14 +276,14 @@ export const POS = () => {
     try {
       const res = await api.get('/pos/daily-summary');
       setDailySummary(res.data);
-    } catch {}
+    } catch (e) { console.error(e); }
   };
 
   const fetchWarehouses = async () => {
     try {
       const res = await api.get('/warehouses');
       setWarehouses(res.data);
-    } catch {}
+    } catch (e) { console.error(e); }
   };
 
   const handleTransfer = async () => {

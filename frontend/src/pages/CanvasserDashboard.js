@@ -76,7 +76,7 @@ export const CanvasserDashboard = () => {
     try {
       const res = await api.get('/canvassers/notifications');
       setNotifications(res.data);
-    } catch {}
+    } catch (e) { console.error(e); }
   };
 
   const fetchMyRecap = async () => {
@@ -84,7 +84,7 @@ export const CanvasserDashboard = () => {
       const today = new Date().toISOString().split('T')[0];
       const res = await api.get(`/canvassers/my-recap?date=${today}`);
       setMyRecap(res.data);
-    } catch {}
+    } catch (e) { console.error(e); }
   };
 
   useEffect(() => {
@@ -97,7 +97,7 @@ export const CanvasserDashboard = () => {
       try {
         const res = await api.get(`/canvassers/product-search?q=${encodeURIComponent(productQuery)}`);
         setProductResults(res.data);
-      } catch {}
+      } catch (e) { console.error(e); }
       setProductSearching(false);
     }, 300);
     return () => clearTimeout(timer);

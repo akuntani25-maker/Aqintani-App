@@ -5,6 +5,7 @@ import { Button } from '../components/ui/button';
 import { ArrowLeft, Bluetooth, Loader2, Printer } from 'lucide-react';
 import { toast } from 'sonner';
 import { thermalPrinter } from '../utils/ThermalPrinter';
+import { escapeHtml as e } from '../utils/htmlEscape';
 
 const SEP = '================================';
 const CHAR_W = 32;
@@ -18,13 +19,13 @@ function browserPrintFallback(lines, title = 'Struk') {
   const win = window.open('', '_blank', 'width=400,height=600');
   if (!win) { toast.error('Pop-up diblokir. Izinkan pop-up untuk mencetak.'); return; }
   const body = lines.map(l => {
-    if (l.startsWith('##')) return `<div style="text-align:center;font-weight:bold;font-size:13px">${l.slice(2)}</div>`;
-    if (l.startsWith('#')) return `<div style="text-align:center;font-size:11px">${l.slice(1)}</div>`;
+    if (l.startsWith('##')) return `<div style="text-align:center;font-weight:bold;font-size:13px">${e(l.slice(2))}</div>`;
+    if (l.startsWith('#')) return `<div style="text-align:center;font-size:11px">${e(l.slice(1))}</div>`;
     if (l === SEP) return `<div style="border-top:1px dashed #000;margin:3px 0"></div>`;
-    if (l.startsWith('**')) return `<div style="font-weight:bold">${l.slice(2)}</div>`;
-    return `<div>${l}</div>`;
+    if (l.startsWith('**')) return `<div style="font-weight:bold">${e(l.slice(2))}</div>`;
+    return `<div>${e(l)}</div>`;
   }).join('');
-  win.document.write(`<!DOCTYPE html><html><head><title>${title}</title><style>
+  win.document.write(`<!DOCTYPE html><html><head><title>${e(title)}</title><style>
 @page{size:58mm auto;margin:0}*{margin:0;padding:0;box-sizing:border-box}
 body{width:48mm;max-width:48mm;padding:2mm 1mm;font:12px/1.5 'Courier New',monospace;color:#000;-webkit-text-size-adjust:none}
 @media print{body{width:48mm;max-width:48mm;padding:1mm 0.5mm;font-size:12px}@page{size:58mm auto;margin:0}}

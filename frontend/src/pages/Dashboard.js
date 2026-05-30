@@ -27,7 +27,7 @@ export const Dashboard = () => {
       const m = date.getMonth() + 1;
       const res = await api.get(`/dashboard/due-calendar?year=${y}&month=${m}`);
       setCalData(res.data);
-    } catch {}
+    } catch (e) { console.error(e); }
   }, []);
 
   useEffect(() => { fetchCalendar(calMonth); }, [calMonth, fetchCalendar]);

@@ -97,7 +97,7 @@ class ThermalPrinter {
               if (foundCharacteristic) break;
             } catch { continue; }
           }
-        } catch {}
+        } catch (e) { console.error(e); }
       }
 
       if (!foundCharacteristic) {
@@ -343,7 +343,7 @@ class ThermalPrinter {
       if (this.connectionType === 'bluetooth' && this.device?.gatt) this.device.gatt.disconnect();
       this.device = null;
       this.characteristic = null;
-    } catch {}
+    } catch (e) { console.error(e); }
   }
 
   isConnected() {

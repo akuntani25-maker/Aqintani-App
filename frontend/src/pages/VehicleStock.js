@@ -10,6 +10,7 @@ import { toast } from 'sonner';
 import { Truck, Package, ShoppingCart, RotateCcw, Search, ArrowLeft, Pencil, Printer } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { CurrencyInput } from '../components/CurrencyInput';
+import { escapeHtml as eHtml } from '../utils/htmlEscape';
 
 const fmt = (n) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(n || 0);
 
@@ -144,7 +145,7 @@ export const VehicleStock = () => {
         o.created_at?.slice(0, 10) === today &&
         o.status !== 'cancelled'
       );
-    } catch {}
+    } catch (e) { console.error(e); }
 
     // Collect today's order items by product
     const todayItemsMap = {};
@@ -177,7 +178,7 @@ export const VehicleStock = () => {
       const nilai = s.remaining_qty * (s.price || 0);
       const nilaiPokok = s.remaining_qty * costPricePerPcs;
       return `<tr class="${isNew ? 'new-item' : ''}">
-        <td>${s.product_name}</td>
+        <td>${eHtml(s.product_name)}</td>
         <td class="c">${fN(s.quantity)}</td>
         <td class="c">${fN(s.sold_qty)}</td>
         <td class="c">${fN(s.returned_qty)}</td>
@@ -196,12 +197,12 @@ export const VehicleStock = () => {
       const ipb = prod?.items_per_box || 1;
       const cpPerPcs = ipb > 1 ? (prod?.cost_price || 0) / ipb : (prod?.cost_price || 0);
       return `<tr>
-        <td>${item.product_name}</td>
+        <td>${eHtml(item.product_name)}</td>
         <td class="c">${fN(item.qty)}</td>
         <td class="r">${fC(cpPerPcs)}</td>
         <td class="r">${fC(item.price)}</td>
         <td class="r">${fC(item.qty * item.price)}</td>
-        <td>${item.stores.join(', ')}</td>
+        <td>${eHtml(item.stores.join(', '))}</td>
       </tr>`;
     }).join('');
 
@@ -220,7 +221,7 @@ export const VehicleStock = () => {
       return s + item.qty * cpPerPcs;
     }, 0);
 
-    const html = `<!DOCTYPE html><html><head><title>Stok ${activeVehicle.vehicle_name}</title>
+    const html = `<!DOCTYPE html><html><head><title>Stok ${eHtml(activeVehicle.vehicle_name)}</title>
 <style>
   @page { size: A4 portrait; margin: 12mm 15mm; }
   * { margin:0; padding:0; box-sizing:border-box; }
@@ -259,11 +260,11 @@ export const VehicleStock = () => {
 <div class="header">
   <div>
     <h1>STOK MOBIL BOX</h1>
-    <div class="subtitle">${activeVehicle.vehicle_name} &bull; ${activeStocks.length} jenis barang</div>
+    <div class="subtitle">${eHtml(activeVehicle.vehicle_name)} &bull; ${activeStocks.length} jenis barang</div>
   </div>
   <div class="date-box">
     <div class="date">${new Date().toLocaleDateString('id-ID', { weekday: 'long', day: '2-digit', month: 'long', year: 'numeric' })}</div>
-    <div class="plate">${activeVehicle.plate_number}</div>
+    <div class="plate">${eHtml(activeVehicle.plate_number)}</div>
   </div>
 </div>
 

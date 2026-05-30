@@ -64,7 +64,7 @@ export const AdminLayout = () => {
       try {
         const res = await api.get('/products/low-stock');
         setLowStockCount(Array.isArray(res.data) ? res.data.length : 0);
-      } catch {}
+      } catch (e) { console.error(e); }
     };
     fetchLowStock();
     const interval = setInterval(fetchLowStock, 60000);

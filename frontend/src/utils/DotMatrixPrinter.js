@@ -2,6 +2,7 @@
 // Format: Invoice pada kertas continuous form 22cm x 14cm NCR 3-ply
 // Pendekatan: Continuous printing - setiap halaman tepat 33 baris (14cm di 6 LPI)
 // Tidak pakai FF, cukup padding baris kosong agar pas dengan potongan kertas
+import { escapeHtml as eH } from './htmlEscape';
 
 const LOCAL_PRINT_SERVER = 'http://localhost:9100';
 const MAX_ITEMS_PER_PAGE = 10;
@@ -350,18 +351,18 @@ class DotMatrixPrinter {
         const isDus = item.unit === 'dus';
         const jmlCtn = isDus ? item.qty + ' DUS' : item.qty + ' PCS';
         const totalQty = isDus ? fN(item.qty * item.ipb) : fN(item.qty);
-        return `<tr><td class="c">${startIdx + i + 1}</td><td>${item.name}</td><td class="c">${jmlCtn}</td><td class="c">${totalQty}</td><td class="r">${fN(item.price)}</td><td class="r">${fN(item.subtotal)}</td></tr>`;
+        return `<tr><td class="c">${startIdx + i + 1}</td><td>${eH(item.name)}</td><td class="c">${jmlCtn}</td><td class="c">${totalQty}</td><td class="r">${fN(item.price)}</td><td class="r">${fN(item.subtotal)}</td></tr>`;
       }).join('');
 
       let headerHtml = isFirst
         ? `<div class="head">
-            <div class="head-left"><h1>INVOICE</h1><div class="kepada">Kepada :<br><strong>${order.partner_store_name}</strong><br>${order.partner_address || ''}</div></div>
-            <div class="head-right"><h2>${storeName}</h2><div style="font-size:8.5pt">Jl. Raya Labuhan Lombok, Wanasaba</div>${storePhone ? `<div style="font-size:8.5pt">Telp: ${storePhone}</div>` : ''}<table style="margin-top:6pt"><tr><td>No Invoice</td><td>: <strong>${order.order_number}</strong></td></tr><tr><td>Tanggal</td><td>: ${tgl}</td></tr></table></div>
-          </div>${order.canvasser_name ? `<div class="sales">Kode Sales: <strong>${order.canvasser_name}</strong></div>` : ''}`
-        : `<div style="margin-bottom:4pt"><strong>${storeName}</strong> &mdash; INVOICE ${order.order_number}<br><span style="font-size:9pt">Kepada: ${order.partner_store_name} &nbsp;&nbsp; Tanggal: ${tgl}</span></div>`;
+            <div class="head-left"><h1>INVOICE</h1><div class="kepada">Kepada :<br><strong>${eH(order.partner_store_name)}</strong><br>${eH(order.partner_address || '')}</div></div>
+            <div class="head-right"><h2>${eH(storeName)}</h2><div style="font-size:8.5pt">Jl. Raya Labuhan Lombok, Wanasaba</div>${storePhone ? `<div style="font-size:8.5pt">Telp: ${eH(storePhone)}</div>` : ''}<table style="margin-top:6pt"><tr><td>No Invoice</td><td>: <strong>${eH(order.order_number)}</strong></td></tr><tr><td>Tanggal</td><td>: ${eH(tgl)}</td></tr></table></div>
+          </div>${order.canvasser_name ? `<div class="sales">Kode Sales: <strong>${eH(order.canvasser_name)}</strong></div>` : ''}`
+        : `<div style="margin-bottom:4pt"><strong>${eH(storeName)}</strong> &mdash; INVOICE ${eH(order.order_number)}<br><span style="font-size:9pt">Kepada: ${eH(order.partner_store_name)} &nbsp;&nbsp; Tanggal: ${eH(tgl)}</span></div>`;
 
       let footerHtml = isLast
-        ? `<div class="terbilang">Terbilang: <em>${totalWords}</em></div>
+        ? `<div class="terbilang">Terbilang: <em>${eH(totalWords)}</em></div>
           <div class="bottom"><div class="catatan"><h3>Catatan :</h3><ul><li>Barang yang sudah dibeli tidak dapat dikembalikan kecuali ada perjanjian.</li><li>Mohon diperiksa dengan teliti (karena kami tidak menerima komplain setelah barang diterima).</li><li>Terima kasih.</li></ul></div><div class="summary"><table>${summaryRows}</table></div></div>`
         : `<div style="text-align:right;font-style:italic;font-size:8.5pt;margin-top:4pt">Bersambung...   Hal ${p + 1}/${totalPages}</div>`;
 
@@ -371,7 +372,7 @@ class DotMatrixPrinter {
         ${footerHtml}</div>`;
     }
 
-    const html = `<!DOCTYPE html><html><head><title>Invoice ${order.order_number}</title>
+    const html = `<!DOCTYPE html><html><head><title>Invoice ${eH(order.order_number)}</title>
 <style>
   @page { size: 22cm 14cm; margin: 6mm 8mm; }
   * { margin:0; padding:0; box-sizing:border-box; }

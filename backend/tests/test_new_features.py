@@ -11,9 +11,9 @@ import uuid
 
 BASE_URL = os.environ.get('REACT_APP_BACKEND_URL', '').rstrip('/')
 
-# Test credentials
-ADMIN_EMAIL = "admin@aqintani.com"
-ADMIN_PASSWORD = "admin123"
+# Test credentials (from env vars, fallback to dev defaults)
+ADMIN_EMAIL = os.environ.get("TEST_ADMIN_EMAIL", "admin@aqintani.com")
+ADMIN_PASSWORD = os.environ.get("TEST_ADMIN_PASSWORD", "admin123")
 
 
 @pytest.fixture(scope="module")
