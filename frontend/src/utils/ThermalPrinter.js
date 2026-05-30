@@ -278,13 +278,15 @@ class ThermalPrinter {
     if (order.is_settled && order.settled_items) {
       order.settled_items.filter(si => si.qty_sold > 0).forEach(si => {
         d.push(...this.textToBytes(si.product_name)); d.push(...this.commands.LINE_FEED);
-        d.push(...this.textToBytes(this.formatLine(`${si.qty_sold}x${this.formatCurrency(si.price)}`, this.formatCurrency(si.qty_sold * si.price))));
+        const u = si.unit ? ` ${si.unit}` : '';
+        d.push(...this.textToBytes(this.formatLine(`${si.qty_sold}${u}x${this.formatCurrency(si.price)}`, this.formatCurrency(si.qty_sold * si.price))));
         d.push(...this.commands.LINE_FEED);
       });
     } else {
-      order.items.forEach(item => {
+      order.items.filter(item => (item.quantity || 0) > 0).forEach(item => {
         d.push(...this.textToBytes(item.product_name)); d.push(...this.commands.LINE_FEED);
-        d.push(...this.textToBytes(this.formatLine(`${item.quantity}x${this.formatCurrency(item.price)}`, this.formatCurrency(item.subtotal))));
+        const u = item.unit ? ` ${item.unit}` : '';
+        d.push(...this.textToBytes(this.formatLine(`${item.quantity}${u}x${this.formatCurrency(item.price)}`, this.formatCurrency(item.subtotal))));
         d.push(...this.commands.LINE_FEED);
       });
     }

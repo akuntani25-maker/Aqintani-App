@@ -173,7 +173,10 @@ async def get_partner_order(order_id: str, current_user: dict = Depends(get_curr
 
 
 @router.post("/partner-orders", response_model=PartnerOrder)
-async def create_partner_order(data: PartnerOrderCreate, current_user: dict = Depends(get_current_user)):
+async def create_partner_order(req: FastAPIRequest, current_user: dict = Depends(get_current_user)):
+    body = await req.json()
+    data = PartnerOrderCreate(**body)
+    barter_received_raw = body.get("barter_received_items", []) or []
     partner_store = await db.partner_stores.find_one({"id": data.partner_store_id}, {"_id": 0})
     if not partner_store:
         raise HTTPException(status_code=404, detail="Partner store not found")
@@ -204,14 +207,55 @@ async def create_partner_order(data: PartnerOrderCreate, current_user: dict = De
         item_dict["unit"] = "dus" if (wh and wh.get("unit") == "dus") else "pcs"
         enriched_items.append(item_dict)
 
+    # Barter: barang yang TOKO ambil dari KIOS - tambahkan ke stok gudang
+    is_barter = (data.order_type or "regular") == "barter"
+    enriched_barter = []
+    barter_total_value = 0
+    if is_barter:
+        for b in barter_received_raw:
+            b_pid = b.get("product_id", "")
+            b_name = b.get("product_name", "")
+            b_qty = int(b.get("quantity", 0))
+            b_price = float(b.get("price", 0))
+            b_wh_id = b.get("warehouse_id") or "gudang_toko"
+            if b_qty <= 0 or not b_name:
+                continue
+            b_wh = await db.warehouses.find_one({"id": b_wh_id}, {"_id": 0})
+            b_unit = "dus" if (b_wh and b_wh.get("unit") == "dus") else "pcs"
+            # Tambah stok ke gudang tujuan
+            await db.warehouse_stock.update_one(
+                {"product_id": b_pid, "warehouse_id": b_wh_id},
+                {"$inc": {"stock": b_qty}}, upsert=True
+            )
+            if b_pid:
+                await recalculate_product_stock(b_pid)
+            # Hitung subtotal: jika unit gudang = dus, harga per pcs * qty * ipb; jika pcs, harga * qty
+            product = await db.products.find_one({"id": b_pid}, {"_id": 0}) if b_pid else None
+            ipb = (product or {}).get("items_per_box", 1) or 1
+            b_subtotal = b_price * b_qty * (ipb if b_unit == "dus" else 1)
+            enriched_barter.append({
+                "product_id": b_pid, "product_name": b_name,
+                "quantity": b_qty, "price": b_price, "subtotal": b_subtotal,
+                "warehouse_id": b_wh_id, "unit": b_unit
+            })
+            barter_total_value += b_subtotal
+
     now = datetime.now(timezone.utc)
     order_number = f"PO{now.strftime('%Y%m%d%H%M%S')}"
+    # Untuk barter: net total = subtotal kios ambil - subtotal toko ambil (boleh minus)
+    if is_barter:
+        net_total = float(data.total) - float(barter_total_value)
+        net_remaining = net_total - float(data.paid)
+    else:
+        net_total = data.total
+        net_remaining = data.total - data.paid
+
     order_doc = {
         "id": str(uuid.uuid4()), "order_number": order_number,
         "partner_store_id": data.partner_store_id, "partner_store_name": partner_store["name"],
         "items": enriched_items,
-        "subtotal": data.subtotal, "discount": data.discount, "total": data.total,
-        "paid": data.paid, "remaining": data.total - data.paid,
+        "subtotal": data.subtotal, "discount": data.discount, "total": net_total,
+        "paid": data.paid, "remaining": net_remaining,
         "delivery_date": data.delivery_date or now.strftime("%Y-%m-%d"),
         "canvasser_id": data.canvasser_id or "", "canvasser_name": canvasser_name,
         "warehouse_id": default_wh_id, "status": "pending",
@@ -219,6 +263,10 @@ async def create_partner_order(data: PartnerOrderCreate, current_user: dict = De
         "is_settled": False,
         "created_at": now.isoformat(), "date": now.strftime("%Y-%m-%d")
     }
+    if is_barter:
+        order_doc["barter_received_items"] = enriched_barter
+        order_doc["barter_received_total"] = barter_total_value
+
     await db.partner_orders.insert_one(order_doc)
     new_debt = partner_store.get("current_debt", 0) + order_doc["remaining"]
     await db.partner_stores.update_one({"id": data.partner_store_id}, {"$set": {"current_debt": new_debt}})

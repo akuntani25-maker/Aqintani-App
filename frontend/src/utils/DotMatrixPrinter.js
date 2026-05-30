@@ -89,7 +89,7 @@ class DotMatrixPrinter {
           name: si.product_name, qty: si.qty_sold, price: si.price,
           subtotal: si.qty_sold * si.price, unit: 'satuan', ipb: 1
         }))
-      : order.items.map(item => {
+      : order.items.filter(item => (item.quantity || 0) > 0).map(item => {
           const unit = item.sell_unit || item.unit || 'satuan';
           const ipb = item.items_per_box || 1;
           return {
