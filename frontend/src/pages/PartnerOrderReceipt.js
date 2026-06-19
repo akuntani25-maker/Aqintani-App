@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from '../context/AuthContext';
 import { Button } from '../components/ui/button';
-import { ArrowLeft, Bluetooth, Loader2, Printer } from 'lucide-react';
+import { ArrowLeft, Bluetooth, Loader2, Printer, FileText } from 'lucide-react';
 import { toast } from 'sonner';
 import { thermalPrinter } from '../utils/ThermalPrinter';
 import { dotMatrixPrinter } from '../utils/DotMatrixPrinter';
@@ -44,6 +44,7 @@ export const PartnerOrderReceipt = () => {
   const [printStatus, setPrintStatus] = useState('idle');
   const [btStatus, setBtStatus] = useState('idle');
   const [dmStatus, setDmStatus] = useState('idle');
+  const [sjStatus, setSjStatus] = useState('idle');
   const [serverAvailable, setServerAvailable] = useState(null);
 
   useEffect(() => {
@@ -138,6 +139,17 @@ export const PartnerOrderReceipt = () => {
     } finally { setDmStatus('idle'); }
   };
 
+  const handleSuratJalanPrint = () => {
+    if (!order) return;
+    setSjStatus('printing');
+    try {
+      const ok = dotMatrixPrinter.browserPrintSuratJalan(order, storeSettings);
+      if (ok) toast.success('Surat Jalan dibuka di browser - pilih printer & cetak.');
+      else toast.error('Pop-up diblokir. Izinkan pop-up untuk mencetak.');
+    } catch (e) { toast.error('Gagal cetak Surat Jalan: ' + e.message); }
+    finally { setSjStatus('idle'); }
+  };
+
   useEffect(() => {
     const orderId = searchParams.get('id');
     if (orderId) fetchData(orderId);
@@ -180,6 +192,10 @@ export const PartnerOrderReceipt = () => {
             <Button variant="secondary" onClick={handleDotMatrixPrint} disabled={dmStatus !== 'idle'} data-testid="dotmatrix-print-button">
               {dmStatus !== 'idle' ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Printer className="w-4 h-4 mr-2" />}
               {dmStatus === 'printing' ? 'Mencetak...' : 'Cetak Faktur'}
+            </Button>
+            <Button variant="secondary" onClick={handleSuratJalanPrint} disabled={sjStatus !== 'idle'} data-testid="surat-jalan-print-button">
+              {sjStatus !== 'idle' ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <FileText className="w-4 h-4 mr-2" />}
+              {sjStatus === 'printing' ? 'Mencetak...' : 'Cetak Surat Jalan'}
             </Button>
           </div>
         </div>
