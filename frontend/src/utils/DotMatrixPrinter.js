@@ -409,178 +409,146 @@ class DotMatrixPrinter {
   }
 
   // ============================================================
-  // SURAT JALAN - Browser print HTML (static header/footer per page)
-  // Ukuran kertas 22cm x 14cm. Tabel maks 8 baris/halaman. Jika lebih,
-  // otomatis pindah ke halaman berikutnya — masing-masing dengan header
-  // dan footer lengkap.
+  // BUILD SURAT JALAN - ESC/P raw (font bawaan printer)
+  // Continuous form 22cm x 14cm = 33 baris/halaman, max 8 baris item/halaman
+  // Tiap halaman: HEADER + TABEL + FOOTER (statis), padding kosong sampai 33 baris
   // ============================================================
-  browserPrintSuratJalan(order, storeSettings = {}) {
+  buildSuratJalan(order, storeSettings = {}) {
+    const d = [];
+    const W = this.W; // 80 char (10 CPI)
     const storeName = storeSettings?.store_name || 'UD. AQIN TANI';
     const storePhone = storeSettings?.phone || '';
     const tgl = this.fmtDate(order.created_at);
+    const sep = '-'.repeat(W);
     const items = this.prepareItems(order);
 
     const ROWS_PER_PAGE = 8;
-    const chunks = [];
-    if (items.length === 0) {
-      chunks.push([]);
-    } else {
+    const pages = [];
+    if (items.length === 0) pages.push([]);
+    else {
       for (let i = 0; i < items.length; i += ROWS_PER_PAGE) {
-        chunks.push(items.slice(i, i + ROWS_PER_PAGE));
+        pages.push(items.slice(i, i + ROWS_PER_PAGE));
       }
     }
-    const totalPages = chunks.length;
+    const totalPages = pages.length;
 
-    const renderHeader = () => `
-      <div class="head-row">
-        <div class="head-left">
-          <div class="line"><span class="lbl">Kepada Yth,</span></div>
-          <div class="line"><span class="lbl">Nama</span><span class="val">: ${eH(order.partner_store_name || '')}</span></div>
-          <div class="line"><span class="lbl">No. Telp</span><span class="val">: ${eH(order.partner_phone || '-')}</span></div>
-          <div class="line"><span class="lbl">Alamat</span><span class="val">: ${eH(order.partner_address || '-')}</span></div>
-        </div>
-        <div class="head-right">
-          <h1>SURAT JALAN</h1>
-          <div class="meta">
-            <div class="line"><span class="lbl">No. Invoice</span><span class="val">: ${eH(order.order_number)}</span></div>
-            <div class="line"><span class="lbl">Tanggal</span><span class="val">: ${eH(tgl)}</span></div>
-          </div>
-        </div>
-      </div>
-      <div class="pengirim">
-        <div class="line"><span class="lbl">Pengirim</span><span>: <strong>${eH(storeName)}</strong>${storePhone ? `&nbsp;&nbsp;|&nbsp;&nbsp;Telp: ${eH(storePhone)}` : ''}</span></div>
-      </div>`;
+    // Init
+    d.push(...this.cmd.INIT);
+    d.push(...this.cmd.CPI_10);
+    d.push(...this.cmd.LINE_SPACING_1_6);
+    this.lineCount = 0;
 
-    const renderFooter = () => `
-      <div class="perhatian">
-        <h4>PERHATIAN:</h4>
-        <ol>
-          <li>Surat Jalan ini merupakan bukti resmi penerimaan barang.</li>
-          <li>Surat Jalan ini bukan bukti penjualan.</li>
-          <li>Surat Jalan ini akan dilengkapi Invoice sebagai bukti penjualan.</li>
-        </ol>
-      </div>
-      <div class="terima">
-        <strong>BARANG SUDAH DITERIMA DALAM KEADAAN BAIK DAN SESUAI</strong><br>
-        (tanda tangan dan cap/stempel perusahaan)
-      </div>
-      <div class="ttd-row">
-        <div class="ttd-col"><div class="ttd-line"></div><div class="ttd-label">Penerima / Pembeli</div></div>
-        <div class="ttd-col"><div class="ttd-line"></div><div class="ttd-label">Bagian Pengiriman</div></div>
-        <div class="ttd-col"><div class="ttd-line"></div><div class="ttd-label">Petugas Gudang</div></div>
-      </div>`;
+    for (let p = 0; p < totalPages; p++) {
+      const pageItems = pages[p];
+      const startIdx = p * ROWS_PER_PAGE;
 
-    const renderPage = (pageItems, pageIdx) => {
-      // Hitung offset nomor urut (lanjutan dari halaman sebelumnya)
-      const startIdx = pageIdx * ROWS_PER_PAGE;
-      const filledRows = pageItems.map((it, i) => {
-        const isDus = it.unit === 'dus';
-        const qtyStr = isDus ? `${it.qty} DUS (${this.fmtN(it.qty * (it.ipb || 1))} pcs)` : `${this.fmtN(it.qty)} PCS`;
-        return `<tr>
-          <td class="no">${startIdx + i + 1}</td>
-          <td class="nama">${eH(it.name)}</td>
-          <td class="qty">${eH(qtyStr)}</td>
-          <td class="ket">&nbsp;</td>
-        </tr>`;
-      }).join('');
-      const padCount = Math.max(0, ROWS_PER_PAGE - pageItems.length);
-      const padRows = Array(padCount).fill('<tr><td class="no">&nbsp;</td><td class="nama">&nbsp;</td><td class="qty">&nbsp;</td><td class="ket">&nbsp;</td></tr>').join('');
-      const isLast = pageIdx === totalPages - 1;
+      // ===== HEADER (statis tiap halaman) =====
+      // Baris 1: nama toko (bold expanded kiri) + SURAT JALAN (kanan)
+      d.push(...this.cmd.BOLD_ON, ...this.cmd.EXPANDED_ON);
+      d.push(...this.textToBytes(this.pad(storeName, 40)));
+      d.push(...this.textToBytes(this.pad('SURAT JALAN', 20, 'right')));
+      d.push(...this.cmd.LF);
+      d.push(...this.cmd.EXPANDED_OFF, ...this.cmd.BOLD_OFF);
+      this.lineCount++;
 
-      return `<div class="page ${isLast ? 'last' : ''}">
-        <div class="head-block">${renderHeader()}</div>
-        <table class="items">
-          <thead>
-            <tr>
-              <th class="no">No</th>
-              <th class="nama">Nama Barang</th>
-              <th class="qty">Qty</th>
-              <th class="ket">Keterangan</th>
-            </tr>
-          </thead>
-          <tbody>${filledRows}${padRows}</tbody>
-        </table>
-        <div class="page-info">Hal ${pageIdx + 1} dari ${totalPages}${totalPages > 1 && !isLast ? ' — Bersambung...' : ''}</div>
-        <div class="foot-block">${renderFooter()}</div>
-      </div>`;
-    };
+      // Baris 2: Kepada Yth + No Invoice (kanan)
+      this.writeLine(d, this.pad('Kepada Yth,', 40) + 'No. Invoice : ' + order.order_number);
+      // Baris 3: Nama (bold) + Tanggal
+      d.push(...this.cmd.BOLD_ON);
+      d.push(...this.textToBytes(this.pad('Nama   : ' + (order.partner_store_name || ''), 40)));
+      d.push(...this.cmd.BOLD_OFF);
+      d.push(...this.textToBytes('Tanggal     : ' + tgl));
+      d.push(...this.cmd.LF);
+      this.lineCount++;
+      // Baris 4: No Telp + Pengirim
+      this.writeLine(d, this.pad('Telp   : ' + (order.partner_phone || '-'), 40) + 'Pengirim    : ' + storeName);
+      // Baris 5: Alamat + Telp pengirim
+      this.writeLine(d, this.pad('Alamat : ' + (order.partner_address || '-'), 40) + (storePhone ? 'Telp        : ' + storePhone : ''));
 
-    const pagesHtml = chunks.map((c, i) => renderPage(c, i)).join('');
+      // ===== TABEL =====
+      this.writeLine(d, sep);
+      d.push(...this.cmd.BOLD_ON);
+      this.writeLine(d,
+        this.pad('No', 4) +
+        this.pad('Nama Barang', 36) +
+        this.pad('Quantity', 18, 'center') +
+        this.pad('Keterangan', 22)
+      );
+      d.push(...this.cmd.BOLD_OFF);
+      this.writeLine(d, sep);
 
-    const html = `<!DOCTYPE html><html><head><title>Surat Jalan ${eH(order.order_number)}</title>
-<style>
-  @page { size: 22cm 14cm; margin: 0; }
-  * { margin:0; padding:0; box-sizing:border-box; }
-  html, body { font: 10pt/1.35 'Courier New', monospace; color:#000; background:#888; }
+      // Item rows (max 8)
+      pageItems.forEach((item, i) => {
+        const isDus = item.unit === 'dus';
+        const qtyStr = isDus
+          ? item.qty + ' DUS (' + this.fmtN(item.qty * (item.ipb || 1)) + ' pcs)'
+          : this.fmtN(item.qty) + ' PCS';
+        this.writeLine(d,
+          this.pad(String(startIdx + i + 1), 4) +
+          this.pad(item.name, 36) +
+          this.pad(qtyStr, 18, 'center') +
+          this.pad('', 22)
+        );
+      });
 
-  /* Satu halaman = 22cm x 14cm dengan padding internal */
-  .page {
-    width: 22cm;
-    height: 14cm;
-    padding: 6mm 8mm;
-    page-break-after: always;
-    background: white;
-    margin: 0 auto 8mm;
-    display: flex;
-    flex-direction: column;
-    box-shadow: 0 0 12px rgba(0,0,0,.25);
+      // Padding baris kosong agar tabel tetap 8 baris penuh
+      const padRows = ROWS_PER_PAGE - pageItems.length;
+      for (let i = 0; i < padRows; i++) {
+        this.writeLine(d,
+          this.pad('', 4) + this.pad('', 36) + this.pad('', 18) + this.pad('', 22)
+        );
+      }
+      this.writeLine(d, sep);
+
+      // Indikator halaman
+      d.push(...this.cmd.ITALIC_ON);
+      const pageInfo = totalPages > 1 && p < totalPages - 1
+        ? 'Hal ' + (p + 1) + ' dari ' + totalPages + ' -- Bersambung...'
+        : 'Hal ' + (p + 1) + ' dari ' + totalPages;
+      this.writeLine(d, this.pad(pageInfo, W, 'right'));
+      d.push(...this.cmd.ITALIC_OFF);
+
+      // ===== FOOTER (statis tiap halaman) =====
+      // PERHATIAN (di atas)
+      d.push(...this.cmd.BOLD_ON);
+      this.writeLine(d, 'PERHATIAN:');
+      d.push(...this.cmd.BOLD_OFF);
+      this.writeLine(d, '1. Surat Jalan ini merupakan bukti resmi penerimaan barang.');
+      this.writeLine(d, '2. Surat Jalan ini bukan bukti penjualan.');
+      this.writeLine(d, '3. Surat Jalan ini akan dilengkapi Invoice sebagai bukti penjualan.');
+
+      // BARANG SUDAH DITERIMA (center)
+      d.push(...this.cmd.BOLD_ON);
+      this.writeLine(d, this.pad('BARANG SUDAH DITERIMA DALAM KEADAAN BAIK DAN SESUAI', W, 'center'));
+      d.push(...this.cmd.BOLD_OFF);
+
+      // 3 kolom tanda tangan label
+      const colW = Math.floor(W / 3);
+      d.push(...this.cmd.BOLD_ON);
+      this.writeLine(d,
+        this.pad('Penerima / Pembeli', colW, 'center') +
+        this.pad('Bagian Pengiriman', colW, 'center') +
+        this.pad('Petugas Gudang', W - 2 * colW, 'center')
+      );
+      d.push(...this.cmd.BOLD_OFF);
+
+      // Padding sampai genap 33 baris (batas potongan kertas)
+      this.padToPageEnd(d);
+    }
+
+    return d;
   }
-  .page.last { page-break-after: auto; }
-  @media print {
-    html, body { background: white; }
-    .page { margin: 0; box-shadow: none; }
+
+  // Browser fallback - jika print server tidak aktif
+  async printSuratJalan(order, storeSettings) {
+    const serverOk = await this.checkLocalServer();
+    if (!serverOk) throw new Error('Print Server tidak aktif');
+    const data = this.buildSuratJalan(order, storeSettings);
+    await this.printViaServer(data);
+    return { success: true, method: 'server' };
   }
 
-  /* HEADER */
-  .head-block { flex-shrink:0; padding-bottom:3pt; }
-  .head-row { display:flex; justify-content:space-between; align-items:flex-start; border-bottom:1.5pt solid #000; padding-bottom:4pt; }
-  .head-left { width:55%; font-size:9.5pt; }
-  .head-left .line { display:flex; }
-  .head-left .lbl { width:80pt; flex-shrink:0; }
-  .head-left .val { flex:1; font-weight:bold; word-break:break-word; }
-  .head-right { width:42%; text-align:right; }
-  .head-right h1 { font-size:20pt; font-weight:900; letter-spacing:1pt; line-height:1; margin-bottom:4pt; text-align:right; }
-  .head-right .meta { font-size:9pt; }
-  .head-right .meta .line { display:flex; justify-content:flex-end; gap:6pt; text-align:left; }
-  .head-right .meta .lbl { width:60pt; }
-  .head-right .meta .val { min-width:90pt; font-weight:bold; }
-  .pengirim { font-size:9pt; padding:3pt 0; border-bottom:1pt dashed #999; }
-  .pengirim .line { display:flex; }
-  .pengirim .lbl { width:80pt; flex-shrink:0; }
 
-  /* TABEL — flex-grow agar mengisi area tengah */
-  table.items { width:100%; border-collapse:collapse; margin-top:3pt; flex-grow:1; table-layout:fixed; }
-  table.items th, table.items td { border:1pt solid #000; padding:2.5pt 5pt; font-size:9.5pt; vertical-align:top; }
-  table.items th { font-weight:bold; background:#f0f0f0; }
-  table.items th.no, table.items td.no { width:8%; text-align:center; }
-  table.items th.nama, table.items td.nama { width:42%; text-align:left; }
-  table.items th.qty, table.items td.qty { width:22%; text-align:center; }
-  table.items th.ket, table.items td.ket { width:28%; text-align:left; }
-
-  .page-info { text-align:right; font-style:italic; font-size:8pt; padding:2pt 0; flex-shrink:0; }
-
-  /* FOOTER */
-  .foot-block { flex-shrink:0; }
-  .perhatian { font-size:8pt; line-height:1.3; padding:3pt 6pt; border:1pt solid #000; margin-bottom:3pt; }
-  .perhatian h4 { font-weight:bold; font-size:8.5pt; margin-bottom:1pt; }
-  .perhatian ol { padding-left:16pt; margin:0; }
-  .perhatian ol li { margin-bottom:0; }
-  .terima { font-size:8.5pt; text-align:center; margin-bottom:2pt; font-style:italic; }
-  .terima strong { font-style:normal; font-weight:bold; }
-  .ttd-row { display:grid; grid-template-columns:1fr 1fr 1fr; gap:8pt; text-align:center; }
-  .ttd-col { display:flex; flex-direction:column; align-items:center; }
-  .ttd-line { border-bottom:1pt solid #000; width:90%; height:22pt; margin-top:8pt; }
-  .ttd-label { margin-top:1pt; font-size:8.5pt; font-weight:bold; }
-</style></head><body>${pagesHtml}</body></html>`;
-
-    const win = window.open('', '_blank', 'width=900,height=600');
-    if (!win) return false;
-    win.document.write(html);
-    win.document.close();
-    win.focus();
-    setTimeout(() => { win.print(); setTimeout(() => win.close(), 1000); }, 500);
-    return true;
-  }
 
   // ============================================================
   // PRINT VIA LOCAL SERVER

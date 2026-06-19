@@ -139,14 +139,15 @@ export const PartnerOrderReceipt = () => {
     } finally { setDmStatus('idle'); }
   };
 
-  const handleSuratJalanPrint = () => {
+  const handleSuratJalanPrint = async () => {
     if (!order) return;
     setSjStatus('printing');
     try {
-      const ok = dotMatrixPrinter.browserPrintSuratJalan(order, storeSettings);
-      if (ok) toast.success('Surat Jalan dibuka di browser - pilih printer & cetak.');
-      else toast.error('Pop-up diblokir. Izinkan pop-up untuk mencetak.');
-    } catch (e) { toast.error('Gagal cetak Surat Jalan: ' + e.message); }
+      await dotMatrixPrinter.printSuratJalan(order, storeSettings);
+      toast.success('Surat Jalan berhasil dicetak! (font bawaan printer)');
+    } catch (e) {
+      toast.error('Print Server tidak aktif. Jalankan print_server.py di PC.', { duration: 5000 });
+    }
     finally { setSjStatus('idle'); }
   };
 
