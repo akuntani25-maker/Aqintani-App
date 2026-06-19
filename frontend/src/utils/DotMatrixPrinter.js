@@ -411,6 +411,8 @@ class DotMatrixPrinter {
   // ============================================================
   // SURAT JALAN - Browser print HTML
   // Ukuran kertas sama dengan invoice (22cm x 14cm continuous form)
+  // Header (Kepada Yth + Pengirim) & Footer (PERHATIAN + tanda tangan)
+  // berulang otomatis di setiap halaman via <thead>/<tfoot>.
   // ============================================================
   browserPrintSuratJalan(order, storeSettings = {}) {
     const storeName = storeSettings?.store_name || 'UD. AQIN TANI';
@@ -419,21 +421,22 @@ class DotMatrixPrinter {
     const items = this.prepareItems(order);
 
     const itemRows = items.length > 0
-      ? items.map((it) => {
+      ? items.map((it, idx) => {
           const isDus = it.unit === 'dus';
           const qtyStr = isDus ? `${it.qty} DUS (${this.fmtN(it.qty * (it.ipb || 1))} pcs)` : `${this.fmtN(it.qty)} PCS`;
           return `<tr>
+            <td class="no">${idx + 1}</td>
             <td class="nama">${eH(it.name)}</td>
             <td class="qty">${eH(qtyStr)}</td>
             <td class="ket">&nbsp;</td>
           </tr>`;
         }).join('')
-      : `<tr><td class="nama">&nbsp;</td><td class="qty">&nbsp;</td><td class="ket">&nbsp;</td></tr>`;
+      : '';
 
-    // Pad rows so tabel always has minimal height
+    // Pad rows agar tabel tetap punya tinggi minimal
     const minRows = 6;
     const padRows = Math.max(0, minRows - items.length);
-    const blankRows = Array(padRows).fill('<tr><td class="nama">&nbsp;</td><td class="qty">&nbsp;</td><td class="ket">&nbsp;</td></tr>').join('');
+    const blankRows = Array(padRows).fill('<tr><td class="no">&nbsp;</td><td class="nama">&nbsp;</td><td class="qty">&nbsp;</td><td class="ket">&nbsp;</td></tr>').join('');
 
     const html = `<!DOCTYPE html><html><head><title>Surat Jalan ${eH(order.order_number)}</title>
 <style>
@@ -441,106 +444,128 @@ class DotMatrixPrinter {
   * { margin:0; padding:0; box-sizing:border-box; }
   body { font: 10pt/1.35 'Courier New', monospace; color:#000; }
 
-  .top { display:flex; justify-content:space-between; align-items:flex-start; padding-bottom:4pt; border-bottom:1.5pt solid #000; margin-bottom:4pt; }
-  .top .left { width:55%; font-size:9.5pt; }
-  .top .left .row { display:flex; }
-  .top .left .row .lbl { width:80pt; flex-shrink:0; }
-  .top .left .row .val { flex:1; font-weight:bold; word-break:break-word; }
-  .top .right { width:42%; text-align:right; }
-  .top .right h1 { font-size:20pt; font-weight:900; letter-spacing:1pt; line-height:1; margin-bottom:4pt; }
-  .top .right .meta { font-size:9pt; }
-  .top .right .meta .row { display:flex; justify-content:flex-end; gap:6pt; }
-  .top .right .meta .lbl { width:60pt; text-align:left; }
-  .top .right .meta .val { min-width:90pt; text-align:left; font-weight:bold; }
+  /* Tabel utama agar thead/tfoot berulang per halaman */
+  table.page { width:100%; border-collapse:collapse; }
+  table.page > thead { display: table-header-group; }
+  table.page > tfoot { display: table-footer-group; }
 
-  .pengirim { font-size:9pt; padding:3pt 0; border-bottom:1pt dashed #999; margin-bottom:4pt; }
-  .pengirim .row { display:flex; }
+  /* HEADER BLOCK */
+  .head-block { width:100%; padding-bottom:4pt; }
+  .head-row { display:flex; justify-content:space-between; align-items:flex-start; border-bottom:1.5pt solid #000; padding-bottom:4pt; }
+  .head-left { width:55%; font-size:9.5pt; text-align:left; }
+  .head-left .line { display:flex; }
+  .head-left .lbl { width:80pt; flex-shrink:0; }
+  .head-left .val { flex:1; font-weight:bold; word-break:break-word; }
+  .head-right { width:42%; text-align:right; }
+  .head-right h1 { font-size:20pt; font-weight:900; letter-spacing:1pt; line-height:1; margin-bottom:4pt; text-align:right; }
+  .head-right .meta { font-size:9pt; }
+  .head-right .meta .line { display:flex; justify-content:flex-end; gap:6pt; text-align:left; }
+  .head-right .meta .lbl { width:60pt; }
+  .head-right .meta .val { min-width:90pt; font-weight:bold; }
+  .pengirim { font-size:9pt; padding:3pt 0; border-bottom:1pt dashed #999; text-align:left; }
+  .pengirim .line { display:flex; }
   .pengirim .lbl { width:80pt; flex-shrink:0; }
 
-  table.items { width:100%; border-collapse:collapse; margin-top:2pt; }
-  table.items th, table.items td { border:1pt solid #000; padding:3pt 5pt; font-size:9.5pt; }
-  table.items th { font-weight:bold; text-align:left; background:#f0f0f0; }
-  table.items td.qty, table.items th.qty { width:23%; text-align:center; }
-  table.items td.ket, table.items th.ket { width:30%; }
-  table.items td.nama { width:47%; }
+  /* Tabel barang header (kolom) */
+  table.page > thead .col-row th { border:1pt solid #000; padding:3pt 5pt; font-size:9.5pt; font-weight:bold; background:#f0f0f0; }
+  table.page > thead .col-row th.no { width:8%; text-align:center; }
+  table.page > thead .col-row th.nama { width:42%; text-align:left; }
+  table.page > thead .col-row th.qty { width:22%; text-align:center; }
+  table.page > thead .col-row th.ket { width:28%; text-align:left; }
 
-  .bottom { display:grid; grid-template-columns:42% 28% 30%; gap:6pt; margin-top:6pt; font-size:8pt; }
-  .bottom .col { display:flex; flex-direction:column; }
-  .catatan-label { font-style:italic; font-size:8pt; line-height:1.25; }
-  .catatan-label strong { font-style:normal; font-weight:bold; }
-  .perhatian { font-size:8pt; line-height:1.3; }
-  .perhatian h4 { font-weight:bold; margin-bottom:2pt; font-size:8.5pt; }
-  .perhatian ol { padding-left:14pt; }
-  .ttd-block { display:flex; flex-direction:column; align-items:center; margin-top:14pt; }
-  .ttd-line { border-bottom:1pt solid #000; width:90%; height:24pt; }
-  .ttd-label { margin-top:1pt; font-size:8.5pt; }
+  /* Tabel barang body */
+  table.page > tbody td { border:1pt solid #000; padding:3pt 5pt; font-size:9.5pt; vertical-align:top; }
+  table.page > tbody td.no { width:8%; text-align:center; }
+  table.page > tbody td.nama { width:42%; }
+  table.page > tbody td.qty { width:22%; text-align:center; }
+  table.page > tbody td.ket { width:28%; }
+
+  /* FOOTER BLOCK */
+  .foot-block { width:100%; padding-top:6pt; }
+  .perhatian { font-size:8pt; line-height:1.3; margin-bottom:4pt; padding:4pt 6pt; border:1pt solid #000; }
+  .perhatian h4 { font-weight:bold; font-size:9pt; margin-bottom:2pt; }
+  .perhatian ol { padding-left:16pt; margin:0; }
+  .perhatian ol li { margin-bottom:1pt; }
+  .terima { font-size:8.5pt; text-align:center; margin-bottom:4pt; font-style:italic; }
+  .terima strong { font-style:normal; font-weight:bold; }
+  .ttd-row { display:grid; grid-template-columns:1fr 1fr 1fr; gap:8pt; text-align:center; }
+  .ttd-col { display:flex; flex-direction:column; align-items:center; }
+  .ttd-line { border-bottom:1pt solid #000; width:90%; height:26pt; margin-top:14pt; }
+  .ttd-label { margin-top:1pt; font-size:8.5pt; font-weight:bold; }
 
   @media print { body { -webkit-print-color-adjust:exact; } }
 </style></head><body>
 
-<div class="top">
-  <div class="left">
-    <div class="row"><span class="lbl">Kepada Yth,</span></div>
-    <div class="row"><span class="lbl">Nama</span><span class="val">: ${eH(order.partner_store_name || '')}</span></div>
-    <div class="row"><span class="lbl">No. Telp</span><span class="val">: ${eH(order.partner_phone || '-')}</span></div>
-    <div class="row"><span class="lbl">Alamat</span><span class="val">: ${eH(order.partner_address || '-')}</span></div>
-  </div>
-  <div class="right">
-    <h1>SURAT JALAN</h1>
-    <div class="meta">
-      <div class="row"><span class="lbl">No. Invoice</span><span class="val">: ${eH(order.order_number)}</span></div>
-      <div class="row"><span class="lbl">Tanggal</span><span class="val">: ${eH(tgl)}</span></div>
-    </div>
-  </div>
-</div>
-
-<div class="pengirim">
-  <div class="row"><span class="lbl">Pengirim</span><span>: <strong>${eH(storeName)}</strong>${storePhone ? `&nbsp;&nbsp;|&nbsp;&nbsp;Telp: ${eH(storePhone)}` : ''}</span></div>
-</div>
-
-<table class="items">
+<table class="page">
   <thead>
-    <tr>
+    <!-- HEADER yang berulang di setiap halaman -->
+    <tr><th colspan="4" style="border:none;padding:0">
+      <div class="head-block">
+        <div class="head-row">
+          <div class="head-left">
+            <div class="line"><span class="lbl">Kepada Yth,</span></div>
+            <div class="line"><span class="lbl">Nama</span><span class="val">: ${eH(order.partner_store_name || '')}</span></div>
+            <div class="line"><span class="lbl">No. Telp</span><span class="val">: ${eH(order.partner_phone || '-')}</span></div>
+            <div class="line"><span class="lbl">Alamat</span><span class="val">: ${eH(order.partner_address || '-')}</span></div>
+          </div>
+          <div class="head-right">
+            <h1>SURAT JALAN</h1>
+            <div class="meta">
+              <div class="line"><span class="lbl">No. Invoice</span><span class="val">: ${eH(order.order_number)}</span></div>
+              <div class="line"><span class="lbl">Tanggal</span><span class="val">: ${eH(tgl)}</span></div>
+            </div>
+          </div>
+        </div>
+        <div class="pengirim">
+          <div class="line"><span class="lbl">Pengirim</span><span>: <strong>${eH(storeName)}</strong>${storePhone ? `&nbsp;&nbsp;|&nbsp;&nbsp;Telp: ${eH(storePhone)}` : ''}</span></div>
+        </div>
+      </div>
+    </th></tr>
+    <!-- Kolom tabel barang -->
+    <tr class="col-row">
+      <th class="no">No</th>
       <th class="nama">Nama Barang</th>
       <th class="qty">Qty</th>
       <th class="ket">Keterangan</th>
     </tr>
   </thead>
-  <tbody>${itemRows}${blankRows}</tbody>
+  <tfoot>
+    <!-- FOOTER yang berulang di setiap halaman -->
+    <tr><td colspan="4" style="border:none;padding:0">
+      <div class="foot-block">
+        <div class="perhatian">
+          <h4>PERHATIAN:</h4>
+          <ol>
+            <li>Surat Jalan ini merupakan bukti resmi penerimaan barang.</li>
+            <li>Surat Jalan ini bukan bukti penjualan.</li>
+            <li>Surat Jalan ini akan dilengkapi Invoice sebagai bukti penjualan.</li>
+          </ol>
+        </div>
+        <div class="terima">
+          <strong>BARANG SUDAH DITERIMA DALAM KEADAAN BAIK DAN SESUAI</strong><br>
+          (tanda tangan dan cap/stempel perusahaan)
+        </div>
+        <div class="ttd-row">
+          <div class="ttd-col">
+            <div class="ttd-line"></div>
+            <div class="ttd-label">Penerima / Pembeli</div>
+          </div>
+          <div class="ttd-col">
+            <div class="ttd-line"></div>
+            <div class="ttd-label">Bagian Pengiriman</div>
+          </div>
+          <div class="ttd-col">
+            <div class="ttd-line"></div>
+            <div class="ttd-label">Petugas Gudang</div>
+          </div>
+        </div>
+      </div>
+    </td></tr>
+  </tfoot>
+  <tbody>
+    ${itemRows}${blankRows}
+  </tbody>
 </table>
-
-<div class="bottom">
-  <div class="col">
-    <div class="catatan-label">
-      <strong>BARANG SUDAH DITERIMA DALAM KEADAAN BAIK DAN CUKUP</strong><br>
-      <em>(tanda tangan dan cap (stempel) perusahaan)</em>
-    </div>
-    <div class="ttd-block">
-      <div class="ttd-line"></div>
-      <div class="ttd-label">Penerima / Pembeli</div>
-    </div>
-  </div>
-  <div class="col">
-    <div class="ttd-block" style="margin-top:30pt">
-      <div class="ttd-line"></div>
-      <div class="ttd-label">Bagian Pengiriman</div>
-    </div>
-  </div>
-  <div class="col">
-    <div class="perhatian">
-      <h4>PERHATIAN:</h4>
-      <ol>
-        <li>Surat Jalan ini merupakan bukti resmi penerimaan barang.</li>
-        <li>Surat Jalan ini bukan bukti penjualan.</li>
-        <li>Surat Jalan ini akan dilengkapi Invoice sebagai bukti penjualan.</li>
-      </ol>
-    </div>
-    <div class="ttd-block">
-      <div class="ttd-line"></div>
-      <div class="ttd-label">Petugas Gudang</div>
-    </div>
-  </div>
-</div>
 
 </body></html>`;
 
