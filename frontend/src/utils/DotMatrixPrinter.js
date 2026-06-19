@@ -443,10 +443,9 @@ class DotMatrixPrinter {
       const startIdx = p * ROWS_PER_PAGE;
 
       // ===== HEADER (statis tiap halaman) =====
-      // Baris 1: nama toko (bold expanded kiri) + SURAT JALAN (kanan)
+      // Baris 1: SURAT JALAN (bold expanded, kanan)
       d.push(...this.cmd.BOLD_ON, ...this.cmd.EXPANDED_ON);
-      d.push(...this.textToBytes(this.pad(storeName, 40)));
-      d.push(...this.textToBytes(this.pad('SURAT JALAN', 20, 'right')));
+      d.push(...this.textToBytes(this.pad('SURAT JALAN', W / 2, 'right')));
       d.push(...this.cmd.LF);
       d.push(...this.cmd.EXPANDED_OFF, ...this.cmd.BOLD_OFF);
       this.lineCount++;
@@ -500,14 +499,6 @@ class DotMatrixPrinter {
       }
       this.writeLine(d, sep);
 
-      // Indikator halaman
-      d.push(...this.cmd.ITALIC_ON);
-      const pageInfo = totalPages > 1 && p < totalPages - 1
-        ? 'Hal ' + (p + 1) + ' dari ' + totalPages + ' -- Bersambung...'
-        : 'Hal ' + (p + 1) + ' dari ' + totalPages;
-      this.writeLine(d, this.pad(pageInfo, W, 'right'));
-      d.push(...this.cmd.ITALIC_OFF);
-
       // ===== FOOTER (statis tiap halaman) =====
       // PERHATIAN (di atas)
       d.push(...this.cmd.BOLD_ON);
@@ -517,10 +508,13 @@ class DotMatrixPrinter {
       this.writeLine(d, '2. Surat Jalan ini bukan bukti penjualan.');
       this.writeLine(d, '3. Surat Jalan ini akan dilengkapi Invoice sebagai bukti penjualan.');
 
-      // BARANG SUDAH DITERIMA (center)
+      // BARANG SUDAH DITERIMA (rata kiri, bold)
       d.push(...this.cmd.BOLD_ON);
-      this.writeLine(d, this.pad('BARANG SUDAH DITERIMA DALAM KEADAAN BAIK DAN SESUAI', W, 'center'));
+      this.writeLine(d, 'BARANG SUDAH DITERIMA DALAM KEADAAN BAIK DAN SESUAI');
       d.push(...this.cmd.BOLD_OFF);
+
+      // Spasi 1 baris sebelum label TTD
+      this.writeBlank(d);
 
       // 3 kolom tanda tangan label
       const colW = Math.floor(W / 3);
@@ -531,6 +525,19 @@ class DotMatrixPrinter {
         this.pad('Petugas Gudang', W - 2 * colW, 'center')
       );
       d.push(...this.cmd.BOLD_OFF);
+
+      // 3 baris kosong (ruang untuk tanda tangan)
+      this.writeBlank(d);
+      this.writeBlank(d);
+      this.writeBlank(d);
+
+      // Garis panjang di bawah masing-masing label TTD (baris ke-4)
+      const lineSeg = '_'.repeat(colW - 4); // garis pendek dalam kolom
+      this.writeLine(d,
+        this.pad(lineSeg, colW, 'center') +
+        this.pad(lineSeg, colW, 'center') +
+        this.pad(lineSeg, W - 2 * colW, 'center')
+      );
 
       // Padding sampai genap 33 baris (batas potongan kertas)
       this.padToPageEnd(d);
