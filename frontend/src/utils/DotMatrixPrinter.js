@@ -409,10 +409,10 @@ class DotMatrixPrinter {
   }
 
   // ============================================================
-  // SURAT JALAN - Browser print HTML
-  // Ukuran kertas sama dengan invoice (22cm x 14cm continuous form)
-  // Header (Kepada Yth + Pengirim) & Footer (PERHATIAN + tanda tangan)
-  // berulang otomatis di setiap halaman via <thead>/<tfoot>.
+  // SURAT JALAN - Browser print HTML (static header/footer per page)
+  // Ukuran kertas 22cm x 14cm. Tabel maks 8 baris/halaman. Jika lebih,
+  // otomatis pindah ke halaman berikutnya — masing-masing dengan header
+  // dan footer lengkap.
   // ============================================================
   browserPrintSuratJalan(order, storeSettings = {}) {
     const storeName = storeSettings?.store_name || 'UD. AQIN TANI';
@@ -420,39 +420,121 @@ class DotMatrixPrinter {
     const tgl = this.fmtDate(order.created_at);
     const items = this.prepareItems(order);
 
-    const itemRows = items.length > 0
-      ? items.map((it, idx) => {
-          const isDus = it.unit === 'dus';
-          const qtyStr = isDus ? `${it.qty} DUS (${this.fmtN(it.qty * (it.ipb || 1))} pcs)` : `${this.fmtN(it.qty)} PCS`;
-          return `<tr>
-            <td class="no">${idx + 1}</td>
-            <td class="nama">${eH(it.name)}</td>
-            <td class="qty">${eH(qtyStr)}</td>
-            <td class="ket">&nbsp;</td>
-          </tr>`;
-        }).join('')
-      : '';
+    const ROWS_PER_PAGE = 8;
+    const chunks = [];
+    if (items.length === 0) {
+      chunks.push([]);
+    } else {
+      for (let i = 0; i < items.length; i += ROWS_PER_PAGE) {
+        chunks.push(items.slice(i, i + ROWS_PER_PAGE));
+      }
+    }
+    const totalPages = chunks.length;
 
-    // Pad rows agar tabel tetap punya tinggi minimal
-    const minRows = 6;
-    const padRows = Math.max(0, minRows - items.length);
-    const blankRows = Array(padRows).fill('<tr><td class="no">&nbsp;</td><td class="nama">&nbsp;</td><td class="qty">&nbsp;</td><td class="ket">&nbsp;</td></tr>').join('');
+    const renderHeader = () => `
+      <div class="head-row">
+        <div class="head-left">
+          <div class="line"><span class="lbl">Kepada Yth,</span></div>
+          <div class="line"><span class="lbl">Nama</span><span class="val">: ${eH(order.partner_store_name || '')}</span></div>
+          <div class="line"><span class="lbl">No. Telp</span><span class="val">: ${eH(order.partner_phone || '-')}</span></div>
+          <div class="line"><span class="lbl">Alamat</span><span class="val">: ${eH(order.partner_address || '-')}</span></div>
+        </div>
+        <div class="head-right">
+          <h1>SURAT JALAN</h1>
+          <div class="meta">
+            <div class="line"><span class="lbl">No. Invoice</span><span class="val">: ${eH(order.order_number)}</span></div>
+            <div class="line"><span class="lbl">Tanggal</span><span class="val">: ${eH(tgl)}</span></div>
+          </div>
+        </div>
+      </div>
+      <div class="pengirim">
+        <div class="line"><span class="lbl">Pengirim</span><span>: <strong>${eH(storeName)}</strong>${storePhone ? `&nbsp;&nbsp;|&nbsp;&nbsp;Telp: ${eH(storePhone)}` : ''}</span></div>
+      </div>`;
+
+    const renderFooter = () => `
+      <div class="perhatian">
+        <h4>PERHATIAN:</h4>
+        <ol>
+          <li>Surat Jalan ini merupakan bukti resmi penerimaan barang.</li>
+          <li>Surat Jalan ini bukan bukti penjualan.</li>
+          <li>Surat Jalan ini akan dilengkapi Invoice sebagai bukti penjualan.</li>
+        </ol>
+      </div>
+      <div class="terima">
+        <strong>BARANG SUDAH DITERIMA DALAM KEADAAN BAIK DAN SESUAI</strong><br>
+        (tanda tangan dan cap/stempel perusahaan)
+      </div>
+      <div class="ttd-row">
+        <div class="ttd-col"><div class="ttd-line"></div><div class="ttd-label">Penerima / Pembeli</div></div>
+        <div class="ttd-col"><div class="ttd-line"></div><div class="ttd-label">Bagian Pengiriman</div></div>
+        <div class="ttd-col"><div class="ttd-line"></div><div class="ttd-label">Petugas Gudang</div></div>
+      </div>`;
+
+    const renderPage = (pageItems, pageIdx) => {
+      // Hitung offset nomor urut (lanjutan dari halaman sebelumnya)
+      const startIdx = pageIdx * ROWS_PER_PAGE;
+      const filledRows = pageItems.map((it, i) => {
+        const isDus = it.unit === 'dus';
+        const qtyStr = isDus ? `${it.qty} DUS (${this.fmtN(it.qty * (it.ipb || 1))} pcs)` : `${this.fmtN(it.qty)} PCS`;
+        return `<tr>
+          <td class="no">${startIdx + i + 1}</td>
+          <td class="nama">${eH(it.name)}</td>
+          <td class="qty">${eH(qtyStr)}</td>
+          <td class="ket">&nbsp;</td>
+        </tr>`;
+      }).join('');
+      const padCount = Math.max(0, ROWS_PER_PAGE - pageItems.length);
+      const padRows = Array(padCount).fill('<tr><td class="no">&nbsp;</td><td class="nama">&nbsp;</td><td class="qty">&nbsp;</td><td class="ket">&nbsp;</td></tr>').join('');
+      const isLast = pageIdx === totalPages - 1;
+
+      return `<div class="page ${isLast ? 'last' : ''}">
+        <div class="head-block">${renderHeader()}</div>
+        <table class="items">
+          <thead>
+            <tr>
+              <th class="no">No</th>
+              <th class="nama">Nama Barang</th>
+              <th class="qty">Qty</th>
+              <th class="ket">Keterangan</th>
+            </tr>
+          </thead>
+          <tbody>${filledRows}${padRows}</tbody>
+        </table>
+        <div class="page-info">Hal ${pageIdx + 1} dari ${totalPages}${totalPages > 1 && !isLast ? ' — Bersambung...' : ''}</div>
+        <div class="foot-block">${renderFooter()}</div>
+      </div>`;
+    };
+
+    const pagesHtml = chunks.map((c, i) => renderPage(c, i)).join('');
 
     const html = `<!DOCTYPE html><html><head><title>Surat Jalan ${eH(order.order_number)}</title>
 <style>
-  @page { size: 22cm 14cm; margin: 6mm 8mm; }
+  @page { size: 22cm 14cm; margin: 0; }
   * { margin:0; padding:0; box-sizing:border-box; }
-  body { font: 10pt/1.35 'Courier New', monospace; color:#000; }
+  html, body { font: 10pt/1.35 'Courier New', monospace; color:#000; background:#888; }
 
-  /* Tabel utama agar thead/tfoot berulang per halaman */
-  table.page { width:100%; border-collapse:collapse; }
-  table.page > thead { display: table-header-group; }
-  table.page > tfoot { display: table-footer-group; }
+  /* Satu halaman = 22cm x 14cm dengan padding internal */
+  .page {
+    width: 22cm;
+    height: 14cm;
+    padding: 6mm 8mm;
+    page-break-after: always;
+    background: white;
+    margin: 0 auto 8mm;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 0 12px rgba(0,0,0,.25);
+  }
+  .page.last { page-break-after: auto; }
+  @media print {
+    html, body { background: white; }
+    .page { margin: 0; box-shadow: none; }
+  }
 
-  /* HEADER BLOCK */
-  .head-block { width:100%; padding-bottom:4pt; }
+  /* HEADER */
+  .head-block { flex-shrink:0; padding-bottom:3pt; }
   .head-row { display:flex; justify-content:space-between; align-items:flex-start; border-bottom:1.5pt solid #000; padding-bottom:4pt; }
-  .head-left { width:55%; font-size:9.5pt; text-align:left; }
+  .head-left { width:55%; font-size:9.5pt; }
   .head-left .line { display:flex; }
   .head-left .lbl { width:80pt; flex-shrink:0; }
   .head-left .val { flex:1; font-weight:bold; word-break:break-word; }
@@ -462,112 +544,34 @@ class DotMatrixPrinter {
   .head-right .meta .line { display:flex; justify-content:flex-end; gap:6pt; text-align:left; }
   .head-right .meta .lbl { width:60pt; }
   .head-right .meta .val { min-width:90pt; font-weight:bold; }
-  .pengirim { font-size:9pt; padding:3pt 0; border-bottom:1pt dashed #999; text-align:left; }
+  .pengirim { font-size:9pt; padding:3pt 0; border-bottom:1pt dashed #999; }
   .pengirim .line { display:flex; }
   .pengirim .lbl { width:80pt; flex-shrink:0; }
 
-  /* Tabel barang header (kolom) */
-  table.page > thead .col-row th { border:1pt solid #000; padding:3pt 5pt; font-size:9.5pt; font-weight:bold; background:#f0f0f0; }
-  table.page > thead .col-row th.no { width:8%; text-align:center; }
-  table.page > thead .col-row th.nama { width:42%; text-align:left; }
-  table.page > thead .col-row th.qty { width:22%; text-align:center; }
-  table.page > thead .col-row th.ket { width:28%; text-align:left; }
+  /* TABEL — flex-grow agar mengisi area tengah */
+  table.items { width:100%; border-collapse:collapse; margin-top:3pt; flex-grow:1; table-layout:fixed; }
+  table.items th, table.items td { border:1pt solid #000; padding:2.5pt 5pt; font-size:9.5pt; vertical-align:top; }
+  table.items th { font-weight:bold; background:#f0f0f0; }
+  table.items th.no, table.items td.no { width:8%; text-align:center; }
+  table.items th.nama, table.items td.nama { width:42%; text-align:left; }
+  table.items th.qty, table.items td.qty { width:22%; text-align:center; }
+  table.items th.ket, table.items td.ket { width:28%; text-align:left; }
 
-  /* Tabel barang body */
-  table.page > tbody td { border:1pt solid #000; padding:3pt 5pt; font-size:9.5pt; vertical-align:top; }
-  table.page > tbody td.no { width:8%; text-align:center; }
-  table.page > tbody td.nama { width:42%; }
-  table.page > tbody td.qty { width:22%; text-align:center; }
-  table.page > tbody td.ket { width:28%; }
+  .page-info { text-align:right; font-style:italic; font-size:8pt; padding:2pt 0; flex-shrink:0; }
 
-  /* FOOTER BLOCK */
-  .foot-block { width:100%; padding-top:6pt; }
-  .perhatian { font-size:8pt; line-height:1.3; margin-bottom:4pt; padding:4pt 6pt; border:1pt solid #000; }
-  .perhatian h4 { font-weight:bold; font-size:9pt; margin-bottom:2pt; }
+  /* FOOTER */
+  .foot-block { flex-shrink:0; }
+  .perhatian { font-size:8pt; line-height:1.3; padding:3pt 6pt; border:1pt solid #000; margin-bottom:3pt; }
+  .perhatian h4 { font-weight:bold; font-size:8.5pt; margin-bottom:1pt; }
   .perhatian ol { padding-left:16pt; margin:0; }
-  .perhatian ol li { margin-bottom:1pt; }
-  .terima { font-size:8.5pt; text-align:center; margin-bottom:4pt; font-style:italic; }
+  .perhatian ol li { margin-bottom:0; }
+  .terima { font-size:8.5pt; text-align:center; margin-bottom:2pt; font-style:italic; }
   .terima strong { font-style:normal; font-weight:bold; }
   .ttd-row { display:grid; grid-template-columns:1fr 1fr 1fr; gap:8pt; text-align:center; }
   .ttd-col { display:flex; flex-direction:column; align-items:center; }
-  .ttd-line { border-bottom:1pt solid #000; width:90%; height:26pt; margin-top:14pt; }
+  .ttd-line { border-bottom:1pt solid #000; width:90%; height:22pt; margin-top:8pt; }
   .ttd-label { margin-top:1pt; font-size:8.5pt; font-weight:bold; }
-
-  @media print { body { -webkit-print-color-adjust:exact; } }
-</style></head><body>
-
-<table class="page">
-  <thead>
-    <!-- HEADER yang berulang di setiap halaman -->
-    <tr><th colspan="4" style="border:none;padding:0">
-      <div class="head-block">
-        <div class="head-row">
-          <div class="head-left">
-            <div class="line"><span class="lbl">Kepada Yth,</span></div>
-            <div class="line"><span class="lbl">Nama</span><span class="val">: ${eH(order.partner_store_name || '')}</span></div>
-            <div class="line"><span class="lbl">No. Telp</span><span class="val">: ${eH(order.partner_phone || '-')}</span></div>
-            <div class="line"><span class="lbl">Alamat</span><span class="val">: ${eH(order.partner_address || '-')}</span></div>
-          </div>
-          <div class="head-right">
-            <h1>SURAT JALAN</h1>
-            <div class="meta">
-              <div class="line"><span class="lbl">No. Invoice</span><span class="val">: ${eH(order.order_number)}</span></div>
-              <div class="line"><span class="lbl">Tanggal</span><span class="val">: ${eH(tgl)}</span></div>
-            </div>
-          </div>
-        </div>
-        <div class="pengirim">
-          <div class="line"><span class="lbl">Pengirim</span><span>: <strong>${eH(storeName)}</strong>${storePhone ? `&nbsp;&nbsp;|&nbsp;&nbsp;Telp: ${eH(storePhone)}` : ''}</span></div>
-        </div>
-      </div>
-    </th></tr>
-    <!-- Kolom tabel barang -->
-    <tr class="col-row">
-      <th class="no">No</th>
-      <th class="nama">Nama Barang</th>
-      <th class="qty">Qty</th>
-      <th class="ket">Keterangan</th>
-    </tr>
-  </thead>
-  <tfoot>
-    <!-- FOOTER yang berulang di setiap halaman -->
-    <tr><td colspan="4" style="border:none;padding:0">
-      <div class="foot-block">
-        <div class="perhatian">
-          <h4>PERHATIAN:</h4>
-          <ol>
-            <li>Surat Jalan ini merupakan bukti resmi penerimaan barang.</li>
-            <li>Surat Jalan ini bukan bukti penjualan.</li>
-            <li>Surat Jalan ini akan dilengkapi Invoice sebagai bukti penjualan.</li>
-          </ol>
-        </div>
-        <div class="terima">
-          <strong>BARANG SUDAH DITERIMA DALAM KEADAAN BAIK DAN SESUAI</strong><br>
-          (tanda tangan dan cap/stempel perusahaan)
-        </div>
-        <div class="ttd-row">
-          <div class="ttd-col">
-            <div class="ttd-line"></div>
-            <div class="ttd-label">Penerima / Pembeli</div>
-          </div>
-          <div class="ttd-col">
-            <div class="ttd-line"></div>
-            <div class="ttd-label">Bagian Pengiriman</div>
-          </div>
-          <div class="ttd-col">
-            <div class="ttd-line"></div>
-            <div class="ttd-label">Petugas Gudang</div>
-          </div>
-        </div>
-      </div>
-    </td></tr>
-  </tfoot>
-  <tbody>
-    ${itemRows}${blankRows}
-  </tbody>
-</table>
-
-</body></html>`;
+</style></head><body>${pagesHtml}</body></html>`;
 
     const win = window.open('', '_blank', 'width=900,height=600');
     if (!win) return false;
