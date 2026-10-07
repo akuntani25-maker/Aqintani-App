@@ -3,6 +3,7 @@
 // Pendekatan: Continuous printing - setiap halaman tepat 33 baris (14cm di 6 LPI)
 // Tidak pakai FF, cukup padding baris kosong agar pas dengan potongan kertas
 import { escapeHtml as eH } from './htmlEscape';
+import { displayUnit } from './unitDisplay';
 
 const LOCAL_PRINT_SERVER = 'http://localhost:9100';
 const MAX_ITEMS_PER_PAGE = 10;
@@ -200,7 +201,8 @@ class DotMatrixPrinter {
       // Item rows
       pageItems.forEach((item, i) => {
         const isDus = item.unit === 'dus';
-        const jmlCtn = isDus ? item.qty + ' DUS' : item.qty + ' PCS';
+        const unitLabel = displayUnit(item.name, isDus ? 'dus' : 'pcs').toUpperCase();
+        const jmlCtn = item.qty + ' ' + unitLabel;
         const totalQty = isDus ? this.fmtN(item.qty * (item.ipb || 1)) : this.fmtN(item.qty);
         this.writeLine(d,
           this.pad(String(startIdx + i + 1), 4) +
@@ -349,7 +351,8 @@ class DotMatrixPrinter {
 
       const tableRows = pageItems.map((item, i) => {
         const isDus = item.unit === 'dus';
-        const jmlCtn = isDus ? item.qty + ' DUS' : item.qty + ' PCS';
+        const unitLabel = displayUnit(item.name, isDus ? 'dus' : 'pcs').toUpperCase();
+        const jmlCtn = item.qty + ' ' + unitLabel;
         const totalQty = isDus ? fN(item.qty * item.ipb) : fN(item.qty);
         return `<tr><td class="c">${startIdx + i + 1}</td><td>${eH(item.name)}</td><td class="c">${jmlCtn}</td><td class="c">${totalQty}</td><td class="r">${fN(item.price)}</td><td class="r">${fN(item.subtotal)}</td></tr>`;
       }).join('');
@@ -479,9 +482,10 @@ class DotMatrixPrinter {
       // Item rows (max 8)
       pageItems.forEach((item, i) => {
         const isDus = item.unit === 'dus';
+        const unitLabel = displayUnit(item.name, isDus ? 'dus' : 'pcs').toUpperCase();
         const qtyStr = isDus
-          ? item.qty + ' DUS (' + this.fmtN(item.qty * (item.ipb || 1)) + ' pcs)'
-          : this.fmtN(item.qty) + ' PCS';
+          ? item.qty + ' ' + unitLabel + ' (' + this.fmtN(item.qty * (item.ipb || 1)) + ' pcs)'
+          : this.fmtN(item.qty) + ' ' + unitLabel;
         this.writeLine(d,
           this.pad(String(startIdx + i + 1), 4) +
           this.pad(item.name, 36) +

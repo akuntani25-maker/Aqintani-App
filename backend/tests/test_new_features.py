@@ -100,7 +100,7 @@ def test_data(headers):
         requests.delete(f"{BASE_URL}/api/categories/{data['category']['id']}", headers=headers)
         requests.delete(f"{BASE_URL}/api/suppliers/{data['supplier']['id']}", headers=headers)
         requests.delete(f"{BASE_URL}/api/partner-stores/{data['partner_store']['id']}", headers=headers)
-    except:
+    except Exception:
         pass
 
 

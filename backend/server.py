@@ -71,6 +71,14 @@ async def health_check():
 
 @app.on_event("startup")
 async def startup_db():
+    # Init Emergent object storage (non-blocking — log if fails)
+    try:
+        from storage import init_storage
+        init_storage()
+        logger.info("Emergent object storage initialized")
+    except Exception as e:
+        logger.warning(f"Object storage init failed (uploads may fail): {e}")
+
     # Create database indexes for performance
     await create_indexes()
 

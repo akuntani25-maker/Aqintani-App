@@ -1,8 +1,7 @@
-from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, Request as FastAPIRequest
+from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, Request as FastAPIRequest, Response
 from typing import List, Optional
 import uuid
 import os
-import shutil
 from datetime import datetime, timezone
 
 from database import db
@@ -11,10 +10,9 @@ from models import (
     ProductCreate, Product, CategoryCreate, Category
 )
 from services import ensure_warehouse_stock, recalculate_product_stock, log_audit
+from storage import put_object, get_object, MIME_MAP, APP_NAME
 
 router = APIRouter()
-
-UPLOAD_DIR = "uploads/products"
 
 
 @router.post("/products/upload-image/{product_id}")
@@ -27,21 +25,28 @@ async def upload_product_image(product_id: str, file: UploadFile = File(...), ad
     if ext not in ("jpg", "jpeg", "png", "webp"):
         raise HTTPException(status_code=400, detail="Format gambar tidak didukung (jpg/png/webp)")
 
-    filename = f"{product_id}.{ext}"
-    filepath = os.path.join(UPLOAD_DIR, filename)
+    data = await file.read()
+    content_type = MIME_MAP.get(ext, "application/octet-stream")
+    path = f"{APP_NAME}/products/{product_id}.{ext}"
+    try:
+        put_object(path, data, content_type)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Gagal upload gambar: {str(e)}")
 
-    # Remove old image if exists
-    for old_ext in ("jpg", "jpeg", "png", "webp"):
-        old_path = os.path.join(UPLOAD_DIR, f"{product_id}.{old_ext}")
-        if os.path.exists(old_path):
-            os.remove(old_path)
-
-    with open(filepath, "wb") as f:
-        shutil.copyfileobj(file.file, f)
-
-    image_url = f"/api/uploads/products/{filename}"
+    image_url = f"/api/products/image-file/{product_id}.{ext}"
     await db.products.update_one({"id": product_id}, {"$set": {"image_url": image_url}})
     return {"image_url": image_url}
+
+
+@router.get("/products/image-file/{filename}")
+async def serve_product_image(filename: str):
+    """Serve product image from object storage (public read for simplicity)."""
+    path = f"{APP_NAME}/products/{filename}"
+    try:
+        data, ct = get_object(path)
+    except Exception:
+        raise HTTPException(status_code=404, detail="Gambar tidak ditemukan")
+    return Response(content=data, media_type=ct, headers={"Cache-Control": "public, max-age=86400"})
 
 
 @router.delete("/products/image/{product_id}")
@@ -49,12 +54,7 @@ async def delete_product_image(product_id: str, admin: dict = Depends(require_ad
     product = await db.products.find_one({"id": product_id}, {"_id": 0})
     if not product:
         raise HTTPException(status_code=404, detail="Produk tidak ditemukan")
-
-    for ext in ("jpg", "jpeg", "png", "webp"):
-        path = os.path.join(UPLOAD_DIR, f"{product_id}.{ext}")
-        if os.path.exists(path):
-            os.remove(path)
-
+    # Object storage has no delete API; cukup kosongkan referensi di DB
     await db.products.update_one({"id": product_id}, {"$set": {"image_url": ""}})
     return {"message": "Gambar berhasil dihapus"}
 
