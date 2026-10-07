@@ -69,6 +69,44 @@ async def health_check():
     return {"status": "ok"}
 
 
+async def _run_product_migration():
+    """Background migration — gated by marker, batched to reduce round-trips."""
+    try:
+        marker = await db.migrations.find_one({"name": "product_warehouse_stock_init_v1"})
+        if marker and marker.get("completed"):
+            return
+        logger.info("Running product/warehouse_stock migration in background...")
+        products = await db.products.find({}, {"_id": 0}).to_list(10000)
+        product_ids = {p["id"] for p in products}
+        for p in products:
+            await ensure_warehouse_stock(p["id"])
+            all_wh_stock = await db.warehouse_stock.find({"product_id": p["id"]}, {"_id": 0}).to_list(10)
+            total_wh = sum(s.get("stock", 0) for s in all_wh_stock)
+            if total_wh == 0 and p.get("stock", 0) > 0:
+                await db.warehouse_stock.update_one(
+                    {"product_id": p["id"], "warehouse_id": "gudang_toko"},
+                    {"$set": {"stock": p["stock"]}}
+                )
+            if "items_per_box" not in p:
+                await db.products.update_one({"id": p["id"]}, {"$set": {"items_per_box": 1, "box_price": 0}})
+            await recalculate_product_stock(p["id"])
+
+        # Clean orphaned warehouse_stock entries — bulk by distinct product_id
+        orphan_pids = await db.warehouse_stock.distinct("product_id")
+        orphans = [pid for pid in orphan_pids if pid not in product_ids]
+        if orphans:
+            await db.warehouse_stock.delete_many({"product_id": {"$in": orphans}})
+
+        await db.migrations.update_one(
+            {"name": "product_warehouse_stock_init_v1"},
+            {"$set": {"completed": True, "completed_at": datetime.now(timezone.utc).isoformat()}},
+            upsert=True
+        )
+        logger.info("Product migration completed")
+    except Exception as e:
+        logger.error(f"Product migration failed: {e}")
+
+
 @app.on_event("startup")
 async def startup_db():
     # Init Emergent object storage (non-blocking — log if fails)
@@ -105,28 +143,11 @@ async def startup_db():
         ])
         logger.info("Default warehouses created")
 
-    # Migrate existing products
-    products = await db.products.find({}, {"_id": 0}).to_list(10000)
-    product_ids = set()
-    for p in products:
-        product_ids.add(p["id"])
-        await ensure_warehouse_stock(p["id"])
-        all_wh_stock = await db.warehouse_stock.find({"product_id": p["id"]}, {"_id": 0}).to_list(10)
-        total_wh = sum(s.get("stock", 0) for s in all_wh_stock)
-        if total_wh == 0 and p.get("stock", 0) > 0:
-            await db.warehouse_stock.update_one(
-                {"product_id": p["id"], "warehouse_id": "gudang_toko"},
-                {"$set": {"stock": p["stock"]}}
-            )
-        if "items_per_box" not in p:
-            await db.products.update_one({"id": p["id"]}, {"$set": {"items_per_box": 1, "box_price": 0}})
-        await recalculate_product_stock(p["id"])
-
-    # Clean orphaned warehouse_stock entries
-    all_wh_stocks = await db.warehouse_stock.find({}, {"_id": 0}).to_list(100000)
-    for s in all_wh_stocks:
-        if s.get("product_id") not in product_ids:
-            await db.warehouse_stock.delete_many({"product_id": s["product_id"]})
+    # Jalankan migrasi berat (ratusan produk × puluhan round-trip Mongo) di background
+    # agar uvicorn bisa langsung bind port 8001 dan readiness probe lulus.
+    # Dilindungi marker agar tidak re-run di tiap boot.
+    import asyncio
+    asyncio.create_task(_run_product_migration())
 
 
 @app.on_event("shutdown")
