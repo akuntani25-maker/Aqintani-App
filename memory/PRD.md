@@ -143,3 +143,10 @@ Aplikasi web responsif untuk toko farmasi dan pertanian "UD. AQIN TANI" dengan s
 - `/app/backend/routers/report_routes.py` - Dashboard stats, canvasser recap
 - `/app/backend/routers/canvasser_routes.py` - My recap, enriched my-orders
 - `/app/backend/models.py` - supplier_cost_price, order_type, is_settled
+
+## 2026-06 — UI/UX & Motion Revamp (MaterialM-inspired, green theme)
+- Style only, no logic changes. Font Plus Jakarta Sans; primary leaf green, amber secondary; soft shadows (shadow-soft/-lg/-xl/glow), card radius 18px (rounded-tw), pill buttons, `lightprimary` token.
+- AdminLayout: white sidebar fixed on desktop (collapsible via menu-toggle), mobile drawer + overlay, sticky glass header with breadcrumb, user chip, dark mode.
+- Motion (CSS only): page fade on route change, staggered section reveal (`.page-enter`, `.stagger`), nav item entrance, button press scale, input focus ring, dialog blur overlay, tab content fade; respects prefers-reduced-motion; disabled in print.
+- Updated shadcn: button, card, input, textarea, select, table, badge, tabs, dialog, alert-dialog, dropdown, popover. Login, POS, Canvasser, FarmerDebts, DailyTransactions restyled. Receipt/print output untouched.
+- Testing: screenshots only (user asked to skip testing agent).
