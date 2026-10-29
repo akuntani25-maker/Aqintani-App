@@ -249,10 +249,10 @@ export const CanvasserDashboard = () => {
   return (
     <div className="min-h-screen bg-gradient-mesh">
       {/* Header */}
-      <div className="bg-white border-b shadow-sm sticky top-0 z-10">
+      <div className="bg-card/80 backdrop-blur-xl border-b border-border/50 sticky top-0 z-10">
         <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-12 h-12 bg-primary rounded-xl flex items-center justify-center">
+            <div className="w-12 h-12 bg-primary rounded-2xl flex items-center justify-center shadow-glow">
               <Truck className="w-6 h-6 text-white" />
             </div>
             <div>
@@ -282,7 +282,7 @@ export const CanvasserDashboard = () => {
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-4 py-6 space-y-6">
+      <div className="max-w-7xl mx-auto px-4 py-6 space-y-6 stagger">
         {/* Summary Cards */}
         <div className="grid grid-cols-3 gap-3 md:gap-4">
           <Card className="p-4 md:p-6" data-testid="pending-count-card">

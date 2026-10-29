@@ -479,7 +479,7 @@ export const POS = () => {
 
   return (
     <div className="h-screen bg-background flex overflow-hidden" data-testid="pos-page">
-      <div className="flex-1 p-6 overflow-auto">
+      <div className="flex-1 p-6 overflow-auto stagger">
         <div className="mb-6">
           <div className="flex items-center justify-between mb-4">
             <div>

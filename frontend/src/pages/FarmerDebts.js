@@ -170,7 +170,7 @@ export const FarmerDebts = () => {
   if (loading) return <div className="flex items-center justify-center min-h-[50vh]"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div></div>;
 
   return (
-    <div className="p-4 md:p-6 lg:p-8 space-y-6" data-testid="farmer-debts-page">
+    <div className="p-4 md:p-6 lg:p-8 space-y-6 stagger" data-testid="farmer-debts-page">
       <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
         <div>
           <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Hutang Petani</h1>
