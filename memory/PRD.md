@@ -150,3 +150,9 @@ Aplikasi web responsif untuk toko farmasi dan pertanian "UD. AQIN TANI" dengan s
 - Motion (CSS only): page fade on route change, staggered section reveal (`.page-enter`, `.stagger`), nav item entrance, button press scale, input focus ring, dialog blur overlay, tab content fade; respects prefers-reduced-motion; disabled in print.
 - Updated shadcn: button, card, input, textarea, select, table, badge, tabs, dialog, alert-dialog, dropdown, popover. Login, POS, Canvasser, FarmerDebts, DailyTransactions restyled. Receipt/print output untouched.
 - Testing: screenshots only (user asked to skip testing agent).
+
+## 2026-06 — Skeleton loading, Solar icons, favicon
+- All page-level spinners replaced by `components/PageSkeleton.js` (variants: dashboard/table/list/form/receipt) with shimmer (`.skeleton-shimmer`).
+- Icons: lucide replaced app-wide by Solar bold-duotone (MaterialM icon set) via `src/components/icons` (same export names; map in `map.json`; offline subset `solar-subset.json` built by `node scripts/build-icons.js` — rerun after adding names). Checkbox/radio/menu indicators in ui/ still use lucide.
+- Favicon: `public/favicon.svg`, `favicon.ico`, `apple-touch-icon.png`, `logo192/512.png`, `manifest.json` (green leaf logo).
+- Testing: screenshots only (user asked to skip testing agent).

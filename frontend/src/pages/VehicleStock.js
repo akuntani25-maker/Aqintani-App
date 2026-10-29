@@ -7,7 +7,7 @@ import { Label } from '../components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { toast } from 'sonner';
-import { Truck, Package, ShoppingCart, RotateCcw, Search, ArrowLeft, Pencil, Printer } from 'lucide-react';
+import { Truck, Package, ShoppingCart, RotateCcw, Search, ArrowLeft, Pencil, Printer } from '../components/icons';
 import { useNavigate } from 'react-router-dom';
 import { CurrencyInput } from '../components/CurrencyInput';
 import { escapeHtml as eHtml } from '../utils/htmlEscape';

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { PageSkeleton } from '../components/PageSkeleton';
 import { api } from '../context/AuthContext';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -10,7 +11,7 @@ import {
   DollarSign, AlertTriangle, CreditCard, Users, Search, Download,
   ChevronDown, ChevronUp, Clock, FileText, Bell, Banknote, CalendarDays, RotateCcw, Edit3,
   Upload, X, Filter
-} from 'lucide-react';
+} from '../components/icons';
 import { toast } from 'sonner';
 import { CurrencyInput } from '../components/CurrencyInput';
 import { Pagination } from '../components/Pagination';
@@ -364,7 +365,7 @@ export const SupplierDebt = () => {
   const paginatedOverview = filteredOverview.slice((page - 1) * perPage, page * perPage);
 
   if (loading) {
-    return <div className="flex items-center justify-center min-h-screen"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div></div>;
+    return <PageSkeleton variant="table" />;
   }
 
   return (

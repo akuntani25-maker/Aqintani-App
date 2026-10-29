@@ -175,3 +175,20 @@
 @media print {
   .page-enter, .page-enter *, .stagger > * { animation: none !important; }
 }
+
+/* Skeleton shimmer */
+@keyframes aq-shimmer {
+  100% { transform: translateX(100%); }
+}
+.skeleton-shimmer {
+  position: relative;
+  overflow: hidden;
+}
+.skeleton-shimmer::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, hsl(var(--card) / 0.65), transparent);
+  animation: aq-shimmer 1.4s ease-in-out infinite;
+}

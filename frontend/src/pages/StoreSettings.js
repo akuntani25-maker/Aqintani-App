@@ -1,11 +1,12 @@
 import React, { useState, useEffect } from 'react';
+import { PageSkeleton } from '../components/PageSkeleton';
 import { api } from '../context/AuthContext';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Card } from '../components/ui/card';
 import { toast } from 'sonner';
-import { Store, Save } from 'lucide-react';
+import { Store, Save } from '../components/icons';
 
 export const StoreSettings = () => {
   const [loading, setLoading] = useState(true);
@@ -48,9 +49,7 @@ export const StoreSettings = () => {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
-      </div>
+      <PageSkeleton variant="form" />
     );
   }
 

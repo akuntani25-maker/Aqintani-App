@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { PageSkeleton } from '../components/PageSkeleton';
 import { useNavigate } from 'react-router-dom';
 import { api, useAuth } from '../context/AuthContext';
 import { Button } from '../components/ui/button';
@@ -7,7 +8,7 @@ import { Label } from '../components/ui/label';
 import { Card } from '../components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '../components/ui/dialog';
-import { ArrowLeft, ShoppingCart, DollarSign, Copy, Pencil, Check, X } from 'lucide-react';
+import { ArrowLeft, ShoppingCart, DollarSign, Copy, Pencil, Check, X } from '../components/icons';
 import { toast } from 'sonner';
 
 const fmt = (v) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(v);
@@ -99,7 +100,7 @@ export const DailyTransactions = () => {
     } finally { setSaving(false); }
   };
 
-  if (loading) return <div className="flex items-center justify-center min-h-screen"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div></div>;
+  if (loading) return <PageSkeleton variant="table" />;
 
   const transactions = data?.transactions || [];
   const farmerTxns = data?.farmer_transactions || [];

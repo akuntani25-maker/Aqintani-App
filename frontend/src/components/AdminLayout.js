@@ -7,7 +7,7 @@ import {
   LayoutDashboard, Package, Users, Layers, FileText, Settings, LogOut,
   Sprout, UserCog, Printer, Store, ShoppingCart, Truck, TrendingUp,
   Menu, X, Banknote, PanelLeftClose, PanelLeft, Database, ClipboardList, Car, HandCoins, Moon, Sun
-} from 'lucide-react';
+} from './icons';
 
 const ROLE_MENU_MAP = {
   dashboard: '/admin/dashboard',

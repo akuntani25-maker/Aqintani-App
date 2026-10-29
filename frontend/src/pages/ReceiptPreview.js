@@ -1,8 +1,9 @@
 import React, { useEffect, useState, useCallback } from 'react';
+import { PageSkeleton } from '../components/PageSkeleton';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from '../context/AuthContext';
 import { Button } from '../components/ui/button';
-import { ArrowLeft, Bluetooth, Loader2, Printer } from 'lucide-react';
+import { ArrowLeft, Bluetooth, Loader2, Printer } from '../components/icons';
 import { toast } from 'sonner';
 import { thermalPrinter } from '../utils/ThermalPrinter';
 import { escapeHtml as e } from '../utils/htmlEscape';
@@ -130,7 +131,7 @@ export const ReceiptPreview = () => {
 
   const fmt = (v) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(v);
 
-  if (loading) return <div className="min-h-screen flex items-center justify-center"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div></div>;
+  if (loading) return <PageSkeleton variant="receipt" />;
   if (!transaction) return null;
 
   return (

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { PageSkeleton } from '../components/PageSkeleton';
 import { api } from '../context/AuthContext';
 import { Card } from '../components/ui/card';
 import { Button } from '../components/ui/button';
@@ -6,7 +7,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, LineChart, Line
 } from 'recharts';
-import { TrendingUp, Package, DollarSign, ShoppingCart, Star, CloudSun, Loader2, RefreshCw, Leaf, Droplets, Wind, Thermometer, Bug, FlaskConical, AlertTriangle, Sprout, CloudRain, Newspaper, TrendingDown, ArrowUpRight, ExternalLink, BarChart3 } from 'lucide-react';
+import { TrendingUp, Package, DollarSign, ShoppingCart, Star, CloudSun, Loader2, RefreshCw, Leaf, Droplets, Wind, Thermometer, Bug, FlaskConical, AlertTriangle, Sprout, CloudRain, Newspaper, TrendingDown, ArrowUpRight, ExternalLink, BarChart3 } from '../components/icons';
 import { toast } from 'sonner';
 
 const fmt = (v) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(v);
@@ -67,9 +68,7 @@ export const Analytics = () => {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
-      </div>
+      <PageSkeleton variant="dashboard" />
     );
   }
 
