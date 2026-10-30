@@ -6,7 +6,7 @@ import { Input } from '../components/ui/input';
 import { Card } from '../components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { toast } from 'sonner';
-import { Search, Plus, Minus, Trash2, ShoppingCart, LogOut, CreditCard, Banknote, Smartphone, Printer, Pencil, ArrowRightLeft, BarChart3, FileText, Users, RotateCcw, Clock, Package, Moon, Sun } from 'lucide-react';
+import { Search, Plus, Minus, Trash2, ShoppingCart, LogOut, CreditCard, Banknote, Smartphone, Printer, Pencil, ArrowRightLeft, BarChart3, FileText, Users, RotateCcw, Clock, Package, Moon, Sun } from '../components/icons';
 import { CurrencyInput } from '../components/CurrencyInput';
 import { Pagination } from '../components/Pagination';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../components/ui/dialog';
@@ -276,14 +276,14 @@ export const POS = () => {
     try {
       const res = await api.get('/pos/daily-summary');
       setDailySummary(res.data);
-    } catch {}
+    } catch (e) { console.error(e); }
   };
 
   const fetchWarehouses = async () => {
     try {
       const res = await api.get('/warehouses');
       setWarehouses(res.data);
-    } catch {}
+    } catch (e) { console.error(e); }
   };
 
   const handleTransfer = async () => {
@@ -479,7 +479,7 @@ export const POS = () => {
 
   return (
     <div className="h-screen bg-background flex overflow-hidden" data-testid="pos-page">
-      <div className="flex-1 p-6 overflow-auto">
+      <div className="flex-1 p-6 overflow-auto stagger">
         <div className="mb-6">
           <div className="flex items-center justify-between mb-4">
             <div>

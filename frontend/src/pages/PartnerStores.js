@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { PageSkeleton } from '../components/PageSkeleton';
 import { api } from '../context/AuthContext';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -7,7 +8,7 @@ import { Card } from '../components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '../components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
 import { toast } from 'sonner';
-import { Plus, Pencil, Trash2, MapPin, DollarSign, Eye, Search, Truck, CreditCard } from 'lucide-react';
+import { Plus, Pencil, Trash2, MapPin, DollarSign, Eye, Search, Truck, CreditCard } from '../components/icons';
 import { Pagination } from '../components/Pagination';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { GoogleMap, LoadScript, Marker, InfoWindow } from '@react-google-maps/api';
@@ -193,9 +194,7 @@ export const PartnerStores = () => {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
-      </div>
+      <PageSkeleton variant="table" />
     );
   }
 

@@ -315,3 +315,43 @@ async def pay_farmer_debt(
     }
     await db.farmer_payments.insert_one(payment)
     return {"message": "Pembayaran berhasil", "new_debt": new_debt}
+
+
+@router.put("/farmer-debts/{farmer_id}/correct")
+async def correct_farmer_debt(
+    farmer_id: str, req: FastAPIRequest,
+    current_user: dict = Depends(require_admin_or_manager)
+):
+    """Koreksi manual hutang petani: set nilai hutang baru."""
+    body = await req.json()
+    new_debt = float(body.get("new_debt", 0))
+    notes = body.get("notes", "")
+
+    if new_debt < 0:
+        raise HTTPException(status_code=400, detail="Nilai hutang tidak boleh negatif")
+
+    farmer = await db.farmers.find_one({"id": farmer_id}, {"_id": 0})
+    if not farmer:
+        raise HTTPException(status_code=404, detail="Petani tidak ditemukan")
+
+    old_debt = farmer.get("current_debt", 0)
+    if old_debt == new_debt:
+        return {"message": "Tidak ada perubahan", "old_debt": old_debt, "new_debt": new_debt}
+
+    await db.farmers.update_one({"id": farmer_id}, {"$set": {"current_debt": new_debt}})
+
+    # Log the correction as a payment record for audit trail
+    now = datetime.now(timezone(timedelta(hours=8)))
+    correction_doc = {
+        "id": str(uuid.uuid4()),
+        "farmer_id": farmer_id,
+        "farmer_name": farmer["name"],
+        "amount": old_debt - new_debt,
+        "notes": f"[KOREKSI] {notes}" if notes else f"[KOREKSI] {old_debt:,.0f} -> {new_debt:,.0f}",
+        "recorded_by": current_user.get("name", ""),
+        "created_at": now.isoformat(),
+        "date": now.strftime("%Y-%m-%d")
+    }
+    await db.farmer_payments.insert_one(correction_doc)
+
+    return {"message": "Hutang petani berhasil dikoreksi", "old_debt": old_debt, "new_debt": new_debt}

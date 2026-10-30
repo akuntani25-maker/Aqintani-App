@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { PageSkeleton } from '../components/PageSkeleton';
 import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '../context/AuthContext';
 import { Button } from '../components/ui/button';
@@ -7,8 +8,13 @@ import { Label } from '../components/ui/label';
 import { Card } from '../components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
+import { Pagination } from '../components/Pagination';
+import { parseSpreadsheetFile, parseDate } from '../utils/fileParser';
 import { toast } from 'sonner';
-import { ArrowLeft, DollarSign, ShoppingBag, MapPin, Phone, User, CreditCard, Clock } from 'lucide-react';
+import { ArrowLeft, DollarSign, ShoppingBag, MapPin, Phone, User, CreditCard, Clock, Search, X, Upload } from '../components/icons';
+
+const fmt = (v) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(v);
+const fmtNum = (v) => new Intl.NumberFormat('id-ID').format(v);
 
 export const PartnerStoreDetail = () => {
   const { storeId } = useParams();
@@ -17,59 +23,67 @@ export const PartnerStoreDetail = () => {
   const [orders, setOrders] = useState([]);
   const [payments, setPayments] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [paymentDialogOpen, setPaymentDialogOpen] = useState(false);
-  const [selectedOrder, setSelectedOrder] = useState(null);
-  const [paymentAmount, setPaymentAmount] = useState(0);
   const [storePayDialogOpen, setStorePayDialogOpen] = useState(false);
   const [storePayAmount, setStorePayAmount] = useState(0);
   const [storePayNotes, setStorePayNotes] = useState('');
 
-  useEffect(() => {
-    fetchData();
-  }, [storeId]);
+  // Order items (flattened)
+  const [orderItems, setOrderItems] = useState([]);
+  const [itemSearch, setItemSearch] = useState('');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  const [orderItemPage, setOrderItemPage] = useState(1);
+  const orderItemPerPage = 10;
+
+  // Import CSV orders
+  const [importOpen, setImportOpen] = useState(false);
+  const [importRows, setImportRows] = useState([]);
+  const [importSubmitting, setImportSubmitting] = useState(false);
+
+  // Import CSV setoran
+  const [importPayOpen, setImportPayOpen] = useState(false);
+  const [importPayRows, setImportPayRows] = useState([]);
+  const [importPaySubmitting, setImportPaySubmitting] = useState(false);
+
+  // Riwayat Setoran state
+  const [setoranOpen, setSetoranOpen] = useState(false);
+  const [setoranPage, setSetoranPage] = useState(1);
+  const setoranPerPage = 10;
+
+  useEffect(() => { fetchData(); }, [storeId]);
 
   const fetchData = async () => {
     try {
-      const [storeRes, ordersRes, paymentsRes] = await Promise.all([
-        api.get(`/partner-stores`),
+      const [storeRes, ordersRes, paymentsRes, itemsRes] = await Promise.all([
+        api.get('/partner-stores'),
         api.get(`/partner-orders?partner_store_id=${storeId}`),
-        api.get(`/partner-stores/${storeId}/payments`)
+        api.get(`/partner-stores/${storeId}/payments`),
+        api.get(`/partner-stores/${storeId}/order-items`)
       ]);
-      
-      const foundStore = storeRes.data.find(s => s.id === storeId);
-      setStore(foundStore);
+      setStore(storeRes.data.find(s => s.id === storeId));
       setOrders(ordersRes.data);
       setPayments(paymentsRes.data);
+      setOrderItems(itemsRes.data);
     } catch (error) {
       toast.error('Gagal memuat data');
       navigate('/admin/partner-stores');
-    } finally {
-      setLoading(false);
-    }
+    } finally { setLoading(false); }
   };
 
-  const handlePayment = async () => {
-    if (!selectedOrder || paymentAmount <= 0) {
-      toast.error('Masukkan jumlah pembayaran yang valid');
-      return;
-    }
+  const fetchOrderItems = async (search = '', df = '', dt = '') => {
     try {
-      await api.post(`/partner-orders/${selectedOrder.id}/pay?amount=${paymentAmount}`);
-      toast.success('Pembayaran berhasil dicatat');
-      setPaymentDialogOpen(false);
-      setPaymentAmount(0);
-      setSelectedOrder(null);
-      fetchData();
-    } catch (error) {
-      toast.error('Gagal mencatat pembayaran');
-    }
+      const params = new URLSearchParams();
+      if (search) params.append('search', search);
+      if (df) params.append('date_from', df);
+      if (dt) params.append('date_to', dt);
+      const res = await api.get(`/partner-stores/${storeId}/order-items?${params.toString()}`);
+      setOrderItems(res.data);
+      setOrderItemPage(1);
+    } catch { toast.error('Gagal memuat data pesanan'); }
   };
 
   const handleStorePay = async () => {
-    if (storePayAmount <= 0) {
-      toast.error('Masukkan jumlah setoran yang valid');
-      return;
-    }
+    if (storePayAmount <= 0) { toast.error('Masukkan jumlah setoran yang valid'); return; }
     try {
       await api.post(`/partner-stores/${storeId}/pay?amount=${storePayAmount}&notes=${encodeURIComponent(storePayNotes)}`);
       toast.success('Setoran berhasil dicatat');
@@ -77,45 +91,118 @@ export const PartnerStoreDetail = () => {
       setStorePayAmount(0);
       setStorePayNotes('');
       fetchData();
-    } catch (error) {
-      toast.error('Gagal mencatat setoran');
-    }
+    } catch (error) { toast.error('Gagal mencatat setoran'); }
   };
 
-  const formatCurrency = (value) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(value);
+  const handleCSVFile = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const rawRows = await parseSpreadsheetFile(file);
+      const rows = [];
+      for (const row of rawRows) {
+        const nameVal = row['nama barang'] || row['nama_barang'] || row['product_name'] || row['barang'] || row['nama'] || '';
+        const qtyVal = row['qty'] || row['jumlah'] || row['quantity'] || '0';
+        const unitVal = row['unit'] || row['satuan'] || 'satuan';
+        const priceVal = row['harga'] || row['harga jual'] || row['price'] || '0';
+        const dateVal = row['tanggal'] || row['date'] || row['tgl'] || '';
+        if (nameVal) {
+          rows.push({
+            date: parseDate(dateVal), product_name: nameVal,
+            qty: parseInt(qtyVal) || 0,
+            unit: String(unitVal).toLowerCase().includes('dus') ? 'dus' : 'satuan',
+            price: parseFloat(String(priceVal).replace(/[^0-9.-]/g, '')) || 0
+          });
+        }
+      }
+      setImportRows(rows);
+      if (rows.length === 0) toast.error('Tidak ada data valid');
+      else toast.success(`${rows.length} baris data berhasil dibaca`);
+    } catch (err) { toast.error(err.message || 'Gagal membaca file'); }
+    e.target.value = '';
+  };
 
-  const getStatusBadge = (status) => {
-    const styles = {
-      pending: 'bg-yellow-100 text-yellow-800',
-      delivered: 'bg-green-100 text-green-800',
-      cancelled: 'bg-red-100 text-red-800'
-    };
-    return (
-      <span className={`px-2 py-1 rounded-full text-xs font-medium ${styles[status] || styles.pending}`}>
-        {status === 'pending' ? 'Pending' : status === 'delivered' ? 'Terkirim' : 'Batal'}
-      </span>
-    );
+  const handleImportSubmit = async () => {
+    if (importRows.length === 0) return;
+    setImportSubmitting(true);
+    try {
+      const res = await api.post(`/partner-stores/${storeId}/import-orders-csv`, { rows: importRows });
+      toast.success(res.data.message);
+      setImportOpen(false);
+      setImportRows([]);
+      fetchData();
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Gagal import data');
+    } finally { setImportSubmitting(false); }
+  };
+
+  const handleCSVPayFile = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const rawRows = await parseSpreadsheetFile(file);
+      const rows = [];
+      for (const row of rawRows) {
+        const dateVal = row['tanggal'] || row['date'] || row['tgl'] || '';
+        const amountVal = row['jumlah'] || row['amount'] || row['nominal'] || row['bayar'] || '0';
+        const notesVal = row['catatan'] || row['notes'] || row['keterangan'] || '';
+        const amount = parseFloat(String(amountVal).replace(/[^0-9.-]/g, '')) || 0;
+        if (amount > 0) {
+          rows.push({ date: parseDate(dateVal), amount, notes: notesVal || 'Import CSV' });
+        }
+      }
+      setImportPayRows(rows);
+      if (rows.length === 0) toast.error('Tidak ada data valid');
+      else toast.success(`${rows.length} baris data berhasil dibaca`);
+    } catch (err) { toast.error(err.message || 'Gagal membaca file'); }
+    e.target.value = '';
+  };
+
+  const handleImportPaySubmit = async () => {
+    if (importPayRows.length === 0) return;
+    setImportPaySubmitting(true);
+    try {
+      const res = await api.post(`/partner-stores/${storeId}/import-payments-csv`, { rows: importPayRows });
+      toast.success(res.data.message);
+      setImportPayOpen(false);
+      setImportPayRows([]);
+      fetchData();
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Gagal import data');
+    } finally { setImportPaySubmitting(false); }
   };
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
-      </div>
+      <PageSkeleton variant="table" />
     );
   }
 
   if (!store) return null;
 
   const totalOrders = orders.reduce((s, o) => s + o.total, 0);
-  const totalPaid = orders.reduce((s, o) => s + o.paid, 0);
+
+  // Group order items by date
+  const grouped = {};
+  orderItems.forEach(item => {
+    const d = item.date || 'tanpa-tanggal';
+    if (!grouped[d]) grouped[d] = { items: [], total: 0, setoran: item.setoran, order_number: item.order_number };
+    grouped[d].items.push(item);
+    grouped[d].total += item.subtotal;
+    if (!grouped[d].order_number) grouped[d].order_number = item.order_number;
+    // Use first non-zero setoran
+    if (item.setoran > 0 && !grouped[d].setoran) grouped[d].setoran = item.setoran;
+  });
+  const allDates = Object.keys(grouped).sort((a, b) => b.localeCompare(a));
+  const grandTotal = orderItems.reduce((s, i) => s + i.subtotal, 0);
+  const totalDatePages = Math.ceil(allDates.length / orderItemPerPage);
+  const dates = allDates.slice((orderItemPage - 1) * orderItemPerPage, orderItemPage * orderItemPerPage);
 
   return (
     <div className="p-4 md:p-6 lg:p-8 space-y-6" data-testid="partner-store-detail-page">
       <div className="flex items-center gap-4">
         <Button variant="outline" size="sm" onClick={() => navigate('/admin/partner-stores')} data-testid="back-button">
-          <ArrowLeft className="w-4 h-4 mr-2" />
-          Kembali
+          <ArrowLeft className="w-4 h-4 mr-2" />Kembali
         </Button>
         <div className="flex-1">
           <h1 className="text-2xl md:text-3xl lg:text-4xl font-bold tracking-tight">{store.name}</h1>
@@ -123,8 +210,7 @@ export const PartnerStoreDetail = () => {
         </div>
         {store.current_debt > 0 && (
           <Button onClick={() => { setStorePayAmount(store.current_debt); setStorePayDialogOpen(true); }} data-testid="store-pay-button">
-            <DollarSign className="w-4 h-4 mr-2" />
-            Catat Setoran
+            <DollarSign className="w-4 h-4 mr-2" />Catat Setoran
           </Button>
         )}
       </div>
@@ -132,161 +218,243 @@ export const PartnerStoreDetail = () => {
       {/* Store Info */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card className="p-6">
-          <div className="flex items-center gap-3 mb-2">
-            <User className="w-5 h-5 text-muted-foreground" />
-            <span className="text-xs text-muted-foreground uppercase tracking-wider">Pemilik</span>
-          </div>
+          <div className="flex items-center gap-3 mb-2"><User className="w-5 h-5 text-muted-foreground" /><span className="text-xs text-muted-foreground uppercase tracking-wider">Pemilik</span></div>
           <p className="font-semibold">{store.owner_name}</p>
         </Card>
         <Card className="p-6">
-          <div className="flex items-center gap-3 mb-2">
-            <Phone className="w-5 h-5 text-muted-foreground" />
-            <span className="text-xs text-muted-foreground uppercase tracking-wider">Telepon</span>
-          </div>
+          <div className="flex items-center gap-3 mb-2"><Phone className="w-5 h-5 text-muted-foreground" /><span className="text-xs text-muted-foreground uppercase tracking-wider">Telepon</span></div>
           <p className="font-semibold">{store.phone}</p>
         </Card>
         <Card className="p-6">
-          <div className="flex items-center gap-3 mb-2">
-            <ShoppingBag className="w-5 h-5 text-muted-foreground" />
-            <span className="text-xs text-muted-foreground uppercase tracking-wider">Total Pesanan</span>
-          </div>
-          <p className="font-semibold">{formatCurrency(totalOrders)}</p>
+          <div className="flex items-center gap-3 mb-2"><ShoppingBag className="w-5 h-5 text-muted-foreground" /><span className="text-xs text-muted-foreground uppercase tracking-wider">Total Pesanan</span></div>
+          <p className="font-semibold">{fmt(totalOrders)}</p>
         </Card>
         <Card className="p-6 bg-orange-50 border-orange-200">
-          <div className="flex items-center gap-3 mb-2">
-            <CreditCard className="w-5 h-5 text-orange-600" />
-            <span className="text-xs text-orange-600 uppercase tracking-wider font-semibold">Sisa Piutang</span>
-          </div>
-          <p className="font-bold text-xl text-orange-600">{formatCurrency(store.current_debt || 0)}</p>
+          <div className="flex items-center gap-3 mb-2"><CreditCard className="w-5 h-5 text-orange-600" /><span className="text-xs text-orange-600 uppercase tracking-wider font-semibold">Sisa Piutang</span></div>
+          <p className="font-bold text-xl text-orange-600">{fmt(store.current_debt || 0)}</p>
         </Card>
       </div>
 
       <Card className="p-6">
-        <div className="flex items-center gap-3 mb-2">
-          <MapPin className="w-5 h-5 text-muted-foreground" />
-          <span className="text-sm font-semibold">Alamat</span>
-        </div>
+        <div className="flex items-center gap-3 mb-2"><MapPin className="w-5 h-5 text-muted-foreground" /><span className="text-sm font-semibold">Alamat</span></div>
         <p className="text-sm">{store.address}</p>
       </Card>
 
-      {/* Payment History */}
-      {payments.length > 0 && (
-        <Card className="p-6" data-testid="payment-history-card">
-          <div className="flex items-center gap-2 mb-4">
+      {/* Payment History - Riwayat Setoran (Collapsible) */}
+      <Card className="overflow-hidden" data-testid="payment-history-card">
+        <div
+          className="flex items-center justify-between p-4 cursor-pointer hover:bg-muted/30 transition-colors"
+          onClick={() => setSetoranOpen(!setoranOpen)}
+          data-testid="setoran-toggle"
+        >
+          <div className="flex items-center gap-2">
             <Clock className="w-5 h-5 text-green-600" />
-            <h2 className="text-xl font-semibold">Riwayat Setoran</h2>
+            <h2 className="text-lg font-semibold">Riwayat Setoran</h2>
+            <span className="text-xs text-muted-foreground">({payments.length} transaksi)</span>
           </div>
-          <div className="rounded-lg border overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Tanggal</TableHead>
-                  <TableHead className="text-right">Jumlah</TableHead>
-                  <TableHead>Catatan</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {payments.map(p => (
-                  <TableRow key={p.id}>
-                    <TableCell>{new Date(p.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}</TableCell>
-                    <TableCell className="text-right font-semibold text-green-600">{formatCurrency(p.amount)}</TableCell>
-                    <TableCell>{p.notes || '-'}</TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+          <div className="flex items-center gap-3">
+            <span className="text-sm font-bold text-green-600">{fmt(payments.reduce((s, p) => s + p.amount, 0))}</span>
+            <svg className={`w-4 h-4 text-muted-foreground transition-transform ${setoranOpen ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" /></svg>
           </div>
-        </Card>
-      )}
-
-      {/* Orders History */}
-      <Card className="p-6" data-testid="orders-history-card">
-        <h2 className="text-xl font-semibold mb-4">Riwayat Pesanan</h2>
-        {orders.length === 0 ? (
-          <div className="text-center py-8 text-muted-foreground">Belum ada pesanan</div>
-        ) : (
-          <div className="rounded-lg border overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>No. Order</TableHead>
-                  <TableHead>Tanggal</TableHead>
-                  <TableHead>Kanvaser</TableHead>
-                  <TableHead className="text-right">Total</TableHead>
-                  <TableHead className="text-right">Dibayar</TableHead>
-                  <TableHead className="text-right">Sisa</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-center">Aksi</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {orders.map((order) => (
-                  <TableRow key={order.id}>
-                    <TableCell className="font-mono text-sm">{order.order_number}</TableCell>
-                    <TableCell>{new Date(order.created_at).toLocaleDateString('id-ID')}</TableCell>
-                    <TableCell>{order.canvasser_name || '-'}</TableCell>
-                    <TableCell className="text-right font-semibold">{formatCurrency(order.total)}</TableCell>
-                    <TableCell className="text-right">{formatCurrency(order.paid)}</TableCell>
-                    <TableCell className="text-right">
-                      <span className={order.remaining > 0 ? 'text-orange-600 font-semibold' : 'text-green-600'}>
-                        {formatCurrency(order.remaining)}
-                      </span>
-                    </TableCell>
-                    <TableCell>{getStatusBadge(order.status)}</TableCell>
-                    <TableCell>
-                      <div className="flex items-center justify-center gap-2">
-                        {order.remaining > 0 && (
-                          <Button size="sm" onClick={() => { setSelectedOrder(order); setPaymentAmount(order.remaining); setPaymentDialogOpen(true); }} data-testid={`pay-order-${order.id}`}>
-                            <DollarSign className="w-4 h-4 mr-1" />
-                            Bayar
-                          </Button>
-                        )}
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+        </div>
+        {setoranOpen && (
+          <div className="px-4 pb-4 border-t">
+            <div className="flex justify-end mt-3 mb-2">
+              <Button size="sm" variant="outline" className="h-8 gap-1" onClick={(e) => { e.stopPropagation(); setImportPayRows([]); setImportPayOpen(true); }} data-testid="import-payments-csv-btn">
+                <Upload className="w-3.5 h-3.5" /> Import
+              </Button>
+            </div>
+            {payments.length === 0 ? (
+              <p className="text-center text-muted-foreground py-4 text-sm">Belum ada riwayat setoran.</p>
+            ) : (() => {
+              const totalPages = Math.ceil(payments.length / setoranPerPage);
+              const paged = payments.slice((setoranPage - 1) * setoranPerPage, setoranPage * setoranPerPage);
+              return (
+                <>
+                  <div className="rounded-lg border overflow-x-auto">
+                    <Table>
+                      <TableHeader><TableRow><TableHead>Tanggal</TableHead><TableHead className="text-right">Jumlah</TableHead><TableHead>Catatan</TableHead></TableRow></TableHeader>
+                      <TableBody>
+                        {paged.map(p => (
+                          <TableRow key={p.id}>
+                            <TableCell>{new Date(p.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'long', year: 'numeric' })}</TableCell>
+                            <TableCell className="text-right font-semibold text-green-600">{fmt(p.amount)}</TableCell>
+                            <TableCell>{p.notes || '-'}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                  <Pagination page={setoranPage} totalPages={totalPages} total={payments.length} perPage={setoranPerPage} onChange={setSetoranPage} />
+                </>
+              );
+            })()}
           </div>
         )}
       </Card>
 
-      {/* Order Payment Dialog */}
-      <Dialog open={paymentDialogOpen} onOpenChange={setPaymentDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Bayar Pesanan</DialogTitle>
-          </DialogHeader>
-          {selectedOrder && (
-            <div className="space-y-4">
-              <div><p className="text-sm text-muted-foreground">No. Order</p><p className="font-semibold">{selectedOrder.order_number}</p></div>
-              <div className="p-4 bg-orange-50 rounded-lg border border-orange-200">
-                <p className="text-sm text-orange-800">Sisa Tagihan</p>
-                <p className="text-xl font-bold text-orange-600">{formatCurrency(selectedOrder.remaining)}</p>
-              </div>
-              <div className="space-y-2">
-                <Label>Jumlah Pembayaran</Label>
-                <Input type="number" value={paymentAmount} onChange={(e) => setPaymentAmount(parseFloat(e.target.value) || 0)} max={selectedOrder.remaining} />
-              </div>
-              <div className="flex gap-2 justify-end">
-                <Button variant="outline" onClick={() => setPaymentDialogOpen(false)}>Batal</Button>
-                <Button onClick={handlePayment}>Simpan Pembayaran</Button>
-              </div>
+      {/* Orders Detail - Flattened Items */}
+      <Card className="p-6" data-testid="orders-history-card">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-semibold">Detail Pesanan</h2>
+        </div>
+
+        {/* Search & Filter */}
+        <div className="flex flex-col md:flex-row gap-2 mb-4">
+          <div className="relative flex-1">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+            <Input placeholder="Cari nama barang..." value={itemSearch} className="pl-8 h-8 text-sm"
+              onChange={(e) => { setItemSearch(e.target.value); fetchOrderItems(e.target.value, dateFrom, dateTo); }}
+              data-testid="order-item-search" />
+          </div>
+          <div className="flex items-center gap-2">
+            <Input type="date" className="h-8 text-xs w-36" value={dateFrom}
+              onChange={(e) => { setDateFrom(e.target.value); fetchOrderItems(itemSearch, e.target.value, dateTo); }}
+              data-testid="order-date-from" />
+            <span className="text-xs text-muted-foreground">-</span>
+            <Input type="date" className="h-8 text-xs w-36" value={dateTo}
+              onChange={(e) => { setDateTo(e.target.value); fetchOrderItems(itemSearch, dateFrom, e.target.value); }}
+              data-testid="order-date-to" />
+            {(itemSearch || dateFrom || dateTo) && (
+              <Button size="sm" variant="ghost" className="h-8 px-2" onClick={() => {
+                setItemSearch(''); setDateFrom(''); setDateTo('');
+                fetchOrderItems('', '', '');
+              }}><X className="w-3.5 h-3.5" /></Button>
+            )}
+          </div>
+          <Button size="sm" variant="outline" className="h-8 gap-1" onClick={() => { setImportRows([]); setImportOpen(true); }} data-testid="import-orders-csv-btn">
+            <Upload className="w-3.5 h-3.5" /> Import
+          </Button>
+        </div>
+
+        {orderItems.length === 0 ? (
+          <div className="text-center py-8 text-muted-foreground text-sm">
+            {itemSearch || dateFrom || dateTo ? 'Tidak ada data yang cocok dengan filter.' : 'Belum ada pesanan.'}
+          </div>
+        ) : (
+          <>
+            {/* Desktop Table */}
+            <div className="hidden md:block rounded-lg border overflow-hidden">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="text-xs">Tanggal</TableHead>
+                    <TableHead className="text-xs">No. Order</TableHead>
+                    <TableHead className="text-xs">Nama Barang Terjual</TableHead>
+                    <TableHead className="text-xs text-right">Qty Dus</TableHead>
+                    <TableHead className="text-xs text-right">Qty Satuan</TableHead>
+                    <TableHead className="text-xs text-right">Harga Jual</TableHead>
+                    <TableHead className="text-xs text-right">Total</TableHead>
+                    <TableHead className="text-xs text-right">Setoran</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {dates.map(date => {
+                    const group = grouped[date];
+                    return group.items.map((item, idx) => (
+                      <TableRow key={`${date}-${idx}`}>
+                        {idx === 0 ? (
+                          <TableCell rowSpan={group.items.length + 1} className="text-xs font-medium align-top border-r bg-muted/30">
+                            {date !== 'tanpa-tanggal' ? new Date(date).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }) : '-'}
+                          </TableCell>
+                        ) : null}
+                        <TableCell className="text-xs font-mono text-muted-foreground">
+                          {item.order_number}
+                          {item.payment_type === 'cash' && <span className="ml-1 px-1.5 py-0.5 bg-emerald-100 text-emerald-700 text-[10px] rounded font-sans font-semibold">CASH</span>}
+                        </TableCell>
+                        <TableCell className="text-sm">{item.product_name}</TableCell>
+                        <TableCell className="text-sm text-right font-medium">
+                          {item.unit === 'dus' ? fmtNum(item.qty) : <span className="text-muted-foreground">-</span>}
+                        </TableCell>
+                        <TableCell className="text-sm text-right font-medium">
+                          {item.unit !== 'dus' ? fmtNum(item.qty) : <span className="text-muted-foreground">-</span>}
+                        </TableCell>
+                        <TableCell className="text-sm text-right">{fmt(item.price)}</TableCell>
+                        <TableCell className="text-sm text-right font-medium">{fmt(item.subtotal)}</TableCell>
+                        {idx === 0 ? (
+                          <TableCell rowSpan={group.items.length + 1} className="text-sm text-right font-medium align-top border-l">
+                            {group.setoran > 0 ? (
+                              <span className="text-green-600">{fmt(group.setoran)}</span>
+                            ) : (
+                              <span className="text-muted-foreground text-xs">-</span>
+                            )}
+                          </TableCell>
+                        ) : null}
+                      </TableRow>
+                    )).concat([
+                      <TableRow key={`${date}-sub`} className="bg-muted/50 border-b-2">
+                        <TableCell colSpan={5} className="text-xs text-right font-semibold text-muted-foreground">
+                          Subtotal {date !== 'tanpa-tanggal' ? new Date(date).toLocaleDateString('id-ID', { day: '2-digit', month: 'short' }) : ''}:
+                        </TableCell>
+                        <TableCell className="text-sm text-right font-bold">{fmt(group.total)}</TableCell>
+                      </TableRow>
+                    ]);
+                  })}
+                  <TableRow className="bg-primary/5 font-bold">
+                    <TableCell colSpan={3} className="text-sm">GRAND TOTAL</TableCell>
+                    <TableCell className="text-sm text-right">{fmtNum(orderItems.filter(i => i.unit === 'dus').reduce((s, i) => s + i.qty, 0))}</TableCell>
+                    <TableCell className="text-sm text-right">{fmtNum(orderItems.filter(i => i.unit !== 'dus').reduce((s, i) => s + i.qty, 0))}</TableCell>
+                    <TableCell></TableCell>
+                    <TableCell className="text-sm text-right">{fmt(grandTotal)}</TableCell>
+                    <TableCell className="text-sm text-right text-green-600">
+                      {fmt(Object.values(grouped).reduce((s, g) => s + (g.setoran || 0), 0))}
+                    </TableCell>
+                  </TableRow>
+                </TableBody>
+              </Table>
             </div>
-          )}
-        </DialogContent>
-      </Dialog>
+
+            {/* Mobile Cards */}
+            <div className="md:hidden space-y-3">
+              {dates.map(date => {
+                const group = grouped[date];
+                return (
+                  <Card key={date} className="p-3">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-xs font-semibold text-muted-foreground">
+                        {date !== 'tanpa-tanggal' ? new Date(date).toLocaleDateString('id-ID', { day: '2-digit', month: 'short', year: 'numeric' }) : '-'}
+                      </span>
+                      {group.setoran > 0 && (
+                        <span className="text-xs text-green-600 font-medium">Setoran: {fmt(group.setoran)}</span>
+                      )}
+                    </div>
+                    {group.items.map((item, idx) => (
+                      <div key={idx} className="flex items-center justify-between py-1.5 border-t text-sm">
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium truncate">{item.product_name}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {item.unit === 'dus' ? `${fmtNum(item.qty)} dus` : `${fmtNum(item.qty)} satuan`} x {fmt(item.price)}
+                          </p>
+                        </div>
+                        <p className="font-semibold ml-2 shrink-0">{fmt(item.subtotal)}</p>
+                      </div>
+                    ))}
+                    <div className="flex justify-between mt-2 pt-2 border-t">
+                      <span className="text-xs text-muted-foreground font-medium">Subtotal:</span>
+                      <span className="text-sm font-bold">{fmt(group.total)}</span>
+                    </div>
+                  </Card>
+                );
+              })}
+              <Card className="p-3 bg-primary/5">
+                <div className="flex justify-between"><span className="font-semibold text-sm">Grand Total:</span><span className="font-bold text-sm">{fmt(grandTotal)}</span></div>
+              </Card>
+            </div>
+
+            <p className="text-xs text-muted-foreground text-center mt-2">{orderItems.length} item dari {allDates.length} tanggal</p>
+            <Pagination page={orderItemPage} totalPages={totalDatePages} total={allDates.length} perPage={orderItemPerPage} onChange={setOrderItemPage} />
+          </>
+        )}
+      </Card>
 
       {/* Store Direct Payment Dialog */}
       <Dialog open={storePayDialogOpen} onOpenChange={setStorePayDialogOpen}>
         <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Catat Setoran dari {store.name}</DialogTitle>
-          </DialogHeader>
+          <DialogHeader><DialogTitle>Catat Setoran dari {store.name}</DialogTitle></DialogHeader>
           <div className="space-y-4">
             <div className="p-4 bg-orange-50 rounded-lg border border-orange-200">
               <p className="text-sm text-orange-800">Sisa Piutang Saat Ini</p>
-              <p className="text-2xl font-bold text-orange-600">{formatCurrency(store.current_debt || 0)}</p>
+              <p className="text-2xl font-bold text-orange-600">{fmt(store.current_debt || 0)}</p>
             </div>
             <div className="space-y-2">
               <Label>Jumlah Setoran</Label>
@@ -298,9 +466,130 @@ export const PartnerStoreDetail = () => {
             </div>
             <div className="flex gap-2 justify-end">
               <Button variant="outline" onClick={() => setStorePayDialogOpen(false)}>Batal</Button>
-              <Button onClick={handleStorePay} data-testid="confirm-store-payment">
-                <DollarSign className="w-4 h-4 mr-2" />
-                Simpan Setoran
+              <Button onClick={handleStorePay} data-testid="confirm-store-payment"><DollarSign className="w-4 h-4 mr-2" />Simpan Setoran</Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Import CSV Dialog */}
+      <Dialog open={importOpen} onOpenChange={setImportOpen}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto" data-testid="import-orders-modal">
+          <DialogHeader><DialogTitle>Import Riwayat Pesanan</DialogTitle></DialogHeader>
+          <div className="space-y-4">
+            <Card className="p-3 bg-muted/50">
+              <p className="font-semibold">{store.name}</p>
+              <p className="text-xs text-muted-foreground mt-1">Format kolom CSV/XLSX:</p>
+              <p className="text-xs font-mono bg-white rounded p-2 mt-1 border">Tanggal, Nama Barang, Qty, Unit, Harga</p>
+              <p className="text-[10px] text-muted-foreground mt-1">Unit: "dus" atau "satuan". Format tanggal: DD/MM/YYYY atau YYYY-MM-DD.</p>
+            </Card>
+
+            <div className="space-y-2">
+              <Label>Pilih File CSV/XLSX</Label>
+              <Input type="file" accept=".csv,.xlsx,.xls" onChange={handleCSVFile} data-testid="import-orders-file-input" />
+            </div>
+
+            {importRows.length > 0 && (
+              <>
+                <div className="rounded-lg border overflow-hidden max-h-60 overflow-y-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="text-xs">Tanggal</TableHead>
+                        <TableHead className="text-xs">Nama Barang</TableHead>
+                        <TableHead className="text-xs text-right">Qty</TableHead>
+                        <TableHead className="text-xs">Unit</TableHead>
+                        <TableHead className="text-xs text-right">Harga</TableHead>
+                        <TableHead className="text-xs text-right">Total</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {importRows.map((row, i) => (
+                        <TableRow key={i}>
+                          <TableCell className="text-xs">{row.date}</TableCell>
+                          <TableCell className="text-sm">{row.product_name}</TableCell>
+                          <TableCell className="text-sm text-right">{fmtNum(row.qty)}</TableCell>
+                          <TableCell className="text-xs">{row.unit}</TableCell>
+                          <TableCell className="text-sm text-right">{fmt(row.price)}</TableCell>
+                          <TableCell className="text-sm text-right font-medium">{fmt(row.price * row.qty)}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+                <Card className="p-3 bg-amber-50 border-amber-200">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-amber-900">Total import ({importRows.length} item):</span>
+                    <span className="font-bold text-amber-900">{fmt(importRows.reduce((s, r) => s + (r.price * r.qty), 0))}</span>
+                  </div>
+                  <p className="text-xs text-amber-700 mt-1">Semua item akan dicatat sebagai piutang baru (belum dibayar).</p>
+                </Card>
+              </>
+            )}
+
+            <div className="flex gap-2 justify-end pt-2">
+              <Button variant="outline" onClick={() => setImportOpen(false)}>Batal</Button>
+              <Button onClick={handleImportSubmit} disabled={importSubmitting || importRows.length === 0} data-testid="submit-import-orders-btn">
+                {importSubmitting ? 'Mengimport...' : `Import ${importRows.length} Item`}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Import Setoran CSV Dialog */}
+      <Dialog open={importPayOpen} onOpenChange={setImportPayOpen}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto" data-testid="import-payments-modal">
+          <DialogHeader><DialogTitle>Import Riwayat Setoran</DialogTitle></DialogHeader>
+          <div className="space-y-4">
+            <Card className="p-3 bg-muted/50">
+              <p className="font-semibold">{store.name}</p>
+              <p className="text-xs text-muted-foreground mt-1">Format kolom CSV/XLSX:</p>
+              <p className="text-xs font-mono bg-white rounded p-2 mt-1 border">Tanggal, Jumlah, Catatan</p>
+              <p className="text-[10px] text-muted-foreground mt-1">Format tanggal: DD/MM/YYYY atau YYYY-MM-DD. Kolom Catatan opsional.</p>
+            </Card>
+
+            <div className="space-y-2">
+              <Label>Pilih File CSV/XLSX</Label>
+              <Input type="file" accept=".csv,.xlsx,.xls" onChange={handleCSVPayFile} data-testid="import-payments-file-input" />
+            </div>
+
+            {importPayRows.length > 0 && (
+              <>
+                <div className="rounded-lg border overflow-hidden max-h-60 overflow-y-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead className="text-xs">Tanggal</TableHead>
+                        <TableHead className="text-xs text-right">Jumlah</TableHead>
+                        <TableHead className="text-xs">Catatan</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {importPayRows.map((row, i) => (
+                        <TableRow key={i}>
+                          <TableCell className="text-xs">{row.date}</TableCell>
+                          <TableCell className="text-sm text-right font-medium text-green-600">{fmt(row.amount)}</TableCell>
+                          <TableCell className="text-xs">{row.notes || '-'}</TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </div>
+                <Card className="p-3 bg-green-50 border-green-200">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-green-900">Total setoran ({importPayRows.length} pembayaran):</span>
+                    <span className="font-bold text-green-900">{fmt(importPayRows.reduce((s, r) => s + r.amount, 0))}</span>
+                  </div>
+                  <p className="text-xs text-green-700 mt-1">Piutang kios akan dikurangi sesuai total setoran ini.</p>
+                </Card>
+              </>
+            )}
+
+            <div className="flex gap-2 justify-end pt-2">
+              <Button variant="outline" onClick={() => setImportPayOpen(false)}>Batal</Button>
+              <Button onClick={handleImportPaySubmit} disabled={importPaySubmitting || importPayRows.length === 0} data-testid="submit-import-payments-btn">
+                {importPaySubmitting ? 'Mengimport...' : `Import ${importPayRows.length} Setoran`}
               </Button>
             </div>
           </div>

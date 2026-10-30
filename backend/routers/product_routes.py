@@ -1,8 +1,7 @@
-from fastapi import APIRouter, HTTPException, Depends, UploadFile, File
+from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, Request as FastAPIRequest, Response
 from typing import List, Optional
 import uuid
 import os
-import shutil
 from datetime import datetime, timezone
 
 from database import db
@@ -11,10 +10,9 @@ from models import (
     ProductCreate, Product, CategoryCreate, Category
 )
 from services import ensure_warehouse_stock, recalculate_product_stock, log_audit
+from storage import put_object, get_object, MIME_MAP, APP_NAME
 
 router = APIRouter()
-
-UPLOAD_DIR = "uploads/products"
 
 
 @router.post("/products/upload-image/{product_id}")
@@ -27,21 +25,28 @@ async def upload_product_image(product_id: str, file: UploadFile = File(...), ad
     if ext not in ("jpg", "jpeg", "png", "webp"):
         raise HTTPException(status_code=400, detail="Format gambar tidak didukung (jpg/png/webp)")
 
-    filename = f"{product_id}.{ext}"
-    filepath = os.path.join(UPLOAD_DIR, filename)
+    data = await file.read()
+    content_type = MIME_MAP.get(ext, "application/octet-stream")
+    path = f"{APP_NAME}/products/{product_id}.{ext}"
+    try:
+        put_object(path, data, content_type)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Gagal upload gambar: {str(e)}")
 
-    # Remove old image if exists
-    for old_ext in ("jpg", "jpeg", "png", "webp"):
-        old_path = os.path.join(UPLOAD_DIR, f"{product_id}.{old_ext}")
-        if os.path.exists(old_path):
-            os.remove(old_path)
-
-    with open(filepath, "wb") as f:
-        shutil.copyfileobj(file.file, f)
-
-    image_url = f"/api/uploads/products/{filename}"
+    image_url = f"/api/products/image-file/{product_id}.{ext}"
     await db.products.update_one({"id": product_id}, {"$set": {"image_url": image_url}})
     return {"image_url": image_url}
+
+
+@router.get("/products/image-file/{filename}")
+async def serve_product_image(filename: str):
+    """Serve product image from object storage (public read for simplicity)."""
+    path = f"{APP_NAME}/products/{filename}"
+    try:
+        data, ct = get_object(path)
+    except Exception:
+        raise HTTPException(status_code=404, detail="Gambar tidak ditemukan")
+    return Response(content=data, media_type=ct, headers={"Cache-Control": "public, max-age=86400"})
 
 
 @router.delete("/products/image/{product_id}")
@@ -49,12 +54,7 @@ async def delete_product_image(product_id: str, admin: dict = Depends(require_ad
     product = await db.products.find_one({"id": product_id}, {"_id": 0})
     if not product:
         raise HTTPException(status_code=404, detail="Produk tidak ditemukan")
-
-    for ext in ("jpg", "jpeg", "png", "webp"):
-        path = os.path.join(UPLOAD_DIR, f"{product_id}.{ext}")
-        if os.path.exists(path):
-            os.remove(path)
-
+    # Object storage has no delete API; cukup kosongkan referensi di DB
     await db.products.update_one({"id": product_id}, {"$set": {"image_url": ""}})
     return {"message": "Gambar berhasil dihapus"}
 
@@ -183,6 +183,146 @@ async def get_product(product_id: str, current_user: dict = Depends(get_current_
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
     return product
+
+
+@router.post("/products/bulk")
+async def bulk_create_products(req: FastAPIRequest, admin: dict = Depends(require_admin_panel_access)):
+    """Bulk add/restock products from a single supplier delivery."""
+    body = await req.json()
+    supplier_id = body.get("supplier_id", "")
+    items = body.get("items", [])
+    initial_paid = float(body.get("initial_paid", 0))
+    invoice_number = body.get("invoice_number", "")
+    due_date = body.get("due_date", "")
+    warehouse_id = body.get("warehouse_id", "gudang_utama")
+
+    if not supplier_id or not items:
+        raise HTTPException(status_code=400, detail="Supplier dan item harus diisi")
+
+    supplier = await db.suppliers.find_one({"id": supplier_id}, {"_id": 0})
+    if not supplier:
+        raise HTTPException(status_code=404, detail="Supplier tidak ditemukan")
+
+    now = datetime.now(timezone.utc)
+    total_purchase = 0
+    purchase_items = []
+    created_products = []
+
+    for item in items:
+        existing_product_id = item.get("existing_product_id", "")
+        name = item.get("name", "")
+        stock_dus = int(item.get("stock", 0))
+        items_per_box = float(item.get("items_per_box", 1)) or 1
+        supplier_cost = float(item.get("supplier_cost_price", 0))
+        cost_price = float(item.get("cost_price", 0))
+        price = float(item.get("price", 0))
+        box_price = float(item.get("box_price", 0))
+        barcode = item.get("barcode", "")
+        category_id = item.get("category_id", "")
+        total_satuan = int(stock_dus * items_per_box)
+
+        if stock_dus <= 0:
+            continue
+
+        unit_cost = supplier_cost or cost_price
+
+        if existing_product_id:
+            existing = await db.products.find_one({"id": existing_product_id}, {"_id": 0})
+            if not existing:
+                continue
+
+            wh = await db.warehouses.find_one({"id": warehouse_id}, {"_id": 0})
+            if wh and wh.get("unit") == "satuan":
+                await db.warehouse_stock.update_one(
+                    {"product_id": existing_product_id, "warehouse_id": warehouse_id},
+                    {"$inc": {"stock": total_satuan}}, upsert=True
+                )
+            else:
+                await db.warehouse_stock.update_one(
+                    {"product_id": existing_product_id, "warehouse_id": warehouse_id},
+                    {"$inc": {"stock": stock_dus}}, upsert=True
+                )
+
+            update_fields = {"updated_at": now.isoformat()}
+            if supplier_cost > 0:
+                update_fields["supplier_cost_price"] = supplier_cost
+            await db.products.update_one({"id": existing_product_id}, {"$set": update_fields})
+            await recalculate_product_stock(existing_product_id)
+
+            purchase_items.append({
+                "product_id": existing_product_id,
+                "product_name": existing["name"],
+                "quantity": stock_dus,
+                "cost_price": unit_cost,
+                "subtotal": unit_cost * stock_dus
+            })
+            total_purchase += unit_cost * stock_dus
+            created_products.append({"id": existing_product_id, "name": existing["name"], "action": "restock"})
+        else:
+            product_id = str(uuid.uuid4())
+            product_doc = {
+                "id": product_id,
+                "name": name, "barcode": barcode,
+                "category_id": category_id, "supplier_id": supplier_id,
+                "stock": total_satuan, "price": price,
+                "cost_price": cost_price,
+                "supplier_cost_price": supplier_cost or cost_price,
+                "box_price": box_price, "items_per_box": items_per_box,
+                "expiry_date": "", "batch_number": "",
+                "description": "", "min_stock_alert": 10, "image_url": "",
+                "created_at": now.isoformat(), "updated_at": now.isoformat()
+            }
+            await db.products.insert_one(product_doc)
+            await ensure_warehouse_stock(product_id)
+
+            wh = await db.warehouses.find_one({"id": warehouse_id}, {"_id": 0})
+            if wh and wh.get("unit") == "satuan":
+                await db.warehouse_stock.update_one(
+                    {"product_id": product_id, "warehouse_id": warehouse_id},
+                    {"$set": {"stock": total_satuan}}
+                )
+            else:
+                await db.warehouse_stock.update_one(
+                    {"product_id": product_id, "warehouse_id": warehouse_id},
+                    {"$set": {"stock": stock_dus}}
+                )
+
+            purchase_items.append({
+                "product_id": product_id, "product_name": name,
+                "quantity": stock_dus, "cost_price": unit_cost,
+                "subtotal": unit_cost * stock_dus
+            })
+            total_purchase += unit_cost * stock_dus
+            created_products.append({"id": product_id, "name": name, "action": "new"})
+
+    if purchase_items:
+        paid = min(initial_paid, total_purchase)
+        remaining = total_purchase - paid
+        purchase_doc = {
+            "id": str(uuid.uuid4()),
+            "purchase_number": invoice_number or "",
+            "supplier_id": supplier_id, "supplier_name": supplier["name"],
+            "items": purchase_items,
+            "total": total_purchase, "paid": paid, "remaining": remaining,
+            "warehouse_id": warehouse_id,
+            "notes": f"Pembelian bulk - {len(purchase_items)} item" + (" (Tempo)" if remaining > 0 else ""),
+            "due_date": due_date or "",
+            "source": "bulk_entry",
+            "created_at": now.isoformat(), "date": now.strftime("%Y-%m-%d")
+        }
+        await db.purchases.insert_one(purchase_doc)
+        await log_audit(admin, "bulk_create", "products", "", {
+            "supplier": supplier["name"],
+            "items_count": len(created_products),
+            "total_purchase": total_purchase
+        })
+
+    return {
+        "message": f"{len(created_products)} barang berhasil diproses",
+        "products": created_products,
+        "total_purchase": total_purchase,
+        "remaining_debt": max(0, total_purchase - initial_paid)
+    }
 
 
 @router.post("/products", response_model=Product)

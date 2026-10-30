@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { PageSkeleton } from '../components/PageSkeleton';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../context/AuthContext';
 import { Button } from '../components/ui/button';
@@ -9,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
 import { toast } from 'sonner';
-import { Plus, Search, Package, Trash2, ShoppingCart, Warehouse, FileText, DollarSign, TrendingUp, RotateCcw, Pencil, Trash, X, Store } from 'lucide-react';
+import { Plus, Search, Package, Trash2, ShoppingCart, Warehouse, FileText, DollarSign, TrendingUp, RotateCcw, Pencil, Trash, X, Store, Truck, ArrowRightLeft } from '../components/icons';
 import { CurrencyInput } from '../components/CurrencyInput';
 import { Pagination } from '../components/Pagination';
 
@@ -35,6 +36,8 @@ export const PartnerOrders = () => {
   const [returnItems, setReturnItems] = useState([]);
   const [returnNotes, setReturnNotes] = useState('');
   const [returnWarehouse, setReturnWarehouse] = useState('gudang_toko');
+  const [returnToVehicle, setReturnToVehicle] = useState(false);
+  const [returnVehicleId, setReturnVehicleId] = useState('');
   const [searchOrder, setSearchOrder] = useState('');
   const [orderType, setOrderType] = useState('regular');
   const [partnerSearch, setPartnerSearch] = useState('');
@@ -44,18 +47,33 @@ export const PartnerOrders = () => {
   const [addItemSearch, setAddItemSearch] = useState('');
   const [page, setPage] = useState(1);
   const perPage = 15;
+  const [vehicles, setVehicles] = useState([]);
+  const [selectedVehicle, setSelectedVehicle] = useState('');
+
+  // Transfer dialog
+  const [transferDialog, setTransferDialog] = useState(null);
+  const [transferItems, setTransferItems] = useState([]);
+  const [transferStoreId, setTransferStoreId] = useState('');
+  const [transferPayment, setTransferPayment] = useState('bon');
+  const [transferStoreSearch, setTransferStoreSearch] = useState('');
+  const [transferSubmitting, setTransferSubmitting] = useState(false);
+
+  // Barter cart - barang yang TOKO ambil dari kios mitra (tambah stok gudang)
+  const [barterCart, setBarterCart] = useState([]);
+  const [barterSearch, setBarterSearch] = useState('');
 
   useEffect(() => { fetchData(); }, []);
 
   const fetchData = async () => {
     try {
-      const [ordersRes, storesRes, canvassersRes, productsRes, whRes, whStockRes] = await Promise.all([
+      const [ordersRes, storesRes, canvassersRes, productsRes, whRes, whStockRes, vehRes] = await Promise.all([
         api.get('/partner-orders'),
         api.get('/partner-stores'),
         api.get('/canvassers'),
         api.get('/products'),
         api.get('/warehouses'),
-        api.get('/warehouse-stock')
+        api.get('/warehouse-stock'),
+        api.get('/vehicles')
       ]);
       setOrders(ordersRes.data);
       setPartnerStores(storesRes.data);
@@ -63,6 +81,7 @@ export const PartnerOrders = () => {
       setProducts(productsRes.data);
       setWarehouses(whRes.data);
       setWarehouseStock(whStockRes.data);
+      setVehicles(vehRes.data);
     } catch (error) {
       toast.error('Gagal memuat data');
     } finally { setLoading(false); }
@@ -185,17 +204,70 @@ export const PartnerOrders = () => {
   };
 
   const handleSubmit = async () => {
+    if (cart.length === 0 && !(orderType === 'barter' && barterCart.length > 0)) {
+      toast.error('Keranjang kosong');
+      return;
+    }
+
+    // Conditional order → load to vehicle stock
+    if (orderType === 'conditional') {
+      if (!selectedVehicle) { toast.error('Pilih mobil box tujuan'); return; }
+      try {
+        const items = cart.map(item => ({
+          product_id: item.product_id,
+          quantity: item.quantity,
+          price: item.price,
+          warehouse_id: item.warehouse_id || defaultWarehouse
+        }));
+        await api.post('/vehicle-stock/load', {
+          vehicle_id: selectedVehicle,
+          items,
+          notes: `Pesanan kondisional ${deliveryDate}`
+        });
+        const veh = vehicles.find(v => v.id === selectedVehicle);
+        toast.success(`${cart.length} item dimuat ke ${veh?.name || 'mobil box'}`);
+        resetForm();
+        setIsDialogOpen(false);
+        fetchData();
+      } catch (error) {
+        toast.error(error.response?.data?.detail || 'Gagal memuat barang ke mobil');
+      }
+      return;
+    }
+
+    // Regular / Barter order → create partner order
     if (!selectedPartner) { toast.error('Pilih kios mitra'); return; }
-    if (cart.length === 0) { toast.error('Keranjang kosong'); return; }
     const { subtotal, total } = calculateTotal();
+
+    // Barter: validasi minimal 1 barang di salah satu sisi
+    if (orderType === 'barter') {
+      if (cart.length === 0 && barterCart.length === 0) {
+        toast.error('Tambahkan minimal 1 barang barter');
+        return;
+      }
+      const invalidBarter = barterCart.find(b => !b.product_name || b.quantity <= 0);
+      if (invalidBarter) { toast.error('Lengkapi nama barang dan qty untuk semua item barter'); return; }
+    }
+
     try {
-      const res = await api.post('/partner-orders', {
+      const payload = {
         partner_store_id: selectedPartner,
         items: cart, subtotal, discount, total,
         paid: 0, delivery_date: deliveryDate,
         canvasser_id: selectedCanvasser, warehouse_id: defaultWarehouse,
         order_type: orderType
-      });
+      };
+      if (orderType === 'barter') {
+        payload.barter_received_items = barterCart.map(b => ({
+          product_id: b.product_id || '',
+          product_name: b.product_name,
+          quantity: b.quantity,
+          price: b.price,
+          sell_price: b.sell_price || 0,
+          warehouse_id: b.warehouse_id || 'gudang_toko'
+        }));
+      }
+      const res = await api.post('/partner-orders', payload);
       toast.success('Pesanan berhasil dibuat');
       const orderId = res.data?.id;
       resetForm();
@@ -213,7 +285,45 @@ export const PartnerOrders = () => {
     setReturnDialog(order);
     setReturnItems(order.items.map(i => ({ ...i, return_qty: 0, reason: '' })));
     setReturnNotes('');
-    setReturnWarehouse('gudang_toko');
+    // Default gudang sesuai asal order
+    const orderWh = order.warehouse_id || order.items?.[0]?.warehouse_id || 'gudang_toko';
+    setReturnWarehouse(orderWh);
+    setReturnToVehicle(false);
+    setReturnVehicleId('');
+  };
+
+  const openTransferDialog = (order) => {
+    setTransferDialog(order);
+    setTransferItems(order.items.filter(i => i.quantity > 0).map(i => ({
+      product_id: i.product_id, product_name: i.product_name,
+      quantity: i.quantity, max_qty: i.quantity,
+      new_price: i.price, selected: false
+    })));
+    setTransferStoreId('');
+    setTransferPayment('bon');
+    setTransferStoreSearch('');
+  };
+
+  const handleTransfer = async () => {
+    const selected = transferItems.filter(i => i.selected && i.quantity > 0);
+    if (selected.length === 0) { toast.error('Pilih item yang akan dioper'); return; }
+    if (!transferStoreId) { toast.error('Pilih kios mitra tujuan'); return; }
+    setTransferSubmitting(true);
+    try {
+      await api.post(`/partner-orders/${transferDialog.id}/transfer`, {
+        new_partner_store_id: transferStoreId,
+        items: selected.map(i => ({
+          product_id: i.product_id,
+          quantity: i.quantity,
+          new_price: i.new_price
+        })),
+        payment_type: transferPayment
+      });
+      toast.success('Pesanan berhasil dioper');
+      setTransferDialog(null);
+      fetchData();
+    } catch (e) { toast.error(e.response?.data?.detail || 'Gagal mengoper pesanan'); }
+    finally { setTransferSubmitting(false); }
   };
 
   const handleReturn = async () => {
@@ -223,10 +333,13 @@ export const PartnerOrders = () => {
     }));
     if (items.length === 0) { toast.error('Pilih produk yang diretur'); return; }
     try {
-      await api.post('/returns', {
+      const payload = {
         source_type: 'partner_order', source_id: returnDialog.id,
-        items, notes: returnNotes, warehouse_id: returnWarehouse
-      });
+        items, notes: returnNotes,
+        warehouse_id: returnToVehicle ? 'gudang_toko' : returnWarehouse,
+        vehicle_id: returnToVehicle ? returnVehicleId : ''
+      };
+      await api.post('/returns', payload);
       toast.success('Retur berhasil dicatat');
       setReturnDialog(null);
       fetchData();
@@ -269,8 +382,11 @@ export const PartnerOrders = () => {
   const resetForm = () => {
     setSelectedPartner('');
     setSelectedCanvasser('');
+    setSelectedVehicle('');
     setDefaultWarehouse('gudang_utama');
     setCart([]);
+    setBarterCart([]);
+    setBarterSearch('');
     setDiscount(0);
     setDeliveryDate(new Date().toISOString().split('T')[0]);
     setOrderType('regular');
@@ -339,10 +455,18 @@ export const PartnerOrders = () => {
   const filteredProducts = products.filter(p => p.name.toLowerCase().includes(searchProduct.toLowerCase()));
 
   if (loading) {
-    return <div className="flex items-center justify-center min-h-screen"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div></div>;
+    return <PageSkeleton variant="table" />;
   }
 
   const { subtotal, total } = calculateTotal();
+  // Barter: hitung total nilai barang yang TOKO ambil dari kios
+  const barterTotal = barterCart.reduce((sum, b) => {
+    const ipb = (products.find(p => p.id === b.product_id)?.items_per_box) || 1;
+    const wh = warehouses.find(w => w.id === b.warehouse_id);
+    const isDus = wh?.unit === 'dus';
+    return sum + (b.price || 0) * (b.quantity || 0) * (isDus ? ipb : 1);
+  }, 0);
+  const barterNet = subtotal - barterTotal;
 
   return (
     <div className="p-4 md:p-6 lg:p-8 space-y-6" data-testid="partner-orders-page">
@@ -360,6 +484,31 @@ export const PartnerOrders = () => {
             <DialogHeader><DialogTitle>Buat Pesanan Kios Mitra</DialogTitle></DialogHeader>
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               <div className="lg:col-span-2 space-y-4">
+                <div className="space-y-2">
+                  <Label>Tipe Pesanan</Label>
+                  <Select value={orderType} onValueChange={(v) => { setOrderType(v); setSelectedPartner(''); setSelectedVehicle(''); setPartnerSearch(''); }}>
+                    <SelectTrigger data-testid="order-type-select"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="regular">Pesanan Langsung</SelectItem>
+                      <SelectItem value="conditional">Kondisional (Barang Pegangan)</SelectItem>
+                      <SelectItem value="barter">Barter (Toko ↔ Kios)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  {orderType === 'conditional' && <p className="text-xs text-amber-600">Barang akan dimuat ke stok mobil box, bukan ke kios mitra.</p>}
+                  {orderType === 'barter' && <p className="text-xs text-blue-600">Catat barang yang kios ambil dari toko & barang yang toko ambil dari kios. Jika toko ambil &gt; kios ambil, piutang menjadi minus (toko hutang ke kios).</p>}
+                </div>
+
+                {orderType === 'conditional' ? (
+                  <div className="space-y-2">
+                    <Label>Pilih Mobil Box *</Label>
+                    <Select value={selectedVehicle} onValueChange={setSelectedVehicle}>
+                      <SelectTrigger data-testid="order-vehicle-select"><SelectValue placeholder="Pilih mobil box tujuan" /></SelectTrigger>
+                      <SelectContent>
+                        {vehicles.map(v => <SelectItem key={v.id} value={v.id}><Truck className="w-3 h-3 inline mr-1" />{v.name} ({v.plate_number})</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                ) : (
                 <div className="space-y-2">
                   <Label>Cari Kios Mitra *</Label>
                   {selectedPartnerStore ? (
@@ -424,6 +573,7 @@ export const PartnerOrders = () => {
                     </div>
                   )}
                 </div>
+                )}
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label>Kanvaser</Label>
@@ -443,17 +593,6 @@ export const PartnerOrders = () => {
                     <SelectTrigger data-testid="order-warehouse-select"><SelectValue /></SelectTrigger>
                     <SelectContent>{warehouses.map(wh => <SelectItem key={wh.id} value={wh.id}>{wh.name} ({wh.unit})</SelectItem>)}</SelectContent>
                   </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label>Tipe Pesanan</Label>
-                  <Select value={orderType} onValueChange={setOrderType}>
-                    <SelectTrigger data-testid="order-type-select"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="regular">Pesanan Langsung</SelectItem>
-                      <SelectItem value="conditional">Kondisional (Barang Pegangan)</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  {orderType === 'conditional' && <p className="text-xs text-amber-600">Barang yang dibawa kanvaser untuk ditawarkan langsung ke kios.</p>}
                 </div>
                 <div className="space-y-2">
                   <Label>Cari Barang</Label>
@@ -483,6 +622,92 @@ export const PartnerOrders = () => {
                     );
                   })}
                 </div>
+
+                {/* Barter Section - Barang Toko Ambil dari Kios */}
+                {orderType === 'barter' && (
+                  <div className="space-y-2 border-2 border-orange-300 rounded-lg p-3 bg-orange-50/40" data-testid="barter-section">
+                    <div className="flex items-center justify-between">
+                      <Label className="text-orange-900 font-semibold flex items-center gap-1.5">
+                        <ArrowRightLeft className="w-4 h-4" />
+                        Barang TOKO Ambil dari Kios
+                      </Label>
+                      <span className="text-xs text-orange-700">{barterCart.length} item</span>
+                    </div>
+                    <p className="text-xs text-orange-700">Stok gudang otomatis bertambah. Nilai mengurangi piutang kios (boleh sampai minus).</p>
+
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                      <Input placeholder="Cari produk untuk barter dari kios..." value={barterSearch} onChange={(e) => setBarterSearch(e.target.value)} className="pl-10" data-testid="barter-search-product" />
+                    </div>
+                    {barterSearch.length >= 1 && (
+                      <div className="border rounded-md max-h-40 overflow-y-auto bg-white">
+                        {products.filter(p => p.name.toLowerCase().includes(barterSearch.toLowerCase())).slice(0, 8).map(p => (
+                          <div key={p.id} className="p-2 hover:bg-orange-100 cursor-pointer border-b last:border-b-0 text-sm"
+                            onClick={() => {
+                              const existing = barterCart.find(b => b.product_id === p.id);
+                              if (existing) {
+                                setBarterCart(barterCart.map(b => b.product_id === p.id ? { ...b, quantity: b.quantity + 1 } : b));
+                              } else {
+                                setBarterCart([...barterCart, { product_id: p.id, product_name: p.name, quantity: 1, price: p.cost_price || 0, sell_price: p.price || 0, warehouse_id: 'gudang_toko' }]);
+                              }
+                              setBarterSearch('');
+                            }}
+                            data-testid={`barter-product-${p.id}`}>
+                            <p className="font-medium">{p.name}</p>
+                            <p className="text-xs text-muted-foreground">Isi/dus: {p.items_per_box || 1}</p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {barterCart.length > 0 && (
+                      <div className="border rounded-lg max-h-80 overflow-y-auto bg-white">
+                        {barterCart.map((b, idx) => {
+                          const product = products.find(p => p.id === b.product_id);
+                          const wh = warehouses.find(w => w.id === b.warehouse_id);
+                          const ipb = product?.items_per_box || 1;
+                          const isDus = wh?.unit === 'dus';
+                          const subtotal = (b.price || 0) * (b.quantity || 0) * (isDus ? ipb : 1);
+                          return (
+                            <div key={idx} className="p-3 border-b last:border-b-0 space-y-2" data-testid={`barter-item-${idx}`}>
+                              <div className="flex justify-between items-start">
+                                <p className="text-sm font-medium flex-1">{b.product_name}</p>
+                                <Button size="sm" variant="ghost" onClick={() => setBarterCart(barterCart.filter((_, i) => i !== idx))}><Trash2 className="w-3 h-3 text-destructive" /></Button>
+                              </div>
+                              <div className="grid grid-cols-2 gap-2">
+                                <div>
+                                  <Label className="text-xs">Gudang Tujuan</Label>
+                                  <Select value={b.warehouse_id} onValueChange={(v) => setBarterCart(barterCart.map((bb, i) => i === idx ? { ...bb, warehouse_id: v } : bb))}>
+                                    <SelectTrigger className="h-8 text-xs" data-testid={`barter-wh-${idx}`}><SelectValue /></SelectTrigger>
+                                    <SelectContent>{warehouses.map(w => <SelectItem key={w.id} value={w.id}>{w.name} ({w.unit})</SelectItem>)}</SelectContent>
+                                  </Select>
+                                </div>
+                                <div>
+                                  <Label className="text-xs">Qty ({wh?.unit || 'satuan'})</Label>
+                                  <Input type="number" min={1} value={b.quantity}
+                                    onChange={(e) => setBarterCart(barterCart.map((bb, i) => i === idx ? { ...bb, quantity: parseInt(e.target.value) || 1 } : bb))}
+                                    className="h-8 text-sm" data-testid={`barter-qty-${idx}`} />
+                                </div>
+                                <div>
+                                  <Label className="text-xs">Harga Beli dari Kios (/satuan)</Label>
+                                  <CurrencyInput value={b.price} onChange={(v) => setBarterCart(barterCart.map((bb, i) => i === idx ? { ...bb, price: v } : bb))} className="h-8 text-sm" data-testid={`barter-price-${idx}`} />
+                                </div>
+                                <div>
+                                  <Label className="text-xs">Harga Jual Toko (/satuan)</Label>
+                                  <CurrencyInput value={b.sell_price || 0} onChange={(v) => setBarterCart(barterCart.map((bb, i) => i === idx ? { ...bb, sell_price: v } : bb))} className="h-8 text-sm" data-testid={`barter-sell-${idx}`} />
+                                </div>
+                              </div>
+                              <div className="flex justify-between items-center pt-1 border-t">
+                                <span className="text-xs text-muted-foreground">{isDus ? `${b.quantity} dus × ${ipb} pcs × ${fmt(b.price)}` : `${b.quantity} × ${fmt(b.price)}`}</span>
+                                <span className="text-sm font-semibold text-orange-700">{fmt(subtotal)}</span>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
@@ -540,16 +765,33 @@ export const PartnerOrders = () => {
                   })}
                 </div>
                 <div className="space-y-2 pt-2 border-t">
-                  <div className="flex justify-between text-sm"><span>Subtotal:</span><span className="font-semibold">{fmt(subtotal)}</span></div>
-                  <div className="space-y-2">
-                    <Label>Diskon</Label>
-                    <CurrencyInput value={discount} onChange={(v) => setDiscount(v)} data-testid="order-discount" />
-                  </div>
-                  <div className="flex justify-between text-lg font-bold border-t pt-2"><span>Total:</span><span className="text-primary">{fmt(total)}</span></div>
+                  <div className="flex justify-between text-sm"><span>{orderType === 'barter' ? 'Kios Ambil dari Toko' : 'Subtotal'}:</span><span className="font-semibold">{fmt(subtotal)}</span></div>
+                  {orderType === 'barter' && (
+                    <>
+                      <div className="flex justify-between text-sm"><span>Toko Ambil dari Kios:</span><span className="font-semibold text-orange-600">-{fmt(barterTotal)}</span></div>
+                      <div className="flex justify-between text-base font-bold border-t pt-2">
+                        <span>Selisih:</span>
+                        <span className={barterNet >= 0 ? 'text-primary' : 'text-red-600'}>
+                          {fmt(barterNet)}{barterNet < 0 ? ' (Toko hutang)' : ''}
+                        </span>
+                      </div>
+                    </>
+                  )}
+                  {orderType !== 'barter' && (
+                    <>
+                      <div className="space-y-2">
+                        <Label>Diskon</Label>
+                        <CurrencyInput value={discount} onChange={(v) => setDiscount(v)} data-testid="order-discount" />
+                      </div>
+                      <div className="flex justify-between text-lg font-bold border-t pt-2"><span>Total:</span><span className="text-primary">{fmt(total)}</span></div>
+                    </>
+                  )}
                 </div>
                 <div className="flex gap-2 pt-2">
                   <Button variant="outline" onClick={() => setIsDialogOpen(false)} className="flex-1">Batal</Button>
-                  <Button onClick={handleSubmit} className="flex-1" disabled={cart.length === 0} data-testid="submit-order-button">Buat Pesanan</Button>
+                  <Button onClick={handleSubmit} className="flex-1" disabled={cart.length === 0 && !(orderType === 'barter' && barterCart.length > 0)} data-testid="submit-order-button">
+                    {orderType === 'conditional' ? 'Muat ke Mobil Box' : orderType === 'barter' ? 'Catat Barter' : 'Buat Pesanan'}
+                  </Button>
                 </div>
               </div>
             </div>
@@ -698,6 +940,11 @@ export const PartnerOrders = () => {
                           <Plus className="w-4 h-4 mr-1" />Tambah
                         </Button>
                       )}
+                      {order.status !== 'cancelled' && order.items.length > 0 && (
+                        <Button size="sm" variant="outline" onClick={() => openTransferDialog(order)} data-testid={`transfer-${order.id}`} className="text-purple-600 border-purple-200 hover:bg-purple-50">
+                          <ArrowRightLeft className="w-4 h-4 mr-1" />Oper
+                        </Button>
+                      )}
                       <Button size="sm" variant="outline" onClick={() => openReturnDialog(order)} data-testid={`return-${order.id}`} className="text-orange-600 border-orange-200 hover:bg-orange-50">
                         <RotateCcw className="w-4 h-4 mr-1" />Retur
                       </Button>
@@ -746,11 +993,28 @@ export const PartnerOrders = () => {
               ))}
             </div>
             <div className="space-y-2">
-              <Label>Gudang Tujuan Retur</Label>
-              <Select value={returnWarehouse} onValueChange={setReturnWarehouse}>
-                <SelectTrigger data-testid="return-warehouse-select"><SelectValue /></SelectTrigger>
-                <SelectContent>{warehouses.map(wh => <SelectItem key={wh.id} value={wh.id}>{wh.name}</SelectItem>)}</SelectContent>
-              </Select>
+              <Label>Tujuan Retur</Label>
+              <div className="flex gap-2">
+                <Button type="button" size="sm" variant={!returnToVehicle ? 'default' : 'outline'}
+                  onClick={() => setReturnToVehicle(false)} data-testid="return-dest-warehouse">
+                  <Warehouse className="w-3.5 h-3.5 mr-1.5" />Gudang
+                </Button>
+                <Button type="button" size="sm" variant={returnToVehicle ? 'default' : 'outline'}
+                  onClick={() => setReturnToVehicle(true)} data-testid="return-dest-vehicle">
+                  <Truck className="w-3.5 h-3.5 mr-1.5" />Mobil Box
+                </Button>
+              </div>
+              {!returnToVehicle ? (
+                <Select value={returnWarehouse} onValueChange={setReturnWarehouse}>
+                  <SelectTrigger data-testid="return-warehouse-select"><SelectValue /></SelectTrigger>
+                  <SelectContent>{warehouses.map(wh => <SelectItem key={wh.id} value={wh.id}>{wh.name}</SelectItem>)}</SelectContent>
+                </Select>
+              ) : (
+                <Select value={returnVehicleId} onValueChange={setReturnVehicleId}>
+                  <SelectTrigger data-testid="return-vehicle-select"><SelectValue placeholder="Pilih mobil box" /></SelectTrigger>
+                  <SelectContent>{vehicles.map(v => <SelectItem key={v.id} value={v.id}>{v.name} ({v.plate_number})</SelectItem>)}</SelectContent>
+                </Select>
+              )}
             </div>
             <div className="space-y-2">
               <Label>Catatan</Label>
@@ -841,6 +1105,84 @@ export const PartnerOrders = () => {
               <div className="flex gap-2 pt-2">
                 <Button variant="outline" onClick={() => setAddItemDialog(null)} className="flex-1">Batal</Button>
                 <Button onClick={handleSubmitAddItems} className="flex-1" disabled={addItemCart.length === 0} data-testid="submit-add-items">Tambahkan</Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Transfer Dialog */}
+      <Dialog open={!!transferDialog} onOpenChange={() => setTransferDialog(null)}>
+        <DialogContent className="max-w-lg" data-testid="transfer-dialog">
+          <DialogHeader><DialogTitle>Oper Pesanan</DialogTitle></DialogHeader>
+          {transferDialog && (
+            <div className="space-y-4 max-h-[70vh] overflow-y-auto">
+              <Card className="p-3 bg-muted/50">
+                <p className="text-sm">Dari: <strong>{transferDialog.partner_store_name}</strong></p>
+                <p className="text-xs text-muted-foreground">No. Order: {transferDialog.order_number}</p>
+              </Card>
+
+              <div className="space-y-2">
+                <Label>Pilih item yang dioper:</Label>
+                {transferItems.map((item, idx) => (
+                  <div key={item.product_id} className={`p-3 border rounded-lg space-y-2 ${item.selected ? 'border-purple-300 bg-purple-50/50' : ''}`}>
+                    <div className="flex items-center gap-2">
+                      <input type="checkbox" checked={item.selected} onChange={e => {
+                        const ni = [...transferItems]; ni[idx].selected = e.target.checked; setTransferItems(ni);
+                      }} className="rounded" data-testid={`transfer-check-${idx}`} />
+                      <span className="flex-1 text-sm font-medium">{item.product_name}</span>
+                    </div>
+                    {item.selected && (
+                      <div className="grid grid-cols-2 gap-2 pl-6">
+                        <div>
+                          <Label className="text-xs">Jumlah (max: {item.max_qty})</Label>
+                          <Input type="number" min={1} max={item.max_qty} value={item.quantity}
+                            onChange={e => { const ni = [...transferItems]; ni[idx].quantity = Math.min(parseInt(e.target.value) || 1, item.max_qty); setTransferItems(ni); }}
+                            className="h-8" data-testid={`transfer-qty-${idx}`} />
+                        </div>
+                        <div>
+                          <Label className="text-xs">Harga Jual Baru</Label>
+                          <CurrencyInput value={item.new_price} onChange={v => { const ni = [...transferItems]; ni[idx].new_price = v; setTransferItems(ni); }}
+                            className="h-8" data-testid={`transfer-price-${idx}`} />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              <div className="space-y-2">
+                <Label>Kios Mitra Tujuan *</Label>
+                <Input placeholder="Cari kios mitra..." value={transferStoreSearch} onChange={e => setTransferStoreSearch(e.target.value)} data-testid="transfer-store-search" />
+                <div className="border rounded-md max-h-32 overflow-y-auto">
+                  {partnerStores.filter(s => s.id !== transferDialog.partner_store_id && (!transferStoreSearch || s.name.toLowerCase().includes(transferStoreSearch.toLowerCase()))).map(s => (
+                    <div key={s.id}
+                      className={`px-3 py-2 text-sm cursor-pointer ${transferStoreId === s.id ? 'bg-purple-100 font-medium' : 'hover:bg-muted'}`}
+                      onClick={() => setTransferStoreId(s.id)} data-testid={`transfer-store-${s.id}`}>{s.name}</div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Pembayaran</Label>
+                <Select value={transferPayment} onValueChange={setTransferPayment}>
+                  <SelectTrigger data-testid="transfer-payment"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="cash">Cash / Tunai</SelectItem>
+                    <SelectItem value="bon">Bon / Hutang</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="p-3 bg-purple-50 rounded-lg">
+                <p className="text-sm font-semibold">Total Oper: {fmt(transferItems.filter(i => i.selected).reduce((s, i) => s + i.quantity * i.new_price, 0))}</p>
+              </div>
+
+              <div className="flex gap-2 justify-end">
+                <Button variant="outline" onClick={() => setTransferDialog(null)}>Batal</Button>
+                <Button onClick={handleTransfer} disabled={transferSubmitting} className="bg-purple-600 hover:bg-purple-700" data-testid="submit-transfer">
+                  {transferSubmitting ? 'Memproses...' : 'Oper Pesanan'}
+                </Button>
               </div>
             </div>
           )}

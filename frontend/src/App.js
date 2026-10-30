@@ -25,6 +25,7 @@ import { SupplierDebt } from './pages/SupplierDebt';
 import { Analytics } from './pages/Analytics';
 import ImportData from './pages/ImportData';
 import { Vehicles } from './pages/Vehicles';
+import { VehicleStock } from './pages/VehicleStock';
 import { AuditLog } from './pages/AuditLog';
 import { PersonalLoans } from './pages/PersonalLoans';
 import { FarmerDebts } from './pages/FarmerDebts';
@@ -61,6 +62,7 @@ function App() {
             <Route path="settings" element={<Settings />} />
             <Route path="import-data" element={<ImportData />} />
             <Route path="vehicles" element={<Vehicles />} />
+            <Route path="vehicle-stock" element={<VehicleStock />} />
             <Route path="audit-log" element={<AuditLog />} />
             <Route path="personal-loans" element={<PersonalLoans />} />
             <Route path="profile" element={<Profile />} />

@@ -26,6 +26,7 @@ from flask_cors import CORS
 # ========== KONFIGURASI ==========
 PORT = 9100
 PRINTER_NAME = None  # None = auto-detect, atau isi nama printer manual
+DOTMATRIX_PRINTER_NAME = None  # Nama printer dot matrix (Epson LX-310), None = auto-detect
 
 # ========== FLASK APP ==========
 app = Flask(__name__)
@@ -104,15 +105,56 @@ def send_raw_to_printer(data):
     return printer
 
 
+def get_dotmatrix_printer():
+    """Detect dot matrix printer (Epson LX-310 or similar)."""
+    global DOTMATRIX_PRINTER_NAME
+    if DOTMATRIX_PRINTER_NAME:
+        return DOTMATRIX_PRINTER_NAME
+    printers = get_printer_list()
+    for p in printers:
+        pl = p.lower()
+        if any(k in pl for k in ['lx-310', 'lx310', 'lx-300', 'epson lx', 'dot matrix', 'lq-310', 'lq310']):
+            return p
+    return None
+
+
+def send_to_dotmatrix(data):
+    """Send raw ESC/P data to dot matrix printer."""
+    printer = get_dotmatrix_printer()
+    if not printer:
+        printer = get_default_printer()
+    if not printer:
+        raise Exception("Tidak ada printer dot matrix terdeteksi. Set nama printer di konfigurasi atau pastikan Epson LX-310 terhubung.")
+    system = platform.system()
+    if system == 'Windows':
+        import win32print
+        hPrinter = win32print.OpenPrinter(printer)
+        try:
+            hJob = win32print.StartDocPrinter(hPrinter, 1, ("ESC/P Dot Matrix Invoice", None, "RAW"))
+            try:
+                win32print.StartPagePrinter(hPrinter)
+                win32print.WritePrinter(hPrinter, data)
+                win32print.EndPagePrinter(hPrinter)
+            finally:
+                win32print.EndDocPrinter(hPrinter)
+        finally:
+            win32print.ClosePrinter(hPrinter)
+    else:
+        send_to_printer_linux(data, printer)
+    return printer
+
+
 # ========== API ENDPOINTS ==========
 
 @app.route('/status', methods=['GET'])
 def status():
     printer = get_default_printer()
+    dotmatrix = get_dotmatrix_printer()
     printers = get_printer_list()
     return jsonify({
         'status': 'ok',
         'printer': printer,
+        'dotmatrix_printer': dotmatrix,
         'all_printers': printers,
         'os': platform.system()
     })
@@ -151,6 +193,35 @@ def set_printer():
         return jsonify({'error': 'Nama printer tidak boleh kosong'}), 400
     PRINTER_NAME = name
     return jsonify({'success': True, 'printer': PRINTER_NAME})
+
+
+@app.route('/print-dotmatrix', methods=['POST'])
+def print_dotmatrix():
+    """Cetak faktur ke printer dot matrix (Epson LX-310)."""
+    try:
+        data = request.get_data()
+        if not data:
+            return jsonify({'error': 'Tidak ada data untuk dicetak'}), 400
+        printer_used = send_to_dotmatrix(data)
+        return jsonify({
+            'success': True,
+            'message': f'Faktur berhasil dicetak ke: {printer_used}',
+            'printer': printer_used
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/set-dotmatrix-printer', methods=['POST'])
+def set_dotmatrix_printer():
+    """Set nama printer dot matrix manual."""
+    global DOTMATRIX_PRINTER_NAME
+    body = request.get_json()
+    name = body.get('name', '')
+    if not name:
+        return jsonify({'error': 'Nama printer tidak boleh kosong'}), 400
+    DOTMATRIX_PRINTER_NAME = name
+    return jsonify({'success': True, 'printer': DOTMATRIX_PRINTER_NAME})
 
 
 @app.route('/test', methods=['POST'])

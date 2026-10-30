@@ -194,28 +194,114 @@ async def edit_transaction_prices(transaction_id: str, req: FastAPIRequest, curr
 @router.post("/returns")
 async def create_return(data: ReturnCreate, admin: dict = Depends(require_pos_access)):
     now = datetime.now(timezone.utc)
+    vehicle_id = data.vehicle_id if data.vehicle_id else None
     return_doc = {
         "id": str(uuid.uuid4()), "return_number": f"RTN{now.strftime('%Y%m%d%H%M%S')}",
         "source_type": data.source_type, "source_id": data.source_id,
-        "items": data.items, "notes": data.notes, "warehouse_id": data.warehouse_id,
+        "items": data.items, "notes": data.notes,
+        "warehouse_id": data.warehouse_id if not vehicle_id else f"vehicle:{vehicle_id}",
+        "vehicle_id": vehicle_id or "",
         "created_at": now.isoformat(), "date": now.strftime("%Y-%m-%d")
     }
     await db.returns.insert_one(return_doc)
-    for item in data.items:
-        await db.warehouse_stock.update_one(
-            {"product_id": item["product_id"], "warehouse_id": data.warehouse_id},
-            {"$inc": {"stock": item["quantity"]}}, upsert=True
-        )
-        await recalculate_product_stock(item["product_id"])
+
+    if vehicle_id:
+        # Return to vehicle stock instead of warehouse
+        vehicle = await db.vehicles.find_one({"id": vehicle_id}, {"_id": 0})
+        vehicle_name = vehicle.get("name", "") if vehicle else ""
+        for item in data.items:
+            existing_vs = await db.vehicle_stock.find_one(
+                {"vehicle_id": vehicle_id, "product_id": item["product_id"], "remaining_qty": {"$gt": 0}}
+            )
+            if existing_vs:
+                await db.vehicle_stock.update_one(
+                    {"id": existing_vs["id"]},
+                    {"$inc": {"remaining_qty": item["quantity"], "quantity": item["quantity"]}}
+                )
+            else:
+                vs_doc = {
+                    "id": str(uuid.uuid4()),
+                    "vehicle_id": vehicle_id, "vehicle_name": vehicle_name,
+                    "product_id": item["product_id"], "product_name": item["product_name"],
+                    "quantity": item["quantity"], "remaining_qty": item["quantity"],
+                    "sold_qty": 0, "returned_qty": 0,
+                    "price": item.get("price", 0),
+                    "warehouse_id": data.warehouse_id or "gudang_toko",
+                    "loaded_at": now.isoformat(),
+                    "notes": f"Retur dari pesanan {data.source_id}", "status": "active"
+                }
+                await db.vehicle_stock.insert_one(vs_doc)
+    else:
+        for item in data.items:
+            await db.warehouse_stock.update_one(
+                {"product_id": item["product_id"], "warehouse_id": data.warehouse_id},
+                {"$inc": {"stock": item["quantity"]}}, upsert=True
+            )
+            await recalculate_product_stock(item["product_id"])
+
     if data.source_type == "transaction":
         await db.transactions.update_one({"id": data.source_id}, {"$set": {"has_return": True}})
     elif data.source_type == "partner_order":
-        await db.partner_orders.update_one({"id": data.source_id}, {"$set": {"has_return": True}})
         order = await db.partner_orders.find_one({"id": data.source_id}, {"_id": 0})
         if order:
-            return_total = sum(i.get("subtotal", 0) for i in data.items)
-            new_remaining = max(0, order.get("remaining", 0) - return_total)
-            await db.partner_orders.update_one({"id": data.source_id}, {"$set": {"remaining": new_remaining}})
+            # Build a map of warehouses (id -> unit) for ipb-aware subtotal calculation
+            warehouses_map = {w["id"]: w for w in await db.warehouses.find({}, {"_id": 0}).to_list(100)}
+
+            order_items = order.get("items", [])
+            settled_items = order.get("settled_items", []) or []
+            is_settled = order.get("is_settled", False)
+            return_total = 0
+
+            for r_item in data.items:
+                r_pid = r_item["product_id"]
+                r_qty = int(r_item.get("quantity", 0))
+                if r_qty <= 0:
+                    continue
+                # Find first matching order item (with positive remaining quantity)
+                target = next((oi for oi in order_items if oi.get("product_id") == r_pid and (oi.get("quantity", 0) or 0) > 0), None)
+                if not target:
+                    continue
+                qty_to_reduce = min(r_qty, target.get("quantity", 0))
+
+                # Compute actual subtotal of returned portion using ipb if warehouse unit is dus
+                wh_id = target.get("warehouse_id") or order.get("warehouse_id") or ""
+                wh = warehouses_map.get(wh_id)
+                wh_unit = (wh or {}).get("unit", "satuan")
+                product = await db.products.find_one({"id": r_pid}, {"_id": 0})
+                ipb = (product or {}).get("items_per_box", 1) or 1
+                price = float(target.get("price", 0))
+                portion_subtotal = price * qty_to_reduce * (ipb if wh_unit == "dus" else 1)
+
+                # Reduce qty + recompute item subtotal
+                new_qty = target["quantity"] - qty_to_reduce
+                target["quantity"] = new_qty
+                target["subtotal"] = price * new_qty * (ipb if wh_unit == "dus" else 1)
+                return_total += portion_subtotal
+
+                # Juga update settled_items jika order sudah settled
+                if is_settled and settled_items:
+                    settled_target = next((si for si in settled_items if si.get("product_id") == r_pid and (si.get("qty_sold", 0) or 0) > 0), None)
+                    if settled_target:
+                        settled_target["qty_sold"] = max(0, (settled_target.get("qty_sold", 0) or 0) - qty_to_reduce)
+
+            new_total = max(0, (order.get("total", 0) or 0) - return_total)
+            new_subtotal = max(0, (order.get("subtotal", order.get("total", 0)) or 0) - return_total)
+            new_remaining = max(0, (order.get("remaining", 0) or 0) - return_total)
+
+            update_doc = {
+                "has_return": True,
+                "items": order_items,
+                "total": new_total,
+                "subtotal": new_subtotal,
+                "remaining": new_remaining
+            }
+            if is_settled and settled_items:
+                update_doc["settled_items"] = settled_items
+
+            await db.partner_orders.update_one(
+                {"id": data.source_id},
+                {"$set": update_doc}
+            )
             partner_store = await db.partner_stores.find_one({"id": order["partner_store_id"]})
             if partner_store:
                 new_debt = max(0, partner_store.get("current_debt", 0) - return_total)

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { PageSkeleton } from '../components/PageSkeleton';
 import { api } from '../context/AuthContext';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -8,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../components/
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
 import { toast } from 'sonner';
-import { Warehouse, ArrowRightLeft, Package, Search, History } from 'lucide-react';
+import { Warehouse, ArrowRightLeft, Package, Search, History } from '../components/icons';
 
 export const WarehouseManagement = () => {
   const [warehouses, setWarehouses] = useState([]);
@@ -95,7 +96,7 @@ export const WarehouseManagement = () => {
   else if (fromUnit === 'satuan' && toUnit === 'dus') convertedQty = Math.floor(transferForm.quantity / itemsPerBox);
 
   if (loading) {
-    return <div className="flex items-center justify-center min-h-screen"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div></div>;
+    return <PageSkeleton variant="table" />;
   }
 
   return (

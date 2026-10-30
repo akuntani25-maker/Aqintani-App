@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { PageSkeleton } from '../components/PageSkeleton';
 import { api } from '../context/AuthContext';
 import { Card } from '../components/ui/card';
 import { Calendar } from '../components/ui/calendar';
@@ -6,7 +7,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import {
   TrendingUp, TrendingDown, ShoppingCart, Package, AlertTriangle, DollarSign,
   Warehouse, CreditCard, Store, CalendarDays, Bell, ArrowDownToLine, ArrowUpFromLine, Landmark
-} from 'lucide-react';
+} from '../components/icons';
 import { toast } from 'sonner';
 
 const fmt = (v) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(v);
@@ -27,7 +28,7 @@ export const Dashboard = () => {
       const m = date.getMonth() + 1;
       const res = await api.get(`/dashboard/due-calendar?year=${y}&month=${m}`);
       setCalData(res.data);
-    } catch {}
+    } catch (e) { console.error(e); }
   }, []);
 
   useEffect(() => { fetchCalendar(calMonth); }, [calMonth, fetchCalendar]);
@@ -45,9 +46,7 @@ export const Dashboard = () => {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
-      </div>
+      <PageSkeleton variant="dashboard" />
     );
   }
 
@@ -98,7 +97,7 @@ export const Dashboard = () => {
             <p className="text-[10px] md:text-xs font-bold uppercase tracking-wider text-slate-300 mb-1">Nilai Aset Bersih</p>
             <p className="text-xl md:text-2xl lg:text-3xl font-bold">{fmt(stats?.total_assets || 0)}</p>
             <p className="text-xs text-slate-400 mt-1">
-              Gudang ({fmt(stats?.inventory_value || 0)}) + Piutang ({fmt(stats?.total_personal_loans || 0)}) + Hutang Petani ({fmt(stats?.total_farmer_debt || 0)}) - Bon Supplier ({fmt(stats?.total_supplier_debt || 0)})
+              Gudang ({fmt(stats?.inventory_value || 0)}) + Stok Mobil ({fmt(stats?.total_vehicle_stock || 0)}) + Piutang ({fmt(stats?.total_personal_loans || 0)}) + Hutang Petani ({fmt(stats?.total_farmer_debt || 0)}) - Bon Supplier ({fmt(stats?.total_supplier_debt || 0)})
             </p>
             {/* Bon Mitra per Armada breakdown */}
             <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1">

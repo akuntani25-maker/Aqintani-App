@@ -44,19 +44,19 @@ class TestPartnerOrderReceipt:
         for order_id in self.created_orders:
             try:
                 requests.delete(f"{BASE_URL}/api/partner-orders/{order_id}", headers=self.headers)
-            except:
+            except Exception:
                 pass
         
         for store_id in self.created_stores:
             try:
                 requests.delete(f"{BASE_URL}/api/partner-stores/{store_id}", headers=self.headers)
-            except:
+            except Exception:
                 pass
                 
         for product_id in self.created_products:
             try:
                 requests.delete(f"{BASE_URL}/api/products/{product_id}", headers=self.headers)
-            except:
+            except Exception:
                 pass
     
     def test_get_single_order_returns_partner_details(self):

@@ -135,7 +135,18 @@ async def get_dashboard_stats(admin: dict = Depends(require_admin_panel_access))
     farmers = await db.farmers.find({}, {"_id": 0, "current_debt": 1}).to_list(10000)
     total_farmer_debt = sum(f.get("current_debt", 0) for f in farmers)
 
-    total_assets = total_inventory + total_partner_debt + total_personal_loans + total_farmer_debt - total_supplier_debt
+    # Vehicle stock value (barang kondisional di mobil)
+    v_stocks = await db.vehicle_stock.find({"remaining_qty": {"$gt": 0}}, {"_id": 0}).to_list(10000)
+    total_vehicle_stock = 0
+    for vs in v_stocks:
+        prod = prod_map.get(vs["product_id"])
+        if prod:
+            cp = prod.get("cost_price", 0) or 0
+            ipb = prod.get("items_per_box", 1) or 1
+            total_vehicle_stock += (cp / ipb) * vs["remaining_qty"]
+    total_vehicle_stock = round(total_vehicle_stock)
+
+    total_assets = total_inventory + total_vehicle_stock + total_partner_debt + total_personal_loans + total_farmer_debt - total_supplier_debt
 
     # Due this month
     now = datetime.now(timezone.utc)
@@ -165,6 +176,7 @@ async def get_dashboard_stats(admin: dict = Depends(require_admin_panel_access))
         "partner_debt_vehicles": partner_debt_vehicles,
         "total_personal_loans": total_personal_loans,
         "total_farmer_debt": total_farmer_debt, "total_assets": total_assets,
+        "total_vehicle_stock": total_vehicle_stock,
         "due_this_month": [{k: v for k, v in d.items() if k != "_id"} for d in due_this_month]
     }
 
@@ -594,6 +606,268 @@ async def get_profit_loss_report(date_from: str, date_to: str, admin: dict = Dep
 
 
 # ============= AI STOCK FORECAST =============
+@router.post("/agriculture/lombok-info")
+async def get_lombok_agriculture_info(admin: dict = Depends(get_current_user)):
+    """Info cuaca, berita pertanian real, & rekomendasi AI untuk Lombok."""
+    import httpx
+    from bs4 import BeautifulSoup
+    from emergentintegrations.llm.openai import LlmChat, UserMessage
+
+    WMO_CODES = {
+        0: "Cerah", 1: "Sebagian Cerah", 2: "Berawan Sebagian", 3: "Berawan",
+        45: "Berkabut", 48: "Kabut Tebal",
+        51: "Gerimis Ringan", 53: "Gerimis", 55: "Gerimis Lebat",
+        61: "Hujan Ringan", 63: "Hujan Sedang", 65: "Hujan Lebat",
+        80: "Hujan Singkat", 81: "Hujan Singkat Sedang", 82: "Hujan Singkat Lebat",
+        95: "Hujan Petir", 96: "Hujan Petir + Hujan Es", 99: "Hujan Petir Hebat"
+    }
+
+    regions = [
+        {"name": "Lombok Barat", "city": "Mataram", "lat": -8.5833, "lon": 116.1167},
+        {"name": "Lombok Tengah", "city": "Praya", "lat": -8.7167, "lon": 116.2833},
+        {"name": "Lombok Timur", "city": "Selong", "lat": -8.6500, "lon": 116.5500},
+        {"name": "Lombok Utara", "city": "Tanjung", "lat": -8.3500, "lon": 116.3000},
+    ]
+
+    weather_data = []
+    news_articles = []
+
+    async with httpx.AsyncClient(timeout=15, follow_redirects=True, headers={
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+    }) as client:
+        # 1. Fetch weather
+        for region in regions:
+            try:
+                resp = await client.get("https://api.open-meteo.com/v1/forecast", params={
+                    "latitude": region["lat"], "longitude": region["lon"],
+                    "current": "temperature_2m,relative_humidity_2m,rain,wind_speed_10m,weather_code",
+                    "daily": "temperature_2m_max,temperature_2m_min,rain_sum,precipitation_probability_max",
+                    "timezone": "Asia/Makassar", "forecast_days": 7
+                })
+                data = resp.json()
+                current = data.get("current", {})
+                daily = data.get("daily", {})
+                weather_code = current.get("weather_code", 0)
+                weather_data.append({
+                    "region": region["name"], "city": region["city"],
+                    "temperature": current.get("temperature_2m"),
+                    "humidity": current.get("relative_humidity_2m"),
+                    "rain": current.get("rain", 0),
+                    "wind_speed": current.get("wind_speed_10m"),
+                    "weather_code": weather_code,
+                    "weather_desc": WMO_CODES.get(weather_code, "Tidak Diketahui"),
+                    "forecast_7d": {
+                        "dates": daily.get("time", []),
+                        "temp_max": daily.get("temperature_2m_max", []),
+                        "temp_min": daily.get("temperature_2m_min", []),
+                        "rain_sum": daily.get("rain_sum", []),
+                        "rain_prob": daily.get("precipitation_probability_max", [])
+                    }
+                })
+            except Exception:
+                weather_data.append({
+                    "region": region["name"], "city": region["city"],
+                    "temperature": None, "humidity": None, "rain": 0,
+                    "wind_speed": None, "weather_code": 0,
+                    "weather_desc": "Data tidak tersedia", "forecast_7d": {}
+                })
+
+        # 2. Fetch news from Google News RSS
+        search_queries = [
+            "pertanian+lombok+NTB+petani",
+            "tanam+panen+lombok+NTB",
+            "pupuk+pestisida+lombok+petani",
+            "harga+cabai+bawang+lombok+NTB",
+            "tembakau+padi+jagung+lombok",
+        ]
+        seen_titles = set()
+        for query in search_queries:
+            try:
+                rss_url = f"https://news.google.com/rss/search?q={query}&hl=id&gl=ID&ceid=ID:id"
+                resp = await client.get(rss_url)
+                if resp.status_code == 200:
+                    soup = BeautifulSoup(resp.text, "xml")
+                    items = soup.find_all("item")
+                    for item in items[:5]:
+                        title = item.find("title").text.strip() if item.find("title") else ""
+                        if not title or title in seen_titles:
+                            continue
+                        seen_titles.add(title)
+                        description = ""
+                        if item.find("description"):
+                            desc_soup = BeautifulSoup(item.find("description").text, "html.parser")
+                            description = desc_soup.get_text(strip=True)[:300]
+                        link = item.find("link").text.strip() if item.find("link") else ""
+                        pub_date = item.find("pubDate").text.strip() if item.find("pubDate") else ""
+                        source_el = item.find("source")
+                        source = source_el.text.strip() if source_el else ""
+                        news_articles.append({
+                            "title": title, "description": description,
+                            "link": link, "date": pub_date, "source": source
+                        })
+            except Exception:
+                continue
+
+        # 3. Scrape ntbprov.go.id for official news
+        try:
+            resp = await client.get("https://ntbprov.go.id/kategori/pertanian", timeout=10)
+            if resp.status_code == 200:
+                soup = BeautifulSoup(resp.text, "html.parser")
+                for article in soup.select("article, .post-item, .news-item, .card")[:5]:
+                    title_el = article.find("h2") or article.find("h3") or article.find("a")
+                    if title_el:
+                        title = title_el.get_text(strip=True)
+                        if title and title not in seen_titles and len(title) > 15:
+                            seen_titles.add(title)
+                            link_el = article.find("a", href=True)
+                            link = link_el["href"] if link_el else ""
+                            if link and not link.startswith("http"):
+                                link = "https://ntbprov.go.id" + link
+                            news_articles.append({
+                                "title": title, "description": "",
+                                "link": link, "date": "", "source": "ntbprov.go.id"
+                            })
+        except Exception:
+            pass
+
+        # 4. Scrape lombokpost
+        try:
+            resp = await client.get("https://lombokpost.jawapos.com/ntb/", timeout=10)
+            if resp.status_code == 200:
+                soup = BeautifulSoup(resp.text, "html.parser")
+                for article in soup.select("article, .latest__item, .post")[:5]:
+                    title_el = article.find("h2") or article.find("h3") or article.find("a")
+                    if title_el:
+                        title = title_el.get_text(strip=True)
+                        if title and title not in seen_titles and len(title) > 15 and any(
+                            kw in title.lower() for kw in ["tani", "padi", "jagung", "cabai", "bawang", "pupuk", "panen", "tanam", "pertanian", "petani", "tembakau"]
+                        ):
+                            seen_titles.add(title)
+                            link_el = article.find("a", href=True)
+                            link = link_el["href"] if link_el else ""
+                            news_articles.append({
+                                "title": title, "description": "",
+                                "link": link, "date": "", "source": "Lombok Post"
+                            })
+        except Exception:
+            pass
+
+    # Deduplicate and limit
+    news_articles = news_articles[:20]
+
+    now = datetime.now(timezone.utc)
+    month_name = ["Januari", "Februari", "Maret", "April", "Mei", "Juni",
+                  "Juli", "Agustus", "September", "Oktober", "November", "Desember"][now.month - 1]
+
+    weather_summary = "\n".join([
+        f"- {w['region']} ({w['city']}): {w['weather_desc']}, Suhu {w['temperature']}°C, "
+        f"Kelembaban {w['humidity']}%, Hujan {w['rain']}mm, Angin {w['wind_speed']}km/h"
+        for w in weather_data if w['temperature'] is not None
+    ])
+
+    news_summary = "\n".join([
+        f"- [{a['source']}] {a['title']}" + (f" - {a['description'][:150]}" if a['description'] else "")
+        for a in news_articles[:15]
+    ]) or "Tidak ada berita terkini yang ditemukan."
+
+    prompt = f"""Kamu adalah ahli pertanian berpengalaman di Pulau Lombok, Nusa Tenggara Barat, Indonesia.
+
+Bulan saat ini: {month_name} {now.year}
+
+=== CUACA SAAT INI ===
+{weather_summary}
+
+=== BERITA PERTANIAN TERKINI DARI BERBAGAI SUMBER ===
+{news_summary}
+
+Berdasarkan DATA REAL dari berita terkini di atas DAN kondisi cuaca saat ini, berikan analisis KOMPREHENSIF dalam format JSON (tanpa markdown code block):
+{{
+  "ringkasan_cuaca": "Deskripsi kondisi cuaca Lombok saat ini dan dampaknya untuk pertanian (2-3 kalimat)",
+  "musim": "hujan / kemarau / peralihan",
+  "aktivitas_pertanian_terkini": [
+    {{
+      "tanaman": "Nama tanaman yang SEDANG ditanam/dipanen petani Lombok (berdasarkan berita)",
+      "wilayah": "Wilayah di Lombok",
+      "status": "sedang tanam / sedang panen / persiapan lahan",
+      "detail": "Detail informasi dari berita (luas lahan, produksi, dll)",
+      "sumber_info": "Nama media/sumber berita yang melaporkan"
+    }}
+  ],
+  "kondisi_pasar": [
+    {{
+      "komoditas": "Nama komoditas",
+      "harga": "Harga terkini jika ada di berita",
+      "tren": "naik / turun / stabil",
+      "keterangan": "Konteks harga dan supply"
+    }}
+  ],
+  "tanaman_rekomendasi": [
+    {{
+      "nama": "Nama tanaman",
+      "jenis": "pangan/hortikultura/perkebunan",
+      "keterangan": "Kenapa cocok ditanam sekarang BERDASARKAN data real cuaca dan tren berita",
+      "wilayah_ideal": "Wilayah di Lombok yang paling cocok",
+      "masa_tanam": "Estimasi waktu tanam hingga panen",
+      "tips": "Tips singkat"
+    }}
+  ],
+  "kebutuhan_pupuk_obat": [
+    {{
+      "nama": "Nama pupuk/pestisida/obat",
+      "kategori": "pupuk/pestisida/fungisida/herbisida",
+      "kegunaan": "Untuk tanaman apa dan kenapa dibutuhkan",
+      "dosis": "Dosis yang disarankan",
+      "prioritas": "tinggi/sedang/rendah",
+      "alasan_prioritas": "Kenapa prioritas ini"
+    }}
+  ],
+  "hama_penyakit_waspada": [
+    {{
+      "nama": "Nama hama/penyakit",
+      "tanaman_target": "Tanaman yang rentan",
+      "tanda": "Tanda serangan",
+      "pencegahan": "Cara pencegahan"
+    }}
+  ],
+  "tips_musiman": ["Tip 1", "Tip 2", "Tip 3", "Tip 4"],
+  "peringatan": ["Peringatan penting jika ada"]
+}}
+
+PENTING: Untuk bagian "aktivitas_pertanian_terkini" dan "kondisi_pasar", HANYA gunakan data yang benar-benar ada di berita. Jangan mengarang. Jika tidak ada data, kosongkan array.
+Untuk "tanaman_rekomendasi" dan "kebutuhan_pupuk_obat", gunakan kombinasi data berita + pengetahuan ahli.
+Berikan minimal 5 tanaman rekomendasi, 6 pupuk/obat, dan 3 hama/penyakit."""
+
+    try:
+        llm_key = os.environ.get("EMERGENT_LLM_KEY", "")
+        chat = LlmChat(api_key=llm_key, session_id=str(uuid.uuid4()),
+            system_message="Kamu adalah ahli pertanian Lombok. Selalu balas dalam format JSON valid tanpa markdown code block. Gunakan bahasa Indonesia.")
+        chat = chat.with_model("openai", "gpt-4o")
+        chat = chat.with_params(temperature=0.3)
+        result_text = await chat.send_message(UserMessage(text=prompt))
+        import json as json_module
+        try:
+            ai_data = json_module.loads(result_text)
+        except json_module.JSONDecodeError:
+            if "```" in result_text:
+                json_str = result_text.split("```")[1]
+                if json_str.startswith("json"):
+                    json_str = json_str[4:]
+                ai_data = json_module.loads(json_str.strip())
+            else:
+                ai_data = {"ringkasan_cuaca": result_text, "musim": "", "aktivitas_pertanian_terkini": [],
+                           "kondisi_pasar": [], "tanaman_rekomendasi": [], "kebutuhan_pupuk_obat": [],
+                           "hama_penyakit_waspada": [], "tips_musiman": [], "peringatan": []}
+        return {"status": "success", "weather": weather_data, "news": news_articles,
+                "ai": ai_data, "bulan": f"{month_name} {now.year}"}
+    except Exception as e:
+        return {"status": "fallback", "weather": weather_data, "news": news_articles,
+                "ai": {"ringkasan_cuaca": f"AI tidak tersedia: {str(e)}", "musim": "",
+                        "aktivitas_pertanian_terkini": [], "kondisi_pasar": [],
+                        "tanaman_rekomendasi": [], "kebutuhan_pupuk_obat": [],
+                        "hama_penyakit_waspada": [], "tips_musiman": [], "peringatan": []},
+                "bulan": f"{month_name} {now.year}"}
+
+
 @router.post("/forecast/stock")
 async def forecast_stock(admin: dict = Depends(require_admin_panel_access)):
     from emergentintegrations.llm.openai import LlmChat, UserMessage
