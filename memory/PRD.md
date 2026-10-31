@@ -65,8 +65,48 @@ Aplikasi web responsif untuk toko pertanian "UD. AQIN TANI" dengan sistem manaje
 47. Terjual Semua - Tombol di dialog settlement kanvaser untuk auto-isi semua qty terjual
 48. Filter Retur di Struk - Struk kios mitra hanya tampilkan item yang terjual (settled_items), item retur dikeluarkan
 49. Filter Retur di Laporan - Laporan partner sales detail, best sellers, dan laba/rugi menggunakan qty settled untuk pesanan yang sudah diselesaikan
+50. MongoDB Indexing - Index komprehensif pada 15+ koleksi untuk optimasi performa query (transactions, products, partner_orders, purchases, warehouse_stock, users, dll)
+51. Koreksi Hutang Supplier - Fitur edit/koreksi manual sisa hutang supplier dengan audit trail
+52. Koreksi Hutang Petani - Fitur edit/koreksi manual sisa hutang petani dengan audit trail
+53. Fix Piutang Kios Mitra - Pembayaran lebih dari total piutang sekarang bisa minus (kelebihan bayar)
+54. Stok Mobil Box - Halaman baru untuk kelola barang kondisional di kendaraan (muat, jual ke kios, retur ke gudang)
+55. Integrasi Aset Mobil - Nilai stok mobil box ditambahkan ke perhitungan Nilai Aset Bersih di dashboard
+56. Alur Pesanan Kondisional - Pesanan kondisional di halaman Pesanan Kios Mitra sekarang langsung masuk ke Stok Mobil Box (pilih mobil, bukan kios mitra)
+57. Oper Pesanan - Fitur transfer pesanan dari satu kios ke kios lain, dengan edit harga jual manual dan pilih pembayaran cash/bon
+58. Settlement Retur ke Stok Box - Sisa barang dari penyelesaian pesanan kanvaser kini masuk ke stok mobil box (bukan langsung gudang)
+59. Edit Harga Stok Mobil - Tombol edit harga jual per item di halaman Stok Mobil Box
+60. Retur Pilih Gudang - Retur dari stok mobil box kini bisa pilih gudang tujuan (Utama/Toko)
+61. Oper ke Pesanan Existing - Transfer/oper pesanan otomatis merge ke pesanan aktif kios tujuan (tidak buat baru)
+62. Edit Harga di Modal Jual - Harga jual bisa diedit langsung di form penjualan stok mobil box
+63. Konversi Unit Stok Box - Loading dari gudang dus otomatis dikonversi ke pcs di vehicle stock
+64. Simplifikasi Supplier Debt - Pembayaran hutang supplier disederhanakan, retur per-item dihilangkan
+65. Bulk Add Product - Form "Tambah Barang dari Supplier" untuk input banyak barang sekaligus dari satu supplier, dengan integrasi hutang supplier (bayar di muka, invoice, jatuh tempo) dan search supplier
+66. Retur ke Mobil Box - Modal retur di Pesanan Kios Mitra kini bisa pilih tujuan: Gudang atau Mobil Box
+67. Oper Pesanan Merge Fix - Fix query oper pesanan agar handle kedua ejaan "cancelled"/"canceled"
+68. Info Pertanian Lombok - Tab baru di Analytics: cuaca real-time 4 wilayah Lombok (Open-Meteo API), berita pertanian real dari Google News RSS + scraping portal berita NTB (LombokPost, insidelombok, ntbprov.go.id, ANTARA, dll), aktivitas pertanian terkini berdasarkan data berita, kondisi pasar komoditas, rekomendasi tanaman, kebutuhan pupuk/obat, waspada hama/penyakit (AI GPT-4o menganalisis data cuaca + berita real). Menggantikan tab Prediksi Stok AI.
+69. Redesign Halaman Hutang Supplier - Tabel detail pembelian per-item (tanggal, nama barang, qty dus+satuan, harga pokok, total, jatuh tempo per tanggal). Search nama barang + filter tanggal. Import riwayat pembelian dari CSV (hutang saja, tanpa stok).
+70. Redesign Detail Kios Mitra - Tabel detail pesanan per-item (tanggal, no order, nama barang terjual, qty dus, qty satuan, harga jual, total, setoran). Subtotal per tanggal + Grand Total. Search nama barang + filter tanggal. Import riwayat pesanan dari CSV (menambah piutang). Backend: GET /partner-stores/{id}/order-items, POST /partner-stores/{id}/import-orders-csv.
+71. Sorting & Pagination Hutang Supplier - Data pembelian di detail supplier disortir berdasarkan tanggal terbaru. Ditambahkan pagination per grup tanggal (10 grup per halaman) untuk data yang banyak.
+72. Pagination & Sorting Detail Kios Mitra - Data pesanan di detail kios mitra disortir tanggal terbaru + pagination per grup tanggal (10 per halaman).
+73. Import Riwayat Bayar Supplier - Fitur import CSV riwayat pembayaran di tab Riwayat Bayar supplier. Mengurangi hutang secara FIFO (dari pembelian terlama). Format: Tanggal, Jumlah, Catatan.
+74. Import Riwayat Setoran Kios Mitra - Fitur import CSV riwayat setoran di section Riwayat Setoran detail kios mitra. Mengurangi piutang. Format: Tanggal, Jumlah, Catatan. Section selalu ditampilkan + total setoran.
+75. Support XLSX Import - Semua fitur import (pembelian supplier, pembayaran supplier, pesanan kios mitra, setoran kios mitra) sekarang mendukung format CSV dan XLSX. Menggunakan library SheetJS (xlsx). Parser terpusat di `utils/fileParser.js` dengan handle tanggal Excel numeric.
+76. Cetak Faktur Dot Matrix (Epson LX-310) - Tombol "Cetak Faktur" di halaman struk kios mitra. Format INVOICE untuk kertas NCR 3-ply (22x14cm) dengan layout: INVOICE+nama toko (2 kolom header), kepada/alamat kios, no invoice/tanggal, kode sales, tabel item (No/Nama/Jml CTN/Quantity/Harga/Jumlah), terbilang (angka ke kata Indonesia), catatan+ringkasan keuangan (2 kolom: Sub Total/Bon/Total Tagihan). Continuous form printing (33 baris/halaman, tanpa FF). Max 10 item/halaman. Cash invoice tanpa sisa hutang.
+77. Fix Retur ke Gudang saat Settlement - Bug: retur dari settlement selalu masuk vehicle_stock meskipun user pilih retur ke gudang. Fix: tambah field `return_to` di SettlementRequest ("vehicle" atau "warehouse"). Jika "warehouse": retur masuk ke gudang asal (gudang_toko=satuan, gudang_utama=dus) + recalculate_product_stock dipanggil. UI: radio button "Stok Mobil Box" / "Gudang" di dialog settlement canvasser.
 
 ## Credentials
+78. Fix Retur Vehicle Stock ke Gudang - Input retur dalam unit gudang tujuan (DUS/PCS). Retur ke gudang dus: kurangi vehicle (qty*ipb) pcs, tambah warehouse qty dus. recalculate_product_stock dipanggil. UI: label dinamis, info konversi, max limit.
+79. Cetak Stok Mobil Box - Tombol "Cetak Stok": tabel stok (Muat/Jual/Retur/Sisa pcs/Sisa dus+pcs/Harga/Nilai), total nilai, highlight BARU untuk barang dimuat hari ini, tabel pesanan kios hari ini.
+80. Fix Retur Batch Vehicle Stock (02 Feb 2026) - Bug: retur Dus + Satuan bersamaan menyebabkan race condition (frontend mengirim 2 request berurutan, request kedua gagal validasi karena stock sudah berkurang). Fix backend: endpoint `POST /vehicle-stock/{id}/return` menerima `return_dus` + `return_pcs` dalam satu payload, atomic update vehicle stock, lalu split ke `gudang_utama` (dus) dan `gudang_toko` (pcs). Fix frontend `VehicleStock.js` `handleReturn`: kirim 1 request batch + `await fetchData()` untuk refresh UI. Fix juga import `recalculate_product_stock` dari services di `vehicle_stock_routes.py` (sebelumnya NameError).
+81. Fix Konversi Unit Load Vehicle Stock (02 Feb 2026) - Bug: load barang dari gudang dus menyebabkan stok berkurang hanya 0.1 dus (bukan 1 dus) karena `quantity / ipb` salah. Fix: `qty_in_wh_unit = quantity` (frontend sudah kirim dalam unit gudang). Akibat sebelumnya: stok decimal (9.9, 9.8) yang muncul sebagai 11.9, 11.8 saat retur.
+82. Tampilkan Unit di Struk Pesanan Kios (05 Feb 2026) - Item pesanan kios kini tampilkan unit di struk: "2 dus x 10.000" untuk gudang dus, "3 pcs x 10.000" untuk gudang satuan. Field `unit` ditambahkan saat create order & add-items, dan dihitung otomatis oleh GET endpoint untuk data legacy.
+83. Fix Retur Update Struk + Sisa Bon (05 Feb 2026) - Bug: retur barang dari halaman pesanan kios tidak mengurangi struk maupun sisa bon. Fix: endpoint `/returns` untuk `partner_order` kini mengurangi `order.items[].quantity`, recalc `item.subtotal` dengan ipb (jika dus), update `order.total/subtotal/remaining` dan `partner.current_debt` real-time. Item dengan `quantity=0` difilter dari struk.
+84. Filter Item Qty=0 di Semua Path Cetak (12 Feb 2026) - Bug: setelah retur/oper, item dengan qty=0 masih ikut tercetak di bluetooth/server thermal/dot matrix. Fix: filter `(item.quantity || 0) > 0` di `ThermalPrinter.buildPartnerOrderData` dan `DotMatrixPrinter.prepareItems`. Sekaligus tampilkan unit di struk thermal (mis. "2 dus x 10.000").
+85. Pesanan Barter Toko ↔ Kios Mitra (12 Feb 2026) - Tipe pesanan baru "Barter" di dialog Pesanan Kios Mitra: dua sisi (Kios Ambil dari Toko + Toko Ambil dari Kios). Sistem otomatis kurangi stok gudang untuk barang kios ambil, tambah stok gudang untuk barang toko ambil, dan hitung selisih net. Jika toko ambil > kios ambil → piutang minus (toko hutang ke kios mitra). Field tersimpan: `order_type=barter`, `barter_received_items[]`, `barter_received_total`. Mendukung qty dus/satuan dengan kalkulasi ipb otomatis.
+86. Security Hardening (15 Feb 2026) - **XSS Mitigation**: Tambah `utils/htmlEscape.js`, escape semua data dinamis (product_name, store_name, partner_name, address, vehicle_name, order_number, dll) di `document.write()` paths: `PartnerOrderReceipt.js`, `ReceiptPreview.js`, `VehicleStock.js` (print stock), `DotMatrixPrinter.js` (invoice fallback). Cegah eksekusi script jika ada data ber-HTML di nama produk/kios. **Secret Hardening**: kredensial test di `backend/tests/test_new_features.py` dipindah ke env var (`TEST_ADMIN_EMAIL`/`TEST_ADMIN_PASSWORD`). **Error Visibility**: 8 file dengan `} catch {}` silent error sekarang `console.error(e)` agar bug bisa di-trace (POS, Dashboard, Canvassers, VehicleStock, CanvasserDashboard, AdminLayout, ThermalPrinter).
+87. Fix Retur Settled Order — Update settled_items (15 Feb 2026) - Bug: pesanan kanvaser yang sudah disetel (`is_settled=true`), saat di-retur, cetak struk/faktur masih menampilkan barang lama karena `settled_items[].qty_sold` tidak diupdate (cetak pakai field ini, bukan `order.items`). Fix di `transaction_routes.create_return`: jika order `is_settled`, juga kurangi `settled_items[].qty_sold` selain `order.items[].quantity`. Konsisten dengan filter print `qty_sold > 0`.
+88. Surat Jalan via Print Server ESC/P (19 Jun 2026) - **Identik dengan flow Cetak Faktur**: tombol "Cetak Surat Jalan" sekarang mengirim ESC/P raw bytes ke print server lokal (`localhost:9100/print-dotmatrix`) menggunakan **font bawaan printer Epson LX-310** (cepat, tanpa membuka browser print dialog). Format kertas 22cm × 14cm continuous form. **Halaman statis: max 8 baris item/halaman**, tabel selalu 8 baris penuh (padded), total 33 baris/halaman (pas dengan potongan kertas). Tiap halaman: HEADER (SURAT JALAN, Kepada Yth nama/telp/alamat, No.Invoice/Tanggal, Pengirim) + TABEL (No, Nama Barang, Quantity dus/pcs, Keterangan) + FOOTER (PERHATIAN 1-2-3, BARANG SUDAH DITERIMA DALAM KEADAAN BAIK DAN SESUAI rata kiri, 3 label TTD: Penerima, Bagian Pengiriman, Petugas Gudang dengan garis `______________` di bawah). Method: `dotMatrixPrinter.buildSuratJalan()` + `printSuratJalan()`.
+89. Unit Display per Nama Barang (24 Jun 2026) - Util baru `utils/unitDisplay.js` yang transformasi unit tampilan di struk/invoice/faktur/surat jalan berdasarkan nama barang: (1) **Akhiran "ml", "ML", "L"** (contoh "ABACEL 10 X 1L"): pesanan dus tetap "dus", pesanan satuan → **"btl"** (botol). (2) **Nama mengandung "npk"**: pesanan dus → **"zak"**, pesanan satuan tetap "pcs". (3) Barang lain tidak diubah. Diterapkan di 4 lokasi: `PartnerOrderReceipt.js` (visual + browser), `ThermalPrinter.buildPartnerOrderData` (bluetooth + server), `DotMatrixPrinter.buildPartnerInvoice` (faktur), `DotMatrixPrinter.buildSuratJalan`. Backend tidak diubah—unit asli ("dus"/"pcs") tetap tersimpan untuk kalkulasi; display aja yang beda. Berlaku juga untuk order lama secara retroaktif.
 - Admin: admin@aqintani.com / admin123
 - Office Staff: karyawan@aqintani.com / karyawan123
 - Cashier: kasir@aqintani.com / kasir123
@@ -83,13 +123,36 @@ Aplikasi web responsif untuk toko pertanian "UD. AQIN TANI" dengan sistem manaje
 1. Halaman baru untuk kelola "barang retur" dari canvasser
 2. Fitur di halaman laporan admin untuk melihat & kelola retur tersebut
 
+## Future Tasks (P2)
+1. Rekap harian stok mobil box (muat, terjual, retur per hari per mobil)
+
 ## Key Files
-- `/app/print_server.py` - Local print server with auto-start
+- `/app/print_server.py` - Local print server with auto-start (thermal + dot matrix)
+- `/app/frontend/src/utils/ThermalPrinter.js` - ESC/POS thermal printer utility
+- `/app/frontend/src/utils/DotMatrixPrinter.js` - ESC/P dot matrix printer utility (Epson LX-310)
+- `/app/frontend/src/utils/fileParser.js` - Shared CSV/XLSX parser utility
 - `/app/frontend/src/pages/POS.js` - POS with editable qty, shift, retur/tukar
 - `/app/frontend/src/pages/PartnerOrders.js` - Partner orders with editable qty, harga satuan
+- `/app/frontend/src/pages/PartnerOrderReceipt.js` - Receipt page: thermal + bluetooth + dot matrix faktur
+- `/app/frontend/src/pages/CanvasserDashboard.js` - Settlement with return_to option (vehicle/warehouse)
 - `/app/frontend/src/pages/CanvasserDashboard.js` - Settlement, rekap, sisa bon
 - `/app/frontend/src/pages/Reports.js` - All reports + Rekap Kanvaser tab
-- `/app/backend/routers/partner_routes.py` - Settle endpoint, order_type
+- `/app/frontend/src/pages/PartnerStoreDetail.js` - Detail kios mitra: tabel pesanan per-item, search/filter, import CSV
+- `/app/frontend/src/pages/SupplierDebt.js` - Detail hutang supplier per-item, search/filter, import CSV
+- `/app/backend/routers/partner_routes.py` - Settle, order items, CSV import, transfer
 - `/app/backend/routers/report_routes.py` - Dashboard stats, canvasser recap
 - `/app/backend/routers/canvasser_routes.py` - My recap, enriched my-orders
 - `/app/backend/models.py` - supplier_cost_price, order_type, is_settled
+
+## 2026-06 — UI/UX & Motion Revamp (MaterialM-inspired, green theme)
+- Style only, no logic changes. Font Plus Jakarta Sans; primary leaf green, amber secondary; soft shadows (shadow-soft/-lg/-xl/glow), card radius 18px (rounded-tw), pill buttons, `lightprimary` token.
+- AdminLayout: white sidebar fixed on desktop (collapsible via menu-toggle), mobile drawer + overlay, sticky glass header with breadcrumb, user chip, dark mode.
+- Motion (CSS only): page fade on route change, staggered section reveal (`.page-enter`, `.stagger`), nav item entrance, button press scale, input focus ring, dialog blur overlay, tab content fade; respects prefers-reduced-motion; disabled in print.
+- Updated shadcn: button, card, input, textarea, select, table, badge, tabs, dialog, alert-dialog, dropdown, popover. Login, POS, Canvasser, FarmerDebts, DailyTransactions restyled. Receipt/print output untouched.
+- Testing: screenshots only (user asked to skip testing agent).
+
+## 2026-06 — Skeleton loading, Solar icons, favicon
+- All page-level spinners replaced by `components/PageSkeleton.js` (variants: dashboard/table/list/form/receipt) with shimmer (`.skeleton-shimmer`).
+- Icons: lucide replaced app-wide by Solar bold-duotone (MaterialM icon set) via `src/components/icons` (same export names; map in `map.json`; offline subset `solar-subset.json` built by `node scripts/build-icons.js` — rerun after adding names). Checkbox/radio/menu indicators in ui/ still use lucide.
+- Favicon: `public/favicon.svg`, `favicon.ico`, `apple-touch-icon.png`, `logo192/512.png`, `manifest.json` (green leaf logo).
+- Testing: screenshots only (user asked to skip testing agent).

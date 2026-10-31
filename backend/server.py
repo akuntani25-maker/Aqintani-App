@@ -2,12 +2,13 @@ from fastapi import FastAPI, APIRouter
 from fastapi.responses import PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.cors import CORSMiddleware
+from starlette.middleware.gzip import GZipMiddleware
 import os
 import logging
 import uuid
 from datetime import datetime, timezone
 
-from database import db
+from database import db, create_indexes
 from auth import hash_password
 from services import ensure_warehouse_stock, recalculate_product_stock
 
@@ -23,6 +24,7 @@ from routers import (
     admin_routes,
     loan_farmer_routes,
     shift_routes,
+    vehicle_stock_routes,
 )
 
 app = FastAPI()
@@ -40,12 +42,16 @@ api_router.include_router(report_routes.router)
 api_router.include_router(admin_routes.router)
 api_router.include_router(loan_farmer_routes.router)
 api_router.include_router(shift_routes.router)
+api_router.include_router(vehicle_stock_routes.router)
 
 app.include_router(api_router)
 
 # Serve uploaded product images
 os.makedirs("uploads/products", exist_ok=True)
 app.mount("/api/uploads", StaticFiles(directory="uploads"), name="uploads")
+
+# compress JSON responses (product lists, orders) — large lists shrink ~5-8x
+app.add_middleware(GZipMiddleware, minimum_size=1024)
 
 app.add_middleware(
     CORSMiddleware,
@@ -67,20 +73,77 @@ async def health_check():
     return {"status": "ok"}
 
 
+async def _run_product_migration():
+    """Background migration — gated by marker, batched to reduce round-trips."""
+    try:
+        marker = await db.migrations.find_one({"name": "product_warehouse_stock_init_v1"})
+        if marker and marker.get("completed"):
+            return
+        logger.info("Running product/warehouse_stock migration in background...")
+        products = await db.products.find({}, {"_id": 0}).to_list(10000)
+        product_ids = {p["id"] for p in products}
+        for p in products:
+            await ensure_warehouse_stock(p["id"])
+            all_wh_stock = await db.warehouse_stock.find({"product_id": p["id"]}, {"_id": 0}).to_list(10)
+            total_wh = sum(s.get("stock", 0) for s in all_wh_stock)
+            if total_wh == 0 and p.get("stock", 0) > 0:
+                await db.warehouse_stock.update_one(
+                    {"product_id": p["id"], "warehouse_id": "gudang_toko"},
+                    {"$set": {"stock": p["stock"]}}
+                )
+            if "items_per_box" not in p:
+                await db.products.update_one({"id": p["id"]}, {"$set": {"items_per_box": 1, "box_price": 0}})
+            await recalculate_product_stock(p["id"])
+
+        # Clean orphaned warehouse_stock entries — bulk by distinct product_id
+        orphan_pids = await db.warehouse_stock.distinct("product_id")
+        orphans = [pid for pid in orphan_pids if pid not in product_ids]
+        if orphans:
+            await db.warehouse_stock.delete_many({"product_id": {"$in": orphans}})
+
+        await db.migrations.update_one(
+            {"name": "product_warehouse_stock_init_v1"},
+            {"$set": {"completed": True, "completed_at": datetime.now(timezone.utc).isoformat()}},
+            upsert=True
+        )
+        logger.info("Product migration completed")
+    except Exception as e:
+        logger.error(f"Product migration failed: {e}")
+
+
 @app.on_event("startup")
 async def startup_db():
+    # Init Emergent object storage (non-blocking — log if fails)
+    try:
+        from storage import init_storage
+        init_storage()
+        logger.info("Emergent object storage initialized")
+    except Exception as e:
+        logger.warning(f"Object storage init failed (uploads may fail): {e}")
+
+    # Create database indexes for performance
+    await create_indexes()
+
     admin_exists = await db.users.find_one({"role": "admin"})
     if not admin_exists:
+        # First run on an empty database. Credentials come from .env; if no password is
+        # given a random one is generated and written once to the log.
+        import secrets
+        admin_email = os.environ.get("ADMIN_EMAIL", "admin@aqintani.com")
+        admin_password = os.environ.get("ADMIN_PASSWORD") or secrets.token_urlsafe(12)
         default_admin = {
             "id": str(uuid.uuid4()),
-            "email": "admin@aqintani.com",
-            "password": hash_password("admin123"),
+            "email": admin_email,
+            "password": hash_password(admin_password),
             "name": "Administrator",
             "role": "admin",
             "created_at": datetime.now(timezone.utc).isoformat()
         }
         await db.users.insert_one(default_admin)
-        logger.info("Default admin created: admin@aqintani.com / admin123")
+        if os.environ.get("ADMIN_PASSWORD"):
+            logger.info(f"Default admin created: {admin_email} (password from ADMIN_PASSWORD)")
+        else:
+            logger.warning(f"Default admin created: {admin_email} / {admin_password}  <- change it after first login")
 
     # Seed warehouses
     wh_count = await db.warehouses.count_documents({})
@@ -92,28 +155,11 @@ async def startup_db():
         ])
         logger.info("Default warehouses created")
 
-    # Migrate existing products
-    products = await db.products.find({}, {"_id": 0}).to_list(10000)
-    product_ids = set()
-    for p in products:
-        product_ids.add(p["id"])
-        await ensure_warehouse_stock(p["id"])
-        all_wh_stock = await db.warehouse_stock.find({"product_id": p["id"]}, {"_id": 0}).to_list(10)
-        total_wh = sum(s.get("stock", 0) for s in all_wh_stock)
-        if total_wh == 0 and p.get("stock", 0) > 0:
-            await db.warehouse_stock.update_one(
-                {"product_id": p["id"], "warehouse_id": "gudang_toko"},
-                {"$set": {"stock": p["stock"]}}
-            )
-        if "items_per_box" not in p:
-            await db.products.update_one({"id": p["id"]}, {"$set": {"items_per_box": 1, "box_price": 0}})
-        await recalculate_product_stock(p["id"])
-
-    # Clean orphaned warehouse_stock entries
-    all_wh_stocks = await db.warehouse_stock.find({}, {"_id": 0}).to_list(100000)
-    for s in all_wh_stocks:
-        if s.get("product_id") not in product_ids:
-            await db.warehouse_stock.delete_many({"product_id": s["product_id"]})
+    # Jalankan migrasi berat (ratusan produk × puluhan round-trip Mongo) di background
+    # agar uvicorn bisa langsung bind port 8001 dan readiness probe lulus.
+    # Dilindungi marker agar tidak re-run di tiap boot.
+    import asyncio
+    asyncio.create_task(_run_product_migration())
 
 
 @app.on_event("shutdown")

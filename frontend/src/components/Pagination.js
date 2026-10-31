@@ -1,6 +1,6 @@
 import React from 'react';
 import { Button } from './ui/button';
-import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight } from './icons';
 
 export const Pagination = ({ page, totalPages, total, perPage, onChange }) => {
   if (totalPages <= 1) return null;

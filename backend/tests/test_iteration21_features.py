@@ -313,7 +313,7 @@ class TestReturnDateLimit:
                     if days_diff > 2 and txn.get("items", []):
                         old_txn = txn
                         break
-                except:
+                except Exception:
                     continue
         
         if not old_txn:

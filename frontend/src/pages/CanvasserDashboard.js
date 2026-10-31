@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { PageSkeleton } from '../components/PageSkeleton';
 import { useNavigate } from 'react-router-dom';
 import { api, useAuth } from '../context/AuthContext';
 import { Button } from '../components/ui/button';
@@ -8,7 +9,7 @@ import { Label } from '../components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../components/ui/dialog';
 import { toast } from 'sonner';
-import { Package, MapPin, DollarSign, CheckCircle, Truck, LogOut, Search, Bell, Filter, X, ShoppingBag, Warehouse, Printer, BarChart2 } from 'lucide-react';
+import { Package, MapPin, DollarSign, CheckCircle, Truck, LogOut, Search, Bell, Filter, X, ShoppingBag, Warehouse, Printer, BarChart2, ArrowRightLeft } from '../components/icons';
 import { Pagination } from '../components/Pagination';
 
 const fmtCurrency = (v) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(v);
@@ -31,6 +32,7 @@ export const CanvasserDashboard = () => {
   // Settlement (partial return)
   const [settleDialog, setSettleDialog] = useState(null);
   const [settleItems, setSettleItems] = useState([]);
+  const [settleReturnTo, setSettleReturnTo] = useState('vehicle');
 
   // My Recap
   const [myRecap, setMyRecap] = useState(null);
@@ -42,10 +44,20 @@ export const CanvasserDashboard = () => {
   const [page, setPage] = useState(1);
   const perPage = 10;
 
+  // Transfer
+  const [transferDialog, setTransferDialog] = useState(null);
+  const [transferItems, setTransferItems] = useState([]);
+  const [transferStoreId, setTransferStoreId] = useState('');
+  const [transferPayment, setTransferPayment] = useState('bon');
+  const [transferStoreSearch, setTransferStoreSearch] = useState('');
+  const [transferSubmitting, setTransferSubmitting] = useState(false);
+  const [partnerStores, setPartnerStores] = useState([]);
+
   useEffect(() => {
     fetchMyOrders();
     fetchNotifications();
     fetchMyRecap();
+    api.get('/partner-stores').then(r => setPartnerStores(r.data)).catch(() => {});
     const interval = setInterval(fetchNotifications, 30000);
     return () => clearInterval(interval);
   }, []);
@@ -65,7 +77,7 @@ export const CanvasserDashboard = () => {
     try {
       const res = await api.get('/canvassers/notifications');
       setNotifications(res.data);
-    } catch {}
+    } catch (e) { console.error(e); }
   };
 
   const fetchMyRecap = async () => {
@@ -73,7 +85,7 @@ export const CanvasserDashboard = () => {
       const today = new Date().toISOString().split('T')[0];
       const res = await api.get(`/canvassers/my-recap?date=${today}`);
       setMyRecap(res.data);
-    } catch {}
+    } catch (e) { console.error(e); }
   };
 
   useEffect(() => {
@@ -86,7 +98,7 @@ export const CanvasserDashboard = () => {
       try {
         const res = await api.get(`/canvassers/product-search?q=${encodeURIComponent(productQuery)}`);
         setProductResults(res.data);
-      } catch {}
+      } catch (e) { console.error(e); }
       setProductSearching(false);
     }, 300);
     return () => clearTimeout(timer);
@@ -130,6 +142,7 @@ export const CanvasserDashboard = () => {
 
   const openSettlement = (order) => {
     setSettleDialog(order);
+    setSettleReturnTo('vehicle');
     setSettleItems(order.items.map(item => ({
       product_id: item.product_id,
       product_name: item.product_name,
@@ -152,7 +165,8 @@ export const CanvasserDashboard = () => {
           qty_sold: si.qty_sold,
           original_qty: si.original_qty,
           price: si.price
-        }))
+        })),
+        return_to: settleReturnTo
       });
       const { return_items, new_total, debt_reduced } = res.data;
       const returnMsg = return_items.length > 0
@@ -168,6 +182,36 @@ export const CanvasserDashboard = () => {
   };
 
   const formatCurrency = (value) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(value);
+
+  const openTransferDialog = (order) => {
+    setTransferDialog(order);
+    setTransferItems(order.items.filter(i => i.quantity > 0).map(i => ({
+      product_id: i.product_id, product_name: i.product_name,
+      quantity: i.quantity, max_qty: i.quantity,
+      new_price: i.price, selected: false
+    })));
+    setTransferStoreId('');
+    setTransferPayment('bon');
+    setTransferStoreSearch('');
+  };
+
+  const handleTransfer = async () => {
+    const selected = transferItems.filter(i => i.selected && i.quantity > 0);
+    if (selected.length === 0) { toast.error('Pilih item yang akan dioper'); return; }
+    if (!transferStoreId) { toast.error('Pilih kios mitra tujuan'); return; }
+    setTransferSubmitting(true);
+    try {
+      await api.post(`/partner-orders/${transferDialog.id}/transfer`, {
+        new_partner_store_id: transferStoreId,
+        items: selected.map(i => ({ product_id: i.product_id, quantity: i.quantity, new_price: i.new_price })),
+        payment_type: transferPayment
+      });
+      toast.success('Pesanan berhasil dioper');
+      setTransferDialog(null);
+      fetchMyOrders();
+    } catch (e) { toast.error(e.response?.data?.detail || 'Gagal mengoper pesanan'); }
+    finally { setTransferSubmitting(false); }
+  };
 
   const getStatusColor = (status) => {
     const colors = {
@@ -194,9 +238,7 @@ export const CanvasserDashboard = () => {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
-      </div>
+      <PageSkeleton variant="dashboard" />
     );
   }
 
@@ -206,10 +248,10 @@ export const CanvasserDashboard = () => {
   return (
     <div className="min-h-screen bg-gradient-mesh">
       {/* Header */}
-      <div className="bg-white border-b shadow-sm sticky top-0 z-10">
+      <div className="bg-card/80 backdrop-blur-xl border-b border-border/50 sticky top-0 z-10">
         <div className="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-12 h-12 bg-primary rounded-xl flex items-center justify-center">
+            <div className="w-12 h-12 bg-primary rounded-2xl flex items-center justify-center shadow-glow">
               <Truck className="w-6 h-6 text-white" />
             </div>
             <div>
@@ -239,7 +281,7 @@ export const CanvasserDashboard = () => {
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-4 py-6 space-y-6">
+      <div className="max-w-7xl mx-auto px-4 py-6 space-y-6 stagger">
         {/* Summary Cards */}
         <div className="grid grid-cols-3 gap-3 md:gap-4">
           <Card className="p-4 md:p-6" data-testid="pending-count-card">
@@ -535,6 +577,17 @@ export const CanvasserDashboard = () => {
                           Selesaikan
                         </Button>
                       )}
+                      {!order.is_settled && order.status !== 'cancelled' && order.items.length > 0 && (
+                        <Button
+                          variant="outline"
+                          onClick={() => openTransferDialog(order)}
+                          className="w-full border-purple-200 text-purple-700 hover:bg-purple-50"
+                          data-testid={`transfer-btn-${order.id}`}
+                        >
+                          <ArrowRightLeft className="w-4 h-4 mr-2" />
+                          Oper Pesanan
+                        </Button>
+                      )}
                       {order.is_settled && (
                         <span className="text-xs text-center text-green-600 font-semibold">Sudah Diselesaikan</span>
                       )}
@@ -687,10 +740,7 @@ export const CanvasserDashboard = () => {
                       </div>
                       {remaining > 0 && (
                         <div className="text-xs text-amber-700 bg-amber-50 p-2 rounded">
-                          Kembali: {fullBoxes > 0 && <span className="font-semibold">{fullBoxes} dus (gudang utama)</span>}
-                          {fullBoxes > 0 && partialPcs > 0 && ' + '}
-                          {partialPcs > 0 && <span className="font-semibold">{partialPcs} pcs (gudang toko)</span>}
-                          {remaining > 0 && fullBoxes === 0 && partialPcs === 0 && <span className="font-semibold">{remaining} pcs</span>}
+                          Sisa retur: <span className="font-semibold">{remaining} pcs</span>
                         </div>
                       )}
                       <p className="text-xs text-right font-semibold">
@@ -712,10 +762,112 @@ export const CanvasserDashboard = () => {
                 </div>
               </div>
 
+              {settleItems.some(i => {
+                const isDus = i.warehouse_unit === 'dus';
+                const ipb = i.items_per_box || 1;
+                const totalPcs = isDus ? i.original_qty * ipb : i.original_qty;
+                return totalPcs - i.qty_sold > 0;
+              }) && (
+                <div className="p-3 border rounded-lg space-y-2 bg-muted/30">
+                  <Label className="text-xs font-semibold">Tujuan retur barang sisa:</Label>
+                  <div className="flex gap-3">
+                    <label className="flex items-center gap-1.5 cursor-pointer text-sm">
+                      <input type="radio" name="return_to" value="vehicle" checked={settleReturnTo === 'vehicle'}
+                        onChange={() => setSettleReturnTo('vehicle')} className="accent-primary" data-testid="return-to-vehicle" />
+                      Stok Mobil Box
+                    </label>
+                    <label className="flex items-center gap-1.5 cursor-pointer text-sm">
+                      <input type="radio" name="return_to" value="warehouse" checked={settleReturnTo === 'warehouse'}
+                        onChange={() => setSettleReturnTo('warehouse')} className="accent-primary" data-testid="return-to-warehouse" />
+                      Gudang
+                    </label>
+                  </div>
+                </div>
+              )}
+
               <div className="flex gap-2 justify-end pt-2">
                 <Button variant="outline" onClick={() => setSettleDialog(null)}>Batal</Button>
                 <Button onClick={handleSettlement} data-testid="confirm-settlement-btn">
                   Selesaikan Pesanan
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Transfer Dialog */}
+      <Dialog open={!!transferDialog} onOpenChange={() => setTransferDialog(null)}>
+        <DialogContent className="max-w-lg" data-testid="canvasser-transfer-dialog">
+          <DialogHeader><DialogTitle>Oper Pesanan</DialogTitle></DialogHeader>
+          {transferDialog && (
+            <div className="space-y-4 max-h-[70vh] overflow-y-auto">
+              <Card className="p-3 bg-muted/50">
+                <p className="text-sm">Dari: <strong>{transferDialog.partner_store_name}</strong></p>
+                <p className="text-xs text-muted-foreground">{transferDialog.order_number}</p>
+              </Card>
+
+              <div className="space-y-2">
+                <Label>Pilih item yang dioper:</Label>
+                {transferItems.map((item, idx) => (
+                  <div key={item.product_id} className={`p-3 border rounded-lg space-y-2 ${item.selected ? 'border-purple-300 bg-purple-50/50' : ''}`}>
+                    <div className="flex items-center gap-2">
+                      <input type="checkbox" checked={item.selected} onChange={e => {
+                        const ni = [...transferItems]; ni[idx].selected = e.target.checked; setTransferItems(ni);
+                      }} className="rounded" />
+                      <span className="flex-1 text-sm font-medium">{item.product_name}</span>
+                    </div>
+                    {item.selected && (
+                      <div className="grid grid-cols-2 gap-2 pl-6">
+                        <div>
+                          <Label className="text-xs">Jumlah (max: {item.max_qty})</Label>
+                          <Input type="number" min={1} max={item.max_qty} value={item.quantity}
+                            onChange={e => { const ni = [...transferItems]; ni[idx].quantity = Math.min(parseInt(e.target.value) || 1, item.max_qty); setTransferItems(ni); }}
+                            className="h-8" />
+                        </div>
+                        <div>
+                          <Label className="text-xs">Harga Jual Baru</Label>
+                          <Input type="number" min={0} value={item.new_price}
+                            onChange={e => { const ni = [...transferItems]; ni[idx].new_price = parseFloat(e.target.value) || 0; setTransferItems(ni); }}
+                            className="h-8" />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+
+              <div className="space-y-2">
+                <Label>Kios Mitra Tujuan *</Label>
+                <Input placeholder="Cari kios mitra..." value={transferStoreSearch} onChange={e => setTransferStoreSearch(e.target.value)} />
+                <div className="border rounded-md max-h-32 overflow-y-auto">
+                  {partnerStores.filter(s => s.id !== transferDialog.partner_store_id && (!transferStoreSearch || s.name.toLowerCase().includes(transferStoreSearch.toLowerCase()))).map(s => (
+                    <div key={s.id}
+                      className={`px-3 py-2 text-sm cursor-pointer ${transferStoreId === s.id ? 'bg-purple-100 font-medium' : 'hover:bg-muted'}`}
+                      onClick={() => setTransferStoreId(s.id)}>{s.name}</div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Pembayaran</Label>
+                <Select value={transferPayment} onValueChange={setTransferPayment}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="cash">Cash / Tunai</SelectItem>
+                    <SelectItem value="bon">Bon / Hutang</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="p-3 bg-purple-50 rounded-lg">
+                <p className="text-sm font-semibold">Total Oper: {formatCurrency(transferItems.filter(i => i.selected).reduce((s, i) => s + i.quantity * i.new_price, 0))}</p>
+              </div>
+
+              <div className="flex gap-2 justify-end">
+                <Button variant="outline" onClick={() => setTransferDialog(null)}>Batal</Button>
+                <Button onClick={handleTransfer} disabled={transferSubmitting} className="bg-purple-600 hover:bg-purple-700">
+                  {transferSubmitting ? 'Memproses...' : 'Oper Pesanan'}
                 </Button>
               </div>
             </div>

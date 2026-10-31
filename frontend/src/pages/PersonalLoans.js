@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { PageSkeleton } from '../components/PageSkeleton';
 import { api } from '../context/AuthContext';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -7,7 +8,7 @@ import { Card } from '../components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
-import { HandCoins, Plus, Search, DollarSign, Users, ChevronDown, ChevronUp, Banknote, Trash2 } from 'lucide-react';
+import { HandCoins, Plus, Search, DollarSign, Users, ChevronDown, ChevronUp, Banknote, Trash2 } from '../components/icons';
 import { toast } from 'sonner';
 import { CurrencyInput } from '../components/CurrencyInput';
 
@@ -87,7 +88,7 @@ export const PersonalLoans = () => {
     return true;
   });
 
-  if (loading) return <div className="flex items-center justify-center min-h-[50vh]"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div></div>;
+  if (loading) return <PageSkeleton variant="table" />;
 
   return (
     <div className="p-4 md:p-6 lg:p-8 space-y-6" data-testid="personal-loans-page">

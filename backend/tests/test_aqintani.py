@@ -300,5 +300,5 @@ def cleanup_test_data(admin_token):
             for s in stores:
                 if s["name"].startswith("TEST_"):
                     requests.delete(f"{BASE_URL}/api/partner-stores/{s['id']}", headers=headers)
-        except:
+        except Exception:
             pass

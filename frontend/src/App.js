@@ -1,41 +1,52 @@
-import React from 'react';
+import React, { lazy, Suspense } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import { PrivateRoute } from './components/PrivateRoute';
 import { AdminLayout } from './components/AdminLayout';
-import { Login } from './pages/Login';
-import { Dashboard } from './pages/Dashboard';
-import { Products } from './pages/Products';
-import { Categories } from './pages/Categories';
-import { Suppliers } from './pages/Suppliers';
-import { Reports } from './pages/Reports';
-import { Users } from './pages/Users';
-import { Profile } from './pages/Profile';
-import { Settings } from './pages/Settings';
-import { StoreSettings } from './pages/StoreSettings';
-import { PartnerStores } from './pages/PartnerStores';
-import { PartnerStoreDetail } from './pages/PartnerStoreDetail';
-import { PartnerOrders } from './pages/PartnerOrders';
-import { PartnerOrderReceipt } from './pages/PartnerOrderReceipt';
-import { Canvassers } from './pages/Canvassers';
-import { POS } from './pages/POS';
-import { ReceiptPreview } from './pages/ReceiptPreview';
-import { CanvasserDashboard } from './pages/CanvasserDashboard';
-import { SupplierDebt } from './pages/SupplierDebt';
-import { Analytics } from './pages/Analytics';
-import ImportData from './pages/ImportData';
-import { Vehicles } from './pages/Vehicles';
-import { AuditLog } from './pages/AuditLog';
-import { PersonalLoans } from './pages/PersonalLoans';
-import { FarmerDebts } from './pages/FarmerDebts';
-import { DailyTransactions } from './pages/DailyTransactions';
 import { Toaster } from './components/ui/sonner';
 import './App.css';
+
+// Each page is its own chunk: the browser only downloads the page being opened,
+// and heavy libraries (jsPDF, html2canvas, charts) load only with the pages that use them.
+const Login = lazy(() => import('./pages/Login').then(m => ({ default: m.Login })));
+const Dashboard = lazy(() => import('./pages/Dashboard').then(m => ({ default: m.Dashboard })));
+const Products = lazy(() => import('./pages/Products').then(m => ({ default: m.Products })));
+const Categories = lazy(() => import('./pages/Categories').then(m => ({ default: m.Categories })));
+const Suppliers = lazy(() => import('./pages/Suppliers').then(m => ({ default: m.Suppliers })));
+const Reports = lazy(() => import('./pages/Reports').then(m => ({ default: m.Reports })));
+const Users = lazy(() => import('./pages/Users').then(m => ({ default: m.Users })));
+const Profile = lazy(() => import('./pages/Profile').then(m => ({ default: m.Profile })));
+const Settings = lazy(() => import('./pages/Settings').then(m => ({ default: m.Settings })));
+const StoreSettings = lazy(() => import('./pages/StoreSettings').then(m => ({ default: m.StoreSettings })));
+const PartnerStores = lazy(() => import('./pages/PartnerStores').then(m => ({ default: m.PartnerStores })));
+const PartnerStoreDetail = lazy(() => import('./pages/PartnerStoreDetail').then(m => ({ default: m.PartnerStoreDetail })));
+const PartnerOrders = lazy(() => import('./pages/PartnerOrders').then(m => ({ default: m.PartnerOrders })));
+const PartnerOrderReceipt = lazy(() => import('./pages/PartnerOrderReceipt').then(m => ({ default: m.PartnerOrderReceipt })));
+const Canvassers = lazy(() => import('./pages/Canvassers').then(m => ({ default: m.Canvassers })));
+const POS = lazy(() => import('./pages/POS').then(m => ({ default: m.POS })));
+const ReceiptPreview = lazy(() => import('./pages/ReceiptPreview').then(m => ({ default: m.ReceiptPreview })));
+const CanvasserDashboard = lazy(() => import('./pages/CanvasserDashboard').then(m => ({ default: m.CanvasserDashboard })));
+const SupplierDebt = lazy(() => import('./pages/SupplierDebt').then(m => ({ default: m.SupplierDebt })));
+const Analytics = lazy(() => import('./pages/Analytics').then(m => ({ default: m.Analytics })));
+const ImportData = lazy(() => import('./pages/ImportData'));
+const Vehicles = lazy(() => import('./pages/Vehicles').then(m => ({ default: m.Vehicles })));
+const VehicleStock = lazy(() => import('./pages/VehicleStock').then(m => ({ default: m.VehicleStock })));
+const AuditLog = lazy(() => import('./pages/AuditLog').then(m => ({ default: m.AuditLog })));
+const PersonalLoans = lazy(() => import('./pages/PersonalLoans').then(m => ({ default: m.PersonalLoans })));
+const FarmerDebts = lazy(() => import('./pages/FarmerDebts').then(m => ({ default: m.FarmerDebts })));
+const DailyTransactions = lazy(() => import('./pages/DailyTransactions').then(m => ({ default: m.DailyTransactions })));
+
+const Loading = () => (
+  <div className="min-h-screen flex items-center justify-center">
+    <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary"></div>
+  </div>
+);
 
 function App() {
   return (
     <AuthProvider>
       <BrowserRouter>
+        <Suspense fallback={<Loading />}>
         <Routes>
           <Route path="/login" element={<Login />} />
           
@@ -61,6 +72,7 @@ function App() {
             <Route path="settings" element={<Settings />} />
             <Route path="import-data" element={<ImportData />} />
             <Route path="vehicles" element={<Vehicles />} />
+            <Route path="vehicle-stock" element={<VehicleStock />} />
             <Route path="audit-log" element={<AuditLog />} />
             <Route path="personal-loans" element={<PersonalLoans />} />
             <Route path="profile" element={<Profile />} />
@@ -104,6 +116,7 @@ function App() {
 
           <Route path="/" element={<Navigate to="/login" replace />} />
         </Routes>
+        </Suspense>
       </BrowserRouter>
       <Toaster position="top-right" richColors />
     </AuthProvider>
