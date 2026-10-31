@@ -126,7 +126,7 @@ export const WarehouseManagement = () => {
           return (
             <Card key={wh.id} className="p-6 cursor-pointer hover:border-primary/50 transition-colors" onClick={() => setSelectedWarehouse(wh.id === selectedWarehouse ? 'all' : wh.id)} data-testid={`warehouse-card-${wh.id}`}>
               <div className="flex items-center gap-3">
-                <div className="w-12 h-12 bg-primary/10 rounded-xl flex items-center justify-center">
+                <div className="hidden sm:flex w-12 h-12 shrink-0 bg-primary/10 rounded-xl items-center justify-center">
                   <Warehouse className="w-6 h-6 text-primary" />
                 </div>
                 <div>

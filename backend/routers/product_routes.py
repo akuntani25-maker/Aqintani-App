@@ -5,6 +5,7 @@ import os
 from datetime import datetime, timezone
 
 from database import db
+from metrics import low_stock_products
 from auth import get_current_user, require_admin, require_admin_panel_access
 from models import (
     ProductCreate, Product, CategoryCreate, Category
@@ -168,12 +169,13 @@ async def search_products_autocomplete(q: str = "", current_user: dict = Depends
     return result
 
 
-@router.get("/products/low-stock", response_model=List[Product])
-async def get_low_stock_products(current_user: dict = Depends(get_current_user)):
-    products = await db.products.find(
-        {"$expr": {"$lte": ["$stock", "$min_stock_alert"]}},
-        {"_id": 0}
-    ).to_list(1000)
+@router.get("/products/low-stock")
+async def get_low_stock_products(count_only: bool = False, current_user: dict = Depends(get_current_user)):
+    # No strict response_model: one product with a decimal stock or a missing field
+    # used to fail validation and turn the whole response into a 500.
+    products = await low_stock_products()
+    if count_only:
+        return {"count": len(products)}
     return products
 
 

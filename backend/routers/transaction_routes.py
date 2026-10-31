@@ -4,6 +4,7 @@ import uuid
 from datetime import datetime, timezone, timedelta
 
 from database import db
+from metrics import product_map, pos_cost, unit_cost
 from auth import get_current_user, require_admin_panel_access, require_pos_access
 from models import (
     TransactionCreate, Transaction, TransactionItem,
@@ -32,12 +33,12 @@ def get_wita_today():
 @router.get("/pos/daily-summary")
 async def get_pos_daily_summary(current_user: dict = Depends(get_current_user)):
     today = get_business_date()
-    transactions = await db.transactions.find({"date": today}, {"_id": 0}).to_list(10000)
+    transactions = await db.transactions.find({"date": today, "status": {"$ne": "returned"}}, {"_id": 0}).to_list(10000)
     total_sales = sum(t.get("total", 0) for t in transactions)
-    total_cost = 0
-    for t in transactions:
-        for item in t.get("items", []):
-            total_cost += item.get("cost_price", 0) * item.get("quantity", 0)
+    # cost_price on products is per box; POS sells units, so cost per unit = cost_price / items_per_box
+    pids = {it.get("product_id") for t in transactions for it in t.get("items", [])}
+    pmap = await product_map(pids)
+    total_cost = round(sum(pos_cost(t, pmap) for t in transactions))
     return {
         "count": len(transactions), "total_sales": total_sales,
         "total_cost": total_cost, "total_margin": total_sales - total_cost
@@ -74,8 +75,11 @@ async def create_transaction(data: TransactionCreate, current_user: dict = Depen
     now = datetime.now(WITA)
     business_date = get_business_date(now)
     transaction_number = f"TRX{now.strftime('%Y%m%d%H%M%S')}"
+    unit_costs = {}
     for item in data.items:
         product = await db.products.find_one({"id": item.product_id})
+        if product:
+            unit_costs[item.product_id] = unit_cost(product)
         if not product:
             raise HTTPException(status_code=404, detail=f"Product {item.product_name} not found")
         toko_stock = await db.warehouse_stock.find_one({"product_id": item.product_id, "warehouse_id": "gudang_toko"})
@@ -90,7 +94,8 @@ async def create_transaction(data: TransactionCreate, current_user: dict = Depen
     transaction_doc = {
         "id": str(uuid.uuid4()), "transaction_number": transaction_number,
         "cashier_id": current_user["id"], "cashier_name": current_user["name"],
-        "items": [item.model_dump() for item in data.items],
+        # keep the unit cost at time of sale so margins stay right after later price changes
+        "items": [{**item.model_dump(), "cost_price_unit": unit_costs.get(item.product_id, 0)} for item in data.items],
         "subtotal": data.subtotal, "tax": data.tax, "discount": data.discount,
         "total": data.total, "payment_method": data.payment_method,
         "payment_amount": data.payment_amount, "change": data.change,

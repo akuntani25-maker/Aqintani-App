@@ -2,6 +2,7 @@ from fastapi import FastAPI, APIRouter
 from fastapi.responses import PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.cors import CORSMiddleware
+from starlette.middleware.gzip import GZipMiddleware
 import os
 import logging
 import uuid
@@ -48,6 +49,9 @@ app.include_router(api_router)
 # Serve uploaded product images
 os.makedirs("uploads/products", exist_ok=True)
 app.mount("/api/uploads", StaticFiles(directory="uploads"), name="uploads")
+
+# compress JSON responses (product lists, orders) — large lists shrink ~5-8x
+app.add_middleware(GZipMiddleware, minimum_size=1024)
 
 app.add_middleware(
     CORSMiddleware,
@@ -122,16 +126,24 @@ async def startup_db():
 
     admin_exists = await db.users.find_one({"role": "admin"})
     if not admin_exists:
+        # First run on an empty database. Credentials come from .env; if no password is
+        # given a random one is generated and written once to the log.
+        import secrets
+        admin_email = os.environ.get("ADMIN_EMAIL", "admin@aqintani.com")
+        admin_password = os.environ.get("ADMIN_PASSWORD") or secrets.token_urlsafe(12)
         default_admin = {
             "id": str(uuid.uuid4()),
-            "email": "admin@aqintani.com",
-            "password": hash_password("admin123"),
+            "email": admin_email,
+            "password": hash_password(admin_password),
             "name": "Administrator",
             "role": "admin",
             "created_at": datetime.now(timezone.utc).isoformat()
         }
         await db.users.insert_one(default_admin)
-        logger.info("Default admin created: admin@aqintani.com / admin123")
+        if os.environ.get("ADMIN_PASSWORD"):
+            logger.info(f"Default admin created: {admin_email} (password from ADMIN_PASSWORD)")
+        else:
+            logger.warning(f"Default admin created: {admin_email} / {admin_password}  <- change it after first login")
 
     # Seed warehouses
     wh_count = await db.warehouses.count_documents({})

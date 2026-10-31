@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense } from 'react';
+import { PageSkeleton } from './PageSkeleton';
 import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../context/AuthContext';
@@ -61,15 +62,22 @@ export const AdminLayout = () => {
   }, []);
 
   useEffect(() => {
+    // Only the count is needed for the badge. Refresh every 5 minutes while the tab is visible,
+    // and stop retrying after a failure instead of logging an error every minute.
+    let failures = 0;
     const fetchLowStock = async () => {
+      if (document.hidden || failures >= 3) return;
       try {
-        const res = await api.get('/products/low-stock');
-        setLowStockCount(Array.isArray(res.data) ? res.data.length : 0);
-      } catch (e) { console.error(e); }
+        const res = await api.get('/products/low-stock', { params: { count_only: true } });
+        setLowStockCount(typeof res.data?.count === 'number' ? res.data.count : (Array.isArray(res.data) ? res.data.length : 0));
+        failures = 0;
+      } catch { failures += 1; }
     };
     fetchLowStock();
-    const interval = setInterval(fetchLowStock, 60000);
-    return () => clearInterval(interval);
+    const interval = setInterval(fetchLowStock, 5 * 60 * 1000);
+    const onVisible = () => { if (!document.hidden) fetchLowStock(); };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => { clearInterval(interval); document.removeEventListener('visibilitychange', onVisible); };
   }, []);
 
   const handleLogout = () => { logout(); navigate('/login'); };
@@ -96,6 +104,12 @@ export const AdminLayout = () => {
   ];
 
   const menuItems = allMenuItems.filter(item => permissions.includes(item.perm));
+  const SHORT = { dashboard: 'Beranda', products: 'Barang', partner_orders: 'Pesanan', partner_stores: 'Kios', reports: 'Laporan' };
+  const posItem = { to: '/pos', icon: ShoppingCart, perm: 'pos', label: 'Kasir' };
+  // first four available, in order of how often they are used
+  const quickItems = ['dashboard', 'products', 'pos', 'partner_orders', 'partner_stores', 'reports']
+    .map(perm => perm === 'pos' ? (permissions.includes('pos') ? posItem : null) : menuItems.find(i => i.perm === perm))
+    .filter(Boolean).slice(0, 4).map(i => ({ ...i, short: SHORT[i.perm] || i.label }));
 
   const closeSidebar = () => setSidebarOpen(false);
   const location = useLocation();
@@ -218,11 +232,28 @@ export const AdminLayout = () => {
           </div>
         </header>
 
-        <main className="flex-1 w-full min-w-0">
+        <main className="flex-1 w-full min-w-0 pb-[calc(4.5rem+env(safe-area-inset-bottom))] lg:pb-0">
           <div key={location.pathname} className="page-enter">
-            <Outlet />
+            <Suspense fallback={<div className="p-4 md:p-6 lg:p-8"><PageSkeleton variant="table" /></div>}>
+              <Outlet />
+            </Suspense>
           </div>
         </main>
+
+        {/* Phone/tablet: the most used pages one tap away; "Menu" opens the full list */}
+        <nav className="lg:hidden fixed inset-x-0 bottom-0 z-30 bg-card/95 backdrop-blur border-t border-border/60 grid grid-cols-5 pb-[env(safe-area-inset-bottom)]" data-testid="bottom-nav">
+          {quickItems.map(item => (
+            <NavLink key={item.to} to={item.to}
+              className={({ isActive }) => `flex flex-col items-center justify-center gap-0.5 h-16 text-[10.5px] font-semibold ${isActive ? 'text-primary' : 'text-muted-foreground'}`}>
+              <item.icon className="w-5 h-5" />
+              <span className="truncate max-w-full px-1">{item.short}</span>
+            </NavLink>
+          ))}
+          <button onClick={() => setSidebarOpen(true)} className={`flex flex-col items-center justify-center gap-0.5 h-16 text-[10.5px] font-semibold ${quickItems.some(q => location.pathname.startsWith(q.to)) ? 'text-muted-foreground' : 'text-primary'}`} data-testid="bottom-nav-menu">
+            <Menu className="w-5 h-5" />
+            <span>Menu</span>
+          </button>
+        </nav>
       </div>
     </div>
   );

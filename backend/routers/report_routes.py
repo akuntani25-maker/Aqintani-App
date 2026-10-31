@@ -5,6 +5,7 @@ import uuid
 import os
 
 from database import db
+from metrics import low_stock_products as fetch_low_stock, product_map, warehouse_units, pos_cost, order_cost, order_units_sold, item_units
 from auth import get_current_user, require_admin, require_admin_panel_access
 
 router = APIRouter()
@@ -18,14 +19,21 @@ async def get_dashboard_stats(admin: dict = Depends(require_admin_panel_access))
     today_transactions = await db.transactions.find({"date": today}, {"_id": 0}).to_list(10000)
     today_sales = sum(t.get("total", 0) for t in today_transactions)
     total_products = await db.products.count_documents({})
-    low_stock_count = await db.products.count_documents({"$expr": {"$lte": ["$stock", "$min_stock_alert"]}})
+    low_list = await fetch_low_stock()
+    low_stock_count = len(low_list)
 
-    last_7_days = []
-    for i in range(6, -1, -1):
-        d = (now_wita - timedelta(days=i)).strftime("%Y-%m-%d")
-        day_txns = await db.transactions.find({"date": d}, {"_id": 0}).to_list(10000)
-        day_total = sum(t.get("total", 0) for t in day_txns)
-        last_7_days.append({"date": d, "sales": day_total, "count": len(day_txns)})
+    # last 7 days in ONE query instead of seven, ending on the same business date as "today"
+    today_dt = datetime.strptime(today, "%Y-%m-%d")
+    days = [(today_dt - timedelta(days=i)).strftime("%Y-%m-%d") for i in range(6, -1, -1)]
+    week_txns = await db.transactions.find(
+        {"date": {"$gte": days[0], "$lte": days[-1]}}, {"_id": 0, "date": 1, "total": 1}
+    ).to_list(100000)
+    by_day = {d: {"date": d, "sales": 0, "count": 0} for d in days}
+    for t in week_txns:
+        if t.get("date") in by_day:
+            by_day[t["date"]]["sales"] += t.get("total", 0)
+            by_day[t["date"]]["count"] += 1
+    last_7_days = [by_day[d] for d in days]
 
     # Warehouse inventory value + chart
     warehouses = await db.warehouses.find({}, {"_id": 0}).to_list(100)
@@ -157,10 +165,9 @@ async def get_dashboard_stats(admin: dict = Depends(require_admin_panel_access))
     ).to_list(100)
 
     # Low stock product details
-    low_stock_products = await db.products.find(
-        {"$expr": {"$lte": ["$stock", "$min_stock_alert"]}},
-        {"_id": 0, "id": 1, "name": 1, "stock": 1, "min_stock_alert": 1, "items_per_box": 1}
-    ).sort("stock", 1).limit(10).to_list(10)
+    low_stock_products = [
+        {k: p.get(k) for k in ("id", "name", "stock", "min_stock_alert", "items_per_box")} for p in low_list[:10]
+    ]
 
     return {
         "today_sales": today_sales, "today_transactions": len(today_transactions),
@@ -438,51 +445,96 @@ async def get_product_analytics(admin: dict = Depends(require_admin_panel_access
 
 
 @router.get("/analytics/summary")
-async def get_analytics_summary(admin: dict = Depends(require_admin_panel_access)):
-    now = datetime.now(timezone.utc)
-    this_month_start = now.strftime("%Y-%m-01")
-    thirty_days_ago = (now - timedelta(days=30)).strftime("%Y-%m-%d")
-    month_transactions = await db.transactions.find({"date": {"$gte": this_month_start}}, {"_id": 0}).to_list(10000)
-    monthly_sales = sum(t["total"] for t in month_transactions)
-    monthly_cost = sum(
-        sum(item.get("price", 0) * item.get("quantity", 0) * 0.7 for item in t.get("items", []))
-        for t in month_transactions
-    )
-    month_purchases = await db.purchases.find({"date": {"$gte": this_month_start}}, {"_id": 0}).to_list(10000)
-    monthly_purchases_total = sum(p.get("total", 0) for p in month_purchases)
-    monthly_purchases_unpaid = sum(p.get("remaining", 0) for p in month_purchases)
-    all_partner_orders = await db.partner_orders.find({}, {"_id": 0}).to_list(10000)
-    total_partner_sales = sum(o.get("total", 0) for o in all_partner_orders)
-    total_partner_unpaid = sum(o.get("remaining", 0) for o in all_partner_orders)
-    daily_sales = {}
-    for i in range(29, -1, -1):
-        date = (now - timedelta(days=i)).strftime("%Y-%m-%d")
-        daily_sales[date] = {"sales": 0, "transactions": 0}
-    all_30_transactions = await db.transactions.find({"date": {"$gte": thirty_days_ago}}, {"_id": 0}).to_list(10000)
-    for t in all_30_transactions:
-        d = t.get("date", "")
-        if d in daily_sales:
-            daily_sales[d]["sales"] += t.get("total", 0)
-            daily_sales[d]["transactions"] += 1
-    chart_data = [{"date": k, **v} for k, v in daily_sales.items()]
-    products = await db.products.find({}, {"_id": 0}).to_list(10000)
-    categories = await db.categories.find({}, {"_id": 0}).to_list(1000)
-    cat_map = {c["id"]: c["name"] for c in categories}
-    category_stock = {}
-    for p in products:
-        cat_name = cat_map.get(p.get("category_id", ""), "Tanpa Kategori")
-        if cat_name not in category_stock:
-            category_stock[cat_name] = {"name": cat_name, "count": 0, "stock_value": 0}
-        category_stock[cat_name]["count"] += 1
-        ipb = p.get("items_per_box", 1) or 1
-        cost_per_unit = (p.get("cost_price", 0) or 0) / ipb
-        category_stock[cat_name]["stock_value"] += p.get("stock", 0) * cost_per_unit
+async def get_analytics_summary(days: int = 30, admin: dict = Depends(require_admin_panel_access)):
+    """Last N days (default 30), POS + partner orders, with real cost per unit.
+    Returns the fields the Analytics page reads (total_revenue, daily_trend, ...);
+    the old monthly_* fields are kept for anything else that still uses them."""
+    days = max(1, min(days, 366))
+    WITA = timezone(timedelta(hours=8))
+    today = datetime.now(WITA).strftime("%Y-%m-%d")
+    start = (datetime.now(WITA) - timedelta(days=days - 1)).strftime("%Y-%m-%d")
+
+    txns = await db.transactions.find(
+        {"date": {"$gte": start, "$lte": today}, "status": {"$ne": "returned"}}, {"_id": 0}
+    ).to_list(100000)
+    orders = await db.partner_orders.find(
+        {"date": {"$gte": start, "$lte": today}, "status": {"$nin": ["cancelled", "canceled"]}}, {"_id": 0}
+    ).to_list(100000)
+    pids = {it.get("product_id") for t in txns for it in t.get("items", [])}
+    pids |= {it.get("product_id") for o in orders for it in o.get("items", [])}
+    pids |= {si.get("product_id") for o in orders for si in (o.get("settled_items") or [])}
+    pmap = await product_map(pids)
+    wh_units = await warehouse_units()
+    cats = {c["id"]: c["name"] for c in await db.categories.find({}, {"_id": 0, "id": 1, "name": 1}).to_list(1000)}
+
+    pos_rev = sum(t.get("total", 0) for t in txns)
+    kios_rev = sum(o.get("total", 0) for o in orders)
+    cost = sum(pos_cost(t, pmap) for t in txns) + sum(order_cost(o, pmap, wh_units) for o in orders)
+    units_sold = sum(it.get("quantity", 0) or 0 for t in txns for it in t.get("items", []))
+    units_sold += sum(order_units_sold(o, pmap, wh_units) for o in orders)
+
+    trend = {}
+    d = datetime.strptime(start, "%Y-%m-%d")
+    for _ in range(days):
+        k = d.strftime("%Y-%m-%d")
+        trend[k] = {"date": k, "revenue": 0, "pos": 0, "partner": 0, "transactions": 0}
+        d += timedelta(days=1)
+    for t in txns:
+        row = trend.get(t.get("date"))
+        if row:
+            row["revenue"] += t.get("total", 0); row["pos"] += t.get("total", 0); row["transactions"] += 1
+    for o in orders:
+        row = trend.get(o.get("date"))
+        if row:
+            row["revenue"] += o.get("total", 0); row["partner"] += o.get("total", 0); row["transactions"] += 1
+
+    by_cat, by_prod = {}, {}
+    def add_line(pid, name, units, value):
+        cname = cats.get((pmap.get(pid) or {}).get("category_id", ""), "Tanpa Kategori")
+        by_cat[cname] = by_cat.get(cname, 0) + value
+        key = pid or name
+        row = by_prod.setdefault(key, {"name": name or (pmap.get(pid) or {}).get("name", "-"), "quantity": 0, "revenue": 0})
+        row["quantity"] += units; row["revenue"] += value
+    for t in txns:
+        for it in t.get("items", []):
+            add_line(it.get("product_id"), it.get("product_name"), it.get("quantity", 0) or 0,
+                     it.get("subtotal", (it.get("price", 0) or 0) * (it.get("quantity", 0) or 0)))
+    for o in orders:
+        dwh = o.get("warehouse_id") or "gudang_toko"
+        for it in o.get("items", []):
+            prod = pmap.get(it.get("product_id", ""))
+            add_line(it.get("product_id"), it.get("product_name"), item_units(it, prod, wh_units, dwh),
+                     it.get("subtotal", 0) or 0)
+
+    revenue = pos_rev + kios_rev
+    n_orders = len(txns) + len(orders)
+    month_start = datetime.now(WITA).strftime("%Y-%m-01")
+    month_txns = [t for t in txns if t.get("date", "") >= month_start]
+    month_purchases = await db.purchases.find({"date": {"$gte": month_start}}, {"_id": 0, "total": 1, "remaining": 1}).to_list(10000)
     return {
-        "monthly_sales": monthly_sales, "monthly_transactions": len(month_transactions),
-        "monthly_purchases": monthly_purchases_total, "monthly_purchases_unpaid": monthly_purchases_unpaid,
-        "total_partner_sales": total_partner_sales, "total_partner_unpaid": total_partner_unpaid,
-        "estimated_margin": monthly_sales - monthly_cost,
-        "chart_data": chart_data, "category_breakdown": list(category_stock.values())
+        "period": {"from": start, "to": today, "days": days},
+        "total_revenue": round(revenue),
+        "pos_revenue": round(pos_rev),
+        "partner_revenue": round(kios_rev),
+        "total_cost": round(cost),
+        "gross_profit": round(revenue - cost),
+        "margin_pct": round((revenue - cost) / revenue * 100, 1) if revenue else 0,
+        "total_orders": n_orders,
+        "pos_transactions": len(txns),
+        "partner_orders": len(orders),
+        "total_products_sold": round(units_sold, 2),
+        "avg_order_value": round(revenue / n_orders) if n_orders else 0,
+        "daily_trend": [{**v, "revenue": round(v["revenue"])} for v in trend.values()],
+        "category_breakdown": sorted(
+            [{"name": k, "value": round(v)} for k, v in by_cat.items() if v > 0], key=lambda x: -x["value"]),
+        "top_products": sorted(by_prod.values(), key=lambda x: -x["quantity"])[:10],
+        # legacy keys
+        "monthly_sales": sum(t.get("total", 0) for t in month_txns),
+        "monthly_transactions": len(month_txns),
+        "monthly_purchases": sum(p.get("total", 0) for p in month_purchases),
+        "monthly_purchases_unpaid": sum(p.get("remaining", 0) for p in month_purchases),
+        "estimated_margin": round(revenue - cost),
+        "chart_data": [{"date": v["date"], "sales": v["pos"], "transactions": v["transactions"]} for v in trend.values()],
     }
 
 
@@ -496,93 +548,43 @@ async def get_profit_loss_report(date_from: str, date_to: str, admin: dict = Dep
         {"_id": 0}
     ).to_list(100000)
 
-    products_cache = {}
-    async def get_product(pid):
-        if pid not in products_cache:
-            p = await db.products.find_one({"id": pid}, {"_id": 0, "cost_price": 1, "items_per_box": 1})
-            products_cache[pid] = p
-        return products_cache[pid]
-
-    pos_revenue = 0
-    pos_cogs = 0
-    for t in transactions:
-        pos_revenue += t.get("total", 0)
-        for item in t.get("items", []):
-            pid = item.get("product_id", "")
-            qty = item.get("quantity", 0)
-            prod = await get_product(pid)
-            if prod:
-                ipb = prod.get("items_per_box", 1) or 1
-                cost_per_unit = (prod.get("cost_price", 0) or 0) / ipb
-                pos_cogs += qty * cost_per_unit
-
-    # Partner Orders
+    # Partner Orders (cancelled orders are not sales)
     partner_orders = await db.partner_orders.find(
-        {"date": {"$gte": date_from, "$lte": date_to}},
+        {"date": {"$gte": date_from, "$lte": date_to}, "status": {"$nin": ["cancelled", "canceled"]}},
         {"_id": 0}
     ).to_list(100000)
 
-    partner_revenue = 0
-    partner_cogs = 0
+    # one batched product lookup; costs follow the shared rules in metrics.py
+    # (items taken from a "dus" warehouse are converted to units before costing)
+    pids = {it.get("product_id") for t in transactions for it in t.get("items", [])}
+    pids |= {it.get("product_id") for o in partner_orders for it in o.get("items", [])}
+    pids |= {si.get("product_id") for o in partner_orders for si in (o.get("settled_items") or [])}
+    pmap = await product_map(pids)
+    wh_units = await warehouse_units()
+
+    daily = {}
+    pos_revenue = pos_cogs = 0
+    for t in transactions:
+        c = pos_cost(t, pmap)
+        pos_revenue += t.get("total", 0)
+        pos_cogs += c
+        row = daily.setdefault(t.get("date", ""), {"date": t.get("date", ""), "revenue": 0, "cogs": 0})
+        row["revenue"] += t.get("total", 0)
+        row["cogs"] += c
+
+    partner_revenue = partner_cogs = 0
     for o in partner_orders:
+        c = order_cost(o, pmap, wh_units)
         partner_revenue += o.get("total", 0)
-        if o.get("is_settled") and o.get("settled_items"):
-            for si in o["settled_items"]:
-                if si.get("qty_sold", 0) <= 0:
-                    continue
-                pid = si.get("product_id", "")
-                prod = await get_product(pid)
-                if prod:
-                    ipb = prod.get("items_per_box", 1) or 1
-                    cost_per_unit = (prod.get("cost_price", 0) or 0) / ipb
-                    partner_cogs += si["qty_sold"] * cost_per_unit
-        else:
-            for item in o.get("items", []):
-                pid = item.get("product_id", "")
-                qty = item.get("quantity", 0)
-                prod = await get_product(pid)
-                if prod:
-                    ipb = prod.get("items_per_box", 1) or 1
-                    cost_per_unit = (prod.get("cost_price", 0) or 0) / ipb
-                    partner_cogs += qty * cost_per_unit
+        partner_cogs += c
+        row = daily.setdefault(o.get("date", ""), {"date": o.get("date", ""), "revenue": 0, "cogs": 0})
+        row["revenue"] += o.get("total", 0)
+        row["cogs"] += c
 
     total_revenue = pos_revenue + partner_revenue
     total_cogs = pos_cogs + partner_cogs
     gross_profit = total_revenue - total_cogs
     margin_pct = (gross_profit / total_revenue * 100) if total_revenue > 0 else 0
-
-    # Daily breakdown
-    daily = {}
-    for t in transactions:
-        d = t.get("date", "")
-        if d not in daily:
-            daily[d] = {"date": d, "revenue": 0, "cogs": 0}
-        daily[d]["revenue"] += t.get("total", 0)
-        for item in t.get("items", []):
-            prod = await get_product(item.get("product_id", ""))
-            if prod:
-                ipb = prod.get("items_per_box", 1) or 1
-                daily[d]["cogs"] += item.get("quantity", 0) * ((prod.get("cost_price", 0) or 0) / ipb)
-
-    for o in partner_orders:
-        d = o.get("date", "")
-        if d not in daily:
-            daily[d] = {"date": d, "revenue": 0, "cogs": 0}
-        daily[d]["revenue"] += o.get("total", 0)
-        if o.get("is_settled") and o.get("settled_items"):
-            for si in o["settled_items"]:
-                if si.get("qty_sold", 0) <= 0:
-                    continue
-                prod = await get_product(si.get("product_id", ""))
-                if prod:
-                    ipb = prod.get("items_per_box", 1) or 1
-                    daily[d]["cogs"] += si["qty_sold"] * ((prod.get("cost_price", 0) or 0) / ipb)
-        else:
-            for item in o.get("items", []):
-                prod = await get_product(item.get("product_id", ""))
-                if prod:
-                    ipb = prod.get("items_per_box", 1) or 1
-                    daily[d]["cogs"] += item.get("quantity", 0) * ((prod.get("cost_price", 0) or 0) / ipb)
 
     daily_data = sorted(
         [{"date": v["date"], "revenue": round(v["revenue"]), "cogs": round(v["cogs"]), "profit": round(v["revenue"] - v["cogs"])} for v in daily.values()],

@@ -277,40 +277,40 @@ export const Canvassers = () => {
 
       {/* Summary Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
-        <Card className="p-6">
+        <Card className="p-4 md:p-6 min-w-0">
           <div className="flex items-center gap-3">
-            <div className="w-12 h-12 bg-primary/10 rounded-xl flex items-center justify-center">
+            <div className="hidden sm:flex w-12 h-12 shrink-0 bg-primary/10 rounded-xl items-center justify-center">
               <User className="w-6 h-6 text-primary" />
             </div>
             <div>
               <p className="text-xs text-muted-foreground uppercase tracking-wider">Total Kanvaser</p>
-              <p className="text-base md:text-xl lg:text-2xl font-bold truncate">{canvassers.length}</p>
+              <p className="text-[15px] sm:text-base md:text-lg xl:text-xl 2xl:text-2xl font-bold tabular-nums break-normal leading-tight">{canvassers.length}</p>
             </div>
           </div>
         </Card>
 
-        <Card className="p-6">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center">
+        <Card className="p-4 md:p-6 min-w-0">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="hidden sm:flex w-12 h-12 shrink-0 bg-green-100 rounded-xl items-center justify-center">
               <Truck className="w-6 h-6 text-green-600" />
             </div>
             <div>
               <p className="text-xs text-muted-foreground uppercase tracking-wider">Aktif</p>
-              <p className="text-base md:text-xl lg:text-2xl font-bold truncate">
+              <p className="text-[15px] sm:text-base md:text-lg xl:text-xl 2xl:text-2xl font-bold tabular-nums break-normal leading-tight">
                 {canvassers.filter(c => c.is_active).length}
               </p>
             </div>
           </div>
         </Card>
 
-        <Card className="p-6">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 bg-blue-100 rounded-xl flex items-center justify-center">
+        <Card className="p-4 md:p-6 min-w-0">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="hidden sm:flex w-12 h-12 shrink-0 bg-blue-100 rounded-xl items-center justify-center">
               <Truck className="w-6 h-6 text-blue-600" />
             </div>
             <div>
               <p className="text-xs text-muted-foreground uppercase tracking-wider">Mobil Box</p>
-              <p className="text-base md:text-xl lg:text-2xl font-bold truncate">
+              <p className="text-[15px] sm:text-base md:text-lg xl:text-xl 2xl:text-2xl font-bold tabular-nums break-normal leading-tight">
                 {canvassers.filter(c => c.vehicle_type.toLowerCase().includes('box')).length}
               </p>
             </div>
