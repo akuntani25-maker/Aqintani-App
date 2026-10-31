@@ -6,7 +6,7 @@ import { Input } from '../components/ui/input';
 import { Card } from '../components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { toast } from 'sonner';
-import { Search, Plus, Minus, Trash2, ShoppingCart, LogOut, CreditCard, Banknote, Smartphone, Printer, Pencil, ArrowRightLeft, BarChart3, FileText, Users, RotateCcw, Clock, Package, Moon, Sun } from 'lucide-react';
+import { Search, Plus, Minus, Trash2, ShoppingCart, LogOut, CreditCard, Banknote, Smartphone, Printer, Pencil, ArrowRightLeft, BarChart3, FileText, Users, RotateCcw, Clock, Package, Moon, Sun, X } from '../components/icons';
 import { CurrencyInput } from '../components/CurrencyInput';
 import { Pagination } from '../components/Pagination';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../components/ui/dialog';
@@ -99,6 +99,9 @@ export const POS = () => {
   const [products, setProducts] = useState([]);
   const [warehouseStock, setWarehouseStock] = useState([]);
   const [cart, setCart] = useState([]);
+  const [cartOpen, setCartOpen] = useState(false); // phone: cart sheet
+  // purchase cost is for the office; cashiers only see selling prices
+  const canSeeCost = ['admin', 'manager', 'office_staff'].includes(user?.role);
   const [searchTerm, setSearchTerm] = useState('');
   const [barcodeInput, setBarcodeInput] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('cash');
@@ -276,14 +279,14 @@ export const POS = () => {
     try {
       const res = await api.get('/pos/daily-summary');
       setDailySummary(res.data);
-    } catch {}
+    } catch (e) { console.error(e); }
   };
 
   const fetchWarehouses = async () => {
     try {
       const res = await api.get('/warehouses');
       setWarehouses(res.data);
-    } catch {}
+    } catch (e) { console.error(e); }
   };
 
   const handleTransfer = async () => {
@@ -478,31 +481,36 @@ export const POS = () => {
   ];
 
   return (
-    <div className="h-screen bg-background flex overflow-hidden" data-testid="pos-page">
-      <div className="flex-1 p-6 overflow-auto">
-        <div className="mb-6">
-          <div className="flex items-center justify-between mb-4">
+    <div className="h-[100dvh] bg-background flex flex-col md:flex-row overflow-hidden" data-testid="pos-page">
+      <div className="flex-1 min-w-0 p-3 sm:p-4 lg:p-6 pb-28 md:pb-6 overflow-auto stagger">
+        <div className="mb-4 lg:mb-6">
+          <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-3 mb-4">
             <div>
-              <h1 className="text-3xl font-bold tracking-tight">Point of Sale</h1>
+              <h1 className="text-2xl lg:text-3xl font-bold tracking-tight">Point of Sale</h1>
               <p className="text-sm text-muted-foreground">Kasir: {user?.name}</p>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 overflow-x-auto pb-1 -mx-1 px-1 [&>button]:shrink-0">
+              {canSeeCost && (
+                <Button variant="outline" size="sm" onClick={() => navigate('/admin/dashboard')} data-testid="pos-back-admin">
+                  <BarChart3 className="w-4 h-4 sm:mr-2" /><span className="hidden sm:inline">Admin</span>
+                </Button>
+              )}
               {currentShift && (
                 <Button variant="outline" size="sm" onClick={async () => { await fetchCurrentShift(); setShowCloseShift(true); }} className="text-orange-600 border-orange-200" data-testid="close-shift-button">
-                  <Clock className="w-4 h-4 mr-2" />Tutup Shift
+                  <Clock className="w-4 h-4 sm:mr-2" /><span className="hidden sm:inline">Tutup Shift</span>
                 </Button>
               )}
               <Button variant="outline" onClick={() => navigate('/pos/daily-transactions')} data-testid="pos-daily-txn-button">
-                <FileText className="w-4 h-4 mr-2" />Rincian
+                <FileText className="w-4 h-4 sm:mr-2" /><span className="hidden sm:inline">Rincian</span>
               </Button>
               <Button variant="outline" onClick={() => navigate('/pos/farmer-debts')} data-testid="pos-farmer-debts-button">
-                <Users className="w-4 h-4 mr-2" />Hutang Petani
+                <Users className="w-4 h-4 sm:mr-2" /><span className="hidden sm:inline">Hutang Petani</span>
               </Button>
               <Button variant="outline" onClick={() => { resetReturn(); setShowReturn(true); }} data-testid="pos-return-button">
-                <RotateCcw className="w-4 h-4 mr-2" />Retur/Tukar
+                <RotateCcw className="w-4 h-4 sm:mr-2" /><span className="hidden sm:inline">Retur/Tukar</span>
               </Button>
               <Button variant="outline" onClick={() => setShowTransfer(true)} data-testid="pos-transfer-button">
-                <ArrowRightLeft className="w-4 h-4 mr-2" />Transfer Stok
+                <ArrowRightLeft className="w-4 h-4 sm:mr-2" /><span className="hidden sm:inline">Transfer Stok</span>
               </Button>
               <Button variant="outline" onClick={() => {
                 const isDark = document.documentElement.classList.toggle('dark');
@@ -511,25 +519,26 @@ export const POS = () => {
                 <Moon className="w-4 h-4" />
               </Button>
               <Button variant="outline" onClick={handleLogout} data-testid="pos-logout-button">
-                <LogOut className="w-4 h-4 mr-2" />Keluar
+                <LogOut className="w-4 h-4 sm:mr-2" /><span className="hidden sm:inline">Keluar</span>
               </Button>
             </div>
           </div>
 
           {/* Daily Summary */}
           {dailySummary && (
-            <div className="grid grid-cols-3 gap-3 mb-4" data-testid="daily-summary">
-              <Card className="p-3 bg-emerald-50 border-emerald-200">
+            <div className="grid grid-cols-3 gap-2 sm:gap-3 mb-4" data-testid="daily-summary">
+              <Card className="p-2.5 sm:p-3 bg-emerald-50 border-emerald-200 min-w-0 overflow-hidden">
                 <p className="text-[10px] font-bold uppercase text-emerald-700 tracking-wider">Transaksi Hari Ini</p>
-                <p className="text-lg font-bold text-emerald-800">{dailySummary.count || 0}</p>
+                <p className="text-base sm:text-lg font-bold text-emerald-800 tabular-nums">{dailySummary.count || 0}</p>
               </Card>
-              <Card className="p-3 bg-blue-50 border-blue-200">
+              <Card className="p-2.5 sm:p-3 bg-blue-50 border-blue-200 min-w-0 overflow-hidden">
                 <p className="text-[10px] font-bold uppercase text-blue-700 tracking-wider">Total Penjualan</p>
-                <p className="text-lg font-bold text-blue-800">{formatCurrency(dailySummary.total_sales || 0)}</p>
+                <p className="text-[13px] sm:text-lg font-bold text-blue-800 tabular-nums whitespace-nowrap">{formatCurrency(dailySummary.total_sales || 0)}</p>
               </Card>
-              <Card className="p-3 bg-violet-50 border-violet-200">
-                <p className="text-[10px] font-bold uppercase text-violet-700 tracking-wider">Margin</p>
-                <p className="text-lg font-bold text-violet-800">{formatCurrency(dailySummary.total_margin || 0)}</p>
+              <Card className="p-2.5 sm:p-3 bg-violet-50 border-violet-200 min-w-0 overflow-hidden">
+                <p className="text-[10px] font-bold uppercase text-violet-700 tracking-wider">Laba Kotor</p>
+                <p className="text-[13px] sm:text-lg font-bold text-violet-800 tabular-nums whitespace-nowrap">{formatCurrency(dailySummary.total_margin || 0)}</p>
+                {dailySummary.total_sales > 0 && <p className="text-[10px] text-violet-700">{((dailySummary.total_margin || 0) / dailySummary.total_sales * 100).toLocaleString('id-ID', { maximumFractionDigits: 1 })}% margin</p>}
               </Card>
             </div>
           )}
@@ -557,26 +566,27 @@ export const POS = () => {
           </div>
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-4 gap-2.5 sm:gap-3">
           {paginatedPosProducts.map((product) => (
             <Card
               key={product.id}
-              className="p-4 cursor-pointer hover:border-primary transition-colors"
+              className="p-3 cursor-pointer hover:border-primary active:scale-[0.98] transition flex flex-col"
               onClick={() => addToCart(product)}
               data-testid={`product-card-${product.id}`}
             >
-              <div className="aspect-square bg-accent rounded-lg mb-3 flex items-center justify-center overflow-hidden">
-                {product.image_url ? (
-                  <img src={`${process.env.REACT_APP_BACKEND_URL}${product.image_url}`} alt={product.name} className="w-full h-full object-cover" />
-                ) : (
-                  <Package className="w-10 h-10 text-muted-foreground/30" />
+              {/* photo only when there is one: empty placeholders pushed products off screen */}
+              {product.image_url && (
+                <div className="aspect-[4/3] bg-accent rounded-lg mb-2 overflow-hidden">
+                  <img src={`${process.env.REACT_APP_BACKEND_URL}${product.image_url}`} alt={product.name} loading="lazy" className="w-full h-full object-cover" />
+                </div>
+              )}
+              <h3 className="font-semibold text-[13px] leading-snug mb-1 line-clamp-2">{product.name}</h3>
+              <p className="text-base sm:text-lg font-bold text-primary tabular-nums mt-auto">{formatCurrency(product.price)}</p>
+              <div className="flex justify-between items-center gap-1 flex-wrap">
+                <p className="text-xs text-muted-foreground">Stok: {product.toko_stock ?? product.stock}</p>
+                {canSeeCost && (
+                  <p className="text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded">HPP: {formatCurrency(Math.round((product.cost_price || 0) / Math.max(1, product.items_per_box || 1)))}</p>
                 )}
-              </div>
-              <h3 className="font-semibold text-sm mb-1 line-clamp-2">{product.name}</h3>
-              <p className="text-lg font-bold text-primary">{formatCurrency(product.price)}</p>
-              <div className="flex justify-between items-center">
-                <p className="text-xs text-muted-foreground">Stok: {product.toko_stock || product.stock}</p>
-                <p className="text-[10px] text-muted-foreground bg-muted px-1.5 py-0.5 rounded">HPP: {formatCurrency(Math.round((product.cost_price || 0) / Math.max(1, product.items_per_box || 1)))}</p>
               </div>
             </Card>
           ))}
@@ -586,15 +596,32 @@ export const POS = () => {
         </div>
       </div>
 
-      <div className="w-full md:w-96 bg-white border-l shadow-xl flex flex-col h-screen sticky top-0" data-testid="cart-panel">
-        <div className="p-6 border-b">
-          <h2 className="text-xl font-bold flex items-center gap-2">
+      {/* Phone: summary bar at the bottom; the cart opens as a sheet over the products */}
+      <div className="md:hidden fixed inset-x-0 bottom-0 z-30 bg-card border-t shadow-[0_-6px_20px_rgba(0,0,0,0.08)] px-4 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] flex items-center gap-3" data-testid="cart-bar">
+        <div className="flex-1 min-w-0">
+          <p className="text-xs text-muted-foreground">{cart.reduce((n, i) => n + (Number(i.quantity) || 0), 0)} item</p>
+          <p className="text-lg font-bold tabular-nums truncate">{formatCurrency(total)}</p>
+        </div>
+        <Button variant="outline" onClick={() => setCartOpen(true)} data-testid="cart-open-button">
+          <ShoppingCart className="w-4 h-4 mr-2" />Keranjang
+        </Button>
+      </div>
+      {cartOpen && <div className="md:hidden fixed inset-0 z-40 bg-slate-900/40" onClick={() => setCartOpen(false)} />}
+
+      <div className={`bg-card border-l shadow-xl flex flex-col
+        fixed inset-x-0 bottom-0 z-50 max-h-[88dvh] rounded-t-2xl transition-transform duration-300 ${cartOpen ? 'translate-y-0' : 'translate-y-full'}
+        md:static md:translate-y-0 md:max-h-none md:h-[100dvh] md:w-[360px] lg:w-96 md:rounded-none md:z-auto md:shrink-0`} data-testid="cart-panel">
+        <div className="px-4 py-3 md:p-6 border-b flex items-center justify-between">
+          <h2 className="text-lg md:text-xl font-bold flex items-center gap-2">
             <ShoppingCart className="w-5 h-5" />
             Keranjang ({cart.length})
           </h2>
+          <Button variant="ghost" size="sm" className="md:hidden" onClick={() => setCartOpen(false)} aria-label="Tutup keranjang">
+            <X className="w-5 h-5" />
+          </Button>
         </div>
 
-        <div className="flex-1 overflow-auto p-6 space-y-3">
+        <div className="flex-1 overflow-auto p-4 md:p-6 space-y-3">
           {cart.length === 0 ? (
             <div className="text-center py-12 text-muted-foreground">
               <ShoppingCart className="w-16 h-16 mx-auto mb-3 opacity-20" />
@@ -660,7 +687,7 @@ export const POS = () => {
           )}
         </div>
 
-        <div className="p-6 border-t space-y-4">
+        <div className="p-4 md:p-6 border-t space-y-4 pb-[calc(1rem+env(safe-area-inset-bottom))] md:pb-6">
           <div className="space-y-2 text-sm">
             <div className="flex justify-between">
               <span>Subtotal:</span>

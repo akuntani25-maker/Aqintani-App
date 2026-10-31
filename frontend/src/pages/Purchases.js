@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { PageSkeleton } from '../components/PageSkeleton';
 import { api } from '../context/AuthContext';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -8,7 +9,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
 import { toast } from 'sonner';
-import { Plus, DollarSign, ShoppingBag, Trash2, CreditCard, Search } from 'lucide-react';
+import { Plus, DollarSign, ShoppingBag, Trash2, CreditCard, Search } from '../components/icons';
 
 export const Purchases = () => {
   const [purchases, setPurchases] = useState([]);
@@ -154,9 +155,7 @@ export const Purchases = () => {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
-      </div>
+      <PageSkeleton variant="table" />
     );
   }
 
@@ -283,20 +282,20 @@ export const Purchases = () => {
 
       {/* Summary */}
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
-        <Card className="p-6">
+        <Card className="p-4 md:p-6 min-w-0">
           <div className="flex items-center gap-3">
-            <div className="w-12 h-12 bg-primary/10 rounded-xl flex items-center justify-center">
+            <div className="hidden sm:flex w-12 h-12 shrink-0 bg-primary/10 rounded-xl items-center justify-center">
               <ShoppingBag className="w-6 h-6 text-primary" />
             </div>
             <div>
               <p className="text-xs text-muted-foreground uppercase tracking-wider">Total Pembelian</p>
-              <p className="text-base md:text-xl lg:text-2xl font-bold truncate">{fmt(totalBelanja)}</p>
+              <p className="text-[15px] sm:text-base md:text-lg xl:text-xl 2xl:text-2xl font-bold tabular-nums break-normal leading-tight">{fmt(totalBelanja)}</p>
             </div>
           </div>
         </Card>
-        <Card className="p-6">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 bg-orange-100 rounded-xl flex items-center justify-center">
+        <Card className="p-4 md:p-6 min-w-0">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="hidden sm:flex w-12 h-12 shrink-0 bg-orange-100 rounded-xl items-center justify-center">
               <CreditCard className="w-6 h-6 text-orange-600" />
             </div>
             <div>
@@ -305,9 +304,9 @@ export const Purchases = () => {
             </div>
           </div>
         </Card>
-        <Card className="p-6">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center">
+        <Card className="p-4 md:p-6 min-w-0">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="hidden sm:flex w-12 h-12 shrink-0 bg-green-100 rounded-xl items-center justify-center">
               <DollarSign className="w-6 h-6 text-green-600" />
             </div>
             <div>
