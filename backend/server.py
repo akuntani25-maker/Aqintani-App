@@ -73,6 +73,14 @@ async def health_check():
     return {"status": "ok"}
 
 
+@app.get("/api/download/print-server")
+async def download_print_server():
+    """Skrip server cetak untuk komputer kasir (dipakai tombol unduh di halaman struk)."""
+    from fastapi.responses import FileResponse
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "print_server.py")
+    return FileResponse(path, filename="print_server.py", media_type="text/x-python")
+
+
 async def _run_product_migration():
     """Background migration — gated by marker, batched to reduce round-trips."""
     try:
@@ -116,8 +124,7 @@ async def startup_db():
     # Init Emergent object storage (non-blocking — log if fails)
     try:
         from storage import init_storage
-        init_storage()
-        logger.info("Emergent object storage initialized")
+        logger.info(f"Foto produk disimpan di {init_storage()}")
     except Exception as e:
         logger.warning(f"Object storage init failed (uploads may fail): {e}")
 

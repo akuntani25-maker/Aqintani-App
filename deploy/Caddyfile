@@ -1,0 +1,20 @@
+# SITE_ADDRESS = nama domain (HTTPS otomatis) atau ":80" bila belum punya domain
+{$SITE_ADDRESS} {
+	encode zstd gzip
+	request_body {
+		max_size 20MB
+	}
+
+	handle /api/* {
+		reverse_proxy backend:8001
+	}
+
+	handle {
+		root * /srv
+		@assets path /static/*
+		header @assets Cache-Control "public, max-age=31536000, immutable"
+		header /index.html Cache-Control "no-cache"
+		try_files {path} /index.html
+		file_server
+	}
+}
