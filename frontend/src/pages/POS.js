@@ -13,6 +13,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../components/
 import { Label } from '../components/ui/label';
 import { useReactToPrint } from 'react-to-print';
 import ThermalPrinter from '../utils/ThermalPrinter';
+import { imageSrc } from '../utils/imageSrc';
 
 const Receipt = React.forwardRef(({ transaction }, ref) => {
   if (!transaction) return null;
@@ -577,7 +578,7 @@ export const POS = () => {
               {/* photo only when there is one: empty placeholders pushed products off screen */}
               {product.image_url && (
                 <div className="aspect-[4/3] bg-accent rounded-lg mb-2 overflow-hidden">
-                  <img src={`${process.env.REACT_APP_BACKEND_URL}${product.image_url}`} alt={product.name} loading="lazy" className="w-full h-full object-cover" />
+                  <img src={imageSrc(product.image_url)} alt={product.name} loading="lazy" className="w-full h-full object-cover" />
                 </div>
               )}
               <h3 className="font-semibold text-[13px] leading-snug mb-1 line-clamp-2">{product.name}</h3>

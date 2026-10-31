@@ -199,7 +199,7 @@ export const ReceiptPreview = () => {
           ) : (
             <div>
               <p><strong>Print Server tidak aktif.</strong> "Cetak Struk" akan menggunakan browser print.</p>
-              <p className="mt-1">Untuk kualitas terbaik, <a href={`${process.env.REACT_APP_BACKEND_URL}/api/download/print-server`} download="print_server.py" className="underline font-semibold hover:text-amber-900">download print_server.py</a> dan jalankan di PC Anda.</p>
+              <p className="mt-1">Untuk kualitas terbaik, <a href="/print_server.py" download="print_server.py" className="underline font-semibold hover:text-amber-900">download print_server.py</a> dan jalankan di PC Anda.</p>
             </div>
           )}
         </div>

@@ -1,75 +1,65 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import axios from 'axios';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { api, supabase, loadProfile, setCurrentUser } from '../api';
 
 const AuthContext = createContext(null);
 
 export const useAuth = () => {
   const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error('useAuth must be used within AuthProvider');
-  }
+  if (!context) throw new Error('useAuth must be used within AuthProvider');
   return context;
 };
 
-const API_URL = process.env.REACT_APP_BACKEND_URL + '/api';
-
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
-  const [token, setToken] = useState(localStorage.getItem('token'));
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    if (token) {
-      fetchCurrentUser();
-    } else {
-      setLoading(false);
-    }
-  }, [token]);
+  const refresh = useCallback(async () => {
+    const profile = await loadProfile();
+    setCurrentUser(profile);
+    setUser(profile);
+    return profile;
+  }, []);
 
-  const fetchCurrentUser = async () => {
-    try {
-      const response = await axios.get(`${API_URL}/auth/me`, {
-        headers: { Authorization: `Bearer ${token}` }
-      });
-      setUser(response.data);
-    } catch (error) {
-      console.error('Failed to fetch user:', error);
-      logout();
-    } finally {
-      setLoading(false);
-    }
-  };
+  useEffect(() => {
+    let alive = true;
+    supabase.auth.getSession().then(async ({ data }) => {
+      if (data.session) await refresh().catch(() => null);
+      if (alive) setLoading(false);
+    });
+    const { data: sub } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'SIGNED_OUT') { setCurrentUser(null); setUser(null); }
+    });
+    return () => { alive = false; sub.subscription.unsubscribe(); };
+  }, [refresh]);
 
   const login = async (email, password) => {
-    const response = await axios.post(`${API_URL}/auth/login`, { email, password });
-    const { token: newToken, user: userData } = response.data;
-    localStorage.setItem('token', newToken);
-    setToken(newToken);
-    setUser(userData);
-    return userData;
+    const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+    if (error) {
+      const e = new Error('Email atau password salah');
+      e.response = { status: 401, data: { detail: 'Email atau password salah' } };
+      throw e;
+    }
+    const profile = await refresh();
+    if (!profile) {
+      await supabase.auth.signOut();
+      const e = new Error('Akun belum punya profil');
+      e.response = { status: 403, data: { detail: 'Akun ini belum terdaftar sebagai pengguna toko. Hubungi admin.' } };
+      throw e;
+    }
+    return profile;
   };
 
   const logout = () => {
-    localStorage.removeItem('token');
-    setToken(null);
+    setCurrentUser(null);
     setUser(null);
+    supabase.auth.signOut();
   };
 
   return (
-    <AuthContext.Provider value={{ user, token, login, logout, loading }}>
+    <AuthContext.Provider value={{ user, token: user ? 'supabase' : null, login, logout, loading, refreshUser: refresh }}>
       {children}
     </AuthContext.Provider>
   );
 };
 
-export const api = axios.create({
-  baseURL: API_URL
-});
-
-api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('token');
-  if (token) {
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-  return config;
-});
+export { api };

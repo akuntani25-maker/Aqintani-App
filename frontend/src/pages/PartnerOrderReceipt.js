@@ -252,7 +252,7 @@ export const PartnerOrderReceipt = () => {
             <p><strong>Print Server terdeteksi.</strong> Struk thermal & faktur dot matrix siap dicetak (font bawaan printer, kualitas terbaik).</p>
           ) : (
             <div>
-              <p><strong>Print Server tidak aktif.</strong> Jalankan <a href={`${process.env.REACT_APP_BACKEND_URL}/api/download/print-server`} download="print_server.py" className="underline font-semibold">print_server.py</a> di PC untuk cetak struk thermal & faktur dot matrix dengan font bawaan printer.</p>
+              <p><strong>Print Server tidak aktif.</strong> Jalankan <a href="/print_server.py" download="print_server.py" className="underline font-semibold">print_server.py</a> di PC untuk cetak struk thermal & faktur dot matrix dengan font bawaan printer.</p>
             </div>
           )}
         </div>

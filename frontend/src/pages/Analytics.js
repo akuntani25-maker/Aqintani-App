@@ -37,7 +37,7 @@ export const Analytics = () => {
 
   // Auto-fetch agriculture data when tab switches to 'agri'
   useEffect(() => {
-    if (tab === 'agri' && !agriData && !agriLoading) {
+    if (false && tab === 'agri' && !agriData && !agriLoading) {
       fetchAgriInfo();
     }
   }, [tab]);
@@ -93,9 +93,7 @@ export const Analytics = () => {
         <button className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${tab === 'overview' ? 'bg-white shadow text-foreground' : 'text-muted-foreground hover:text-foreground'}`} onClick={() => setTab('overview')} data-testid="tab-overview">
           <TrendingUp className="w-4 h-4 inline mr-1.5" />Ringkasan
         </button>
-        <button className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${tab === 'agri' ? 'bg-white shadow text-foreground' : 'text-muted-foreground hover:text-foreground'}`} onClick={() => setTab('agri')} data-testid="tab-agri">
-          <Sprout className="w-4 h-4 inline mr-1.5" />Info Pertanian Lombok
-        </button>
+        {/* Tab "Info Pertanian Lombok" dihapus: butuh layanan AI berbayar */}
       </div>
 
       {tab === 'overview' && (

@@ -11,6 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '.
 import { toast } from 'sonner';
 import { Plus, Search, Pencil, Trash2, Package, ArrowRightLeft, Filter, AlertTriangle, ClipboardEdit, History, ImagePlus, X } from '../components/icons';
 import { CurrencyInput } from '../components/CurrencyInput';
+import { imageSrc } from '../utils/imageSrc';
 import { Pagination } from '../components/Pagination';
 
 export const Products = () => {
@@ -461,7 +462,7 @@ export const Products = () => {
                   <div className="flex items-center gap-4">
                     {editingProduct.image_url ? (
                       <div className="relative w-24 h-24 rounded-lg overflow-hidden border">
-                        <img src={`${process.env.REACT_APP_BACKEND_URL}${editingProduct.image_url}`} alt={editingProduct.name} className="w-full h-full object-cover" />
+                        <img src={imageSrc(editingProduct.image_url)} alt={editingProduct.name} className="w-full h-full object-cover" />
                         <button type="button" onClick={() => handleDeleteImage(editingProduct.id)} className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-0.5 hover:bg-red-600">
                           <X className="w-3 h-3" />
                         </button>
