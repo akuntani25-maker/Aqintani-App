@@ -54,8 +54,24 @@ sudo /opt/aqintani/deploy/migrate-from-emergent.sh
 - Setelah selesai, login dengan akun lama Anda. Akun admin pertama dari langkah 3 tidak dipakai
   lagi karena tergantikan data lama.
 
-Bila skrip berkata database Emergent tidak bisa diakses dari luar (alamatnya `localhost`),
-berhenti di situ dan kabari Claude; data akan dipindah dengan cara lain.
+**Bila database Emergent tidak bisa diakses dari luar** (pesan "Server selection timed out" atau
+alamat `localhost` — database Atlas milik Emergent memang menolak koneksi dari luar), pakai
+cara kedua: data diambil lewat web lama dengan login admin.
+
+```bash
+sudo git -C /opt/aqintani pull
+sudo /opt/aqintani/deploy/migrate-via-web.sh
+```
+
+- Ketik `PINDAHKAN`, lalu isi alamat web lama (Enter untuk `https://aqintani.online`),
+  email dan password **admin aplikasi lama**.
+- Password akun tidak bisa diambil lewat web. Akun admin yang Anda pakai tetap memakai password
+  lamanya; akun karyawan lain diberi **satu password sementara** yang ditampilkan di akhir.
+  Minta tiap karyawan login lalu menggantinya di menu Profil.
+- Tidak ikut pindah karena tidak tersedia lewat web lama: catatan biaya beli-luar kanvaser dan
+  log retur/tukar kasir. Semua data lain (barang, stok, transaksi, pesanan, hutang, piutang,
+  log aktivitas, foto) ikut pindah.
+- Prosesnya beberapa menit (ratusan permintaan ke web lama); aplikasi lama hanya dibaca.
 
 Skrip ini boleh dijalankan ulang (misalnya sesaat sebelum pindah total) untuk mengambil data terbaru.
 
