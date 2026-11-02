@@ -27,6 +27,9 @@ warn() { printf '\033[1;33m!! %s\033[0m\n' "$*"; }
 randstr() { openssl rand -base64 96 | tr -dc 'A-Za-z0-9' | cut -c1-"$1"; }
 ask()  { local prompt="$1" def="${2:-}" ans; read -r -p "$prompt" ans </dev/tty || true; echo "${ans:-$def}"; }
 
+# Seluruh langkah ada di dalam main(): saat dijalankan lewat "curl | bash", bash membaca
+# skrip utuh dulu, sehingga perintah docker tidak ikut "memakan" sisa skrip dari stdin.
+main() {
 [ "$(id -u)" -eq 0 ] || { echo "Jalankan dengan sudo (sebagai root)."; exit 1; }
 . /etc/os-release
 [ "${ID:-}" = "ubuntu" ] || warn "Skrip ini diuji untuk Ubuntu; sistem Anda: ${PRETTY_NAME:-tidak dikenal}"
@@ -97,7 +100,7 @@ fi
 # ---------- 5. jalankan ----------
 say "Membangun dan menjalankan aplikasi (pertama kali bisa 5–10 menit)"
 cd "$DIR/deploy"
-docker compose up -d --build
+docker compose up -d --build </dev/null
 docker image prune -f >/dev/null 2>&1 || true
 
 # ---------- 6. backup harian ----------
@@ -108,7 +111,7 @@ EOF
 
 say "Menunggu server siap"
 for _ in $(seq 1 60); do
-  if docker compose exec -T backend python -c "import urllib.request;urllib.request.urlopen('http://localhost:8001/api/health')" >/dev/null 2>&1; then OK=1; break; fi
+  if docker compose exec -T backend python -c "import urllib.request;urllib.request.urlopen('http://localhost:8001/api/health')" </dev/null >/dev/null 2>&1; then OK=1; break; fi
   sleep 3
 done
 [ "${OK:-}" = 1 ] || warn "Server belum menjawab. Cek dengan: cd $DIR/deploy && docker compose logs backend"
@@ -128,3 +131,6 @@ echo " Pindah data dari Emergent : sudo $DIR/deploy/migrate-from-emergent.sh"
 echo " Backup manual             : sudo $DIR/deploy/backup.sh"
 echo " Perbarui aplikasi         : sudo $DIR/deploy/update.sh"
 echo "=============================================================="
+}
+
+main "$@"
