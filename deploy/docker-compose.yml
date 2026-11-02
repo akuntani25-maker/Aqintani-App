@@ -1,0 +1,51 @@
+# Aqin Tani di VPS: database + server + tampilan, semuanya di satu mesin.
+# Dijalankan oleh install.sh; jangan diedit kecuali tahu apa yang diubah.
+name: aqintani
+
+services:
+  mongo:
+    image: ${MONGO_IMAGE:-mongo:7.0}
+    # batasi memori database supaya muat di VPS 2 GB
+    command: ["--wiredTigerCacheSizeGB", "0.25"]
+    volumes:
+      - mongo-data:/data/db
+      - ./backups:/backups
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "mongosh --quiet --eval 'db.runCommand({ping:1})' || mongo --quiet --eval 'db.runCommand({ping:1})'"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  backend:
+    build: ../backend
+    env_file: .env
+    environment:
+      MONGO_URL: mongodb://mongo:27017
+      UPLOAD_DIR: /data/uploads
+    volumes:
+      - uploads:/data/uploads
+    depends_on:
+      - mongo
+    restart: unless-stopped
+
+  web:
+    build: ../frontend
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      SITE_ADDRESS: ${SITE_ADDRESS:-:80}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - backend
+    restart: unless-stopped
+
+volumes:
+  mongo-data:
+  uploads:
+  caddy-data:
+  caddy-config:

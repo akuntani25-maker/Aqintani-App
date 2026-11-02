@@ -1,5 +1,6 @@
 // Thermal Printer Utility - Bluetooth & Local Server
 // Supports various thermal printers (58mm, 48mm)
+import { displayUnit } from './unitDisplay';
 
 const LOCAL_PRINT_SERVER = 'http://localhost:9100';
 
@@ -97,7 +98,7 @@ class ThermalPrinter {
               if (foundCharacteristic) break;
             } catch { continue; }
           }
-        } catch {}
+        } catch (e) { console.error(e); }
       }
 
       if (!foundCharacteristic) {
@@ -278,13 +279,15 @@ class ThermalPrinter {
     if (order.is_settled && order.settled_items) {
       order.settled_items.filter(si => si.qty_sold > 0).forEach(si => {
         d.push(...this.textToBytes(si.product_name)); d.push(...this.commands.LINE_FEED);
-        d.push(...this.textToBytes(this.formatLine(`${si.qty_sold}x${this.formatCurrency(si.price)}`, this.formatCurrency(si.qty_sold * si.price))));
+        const u = si.unit ? ` ${displayUnit(si.product_name, si.unit)}` : '';
+        d.push(...this.textToBytes(this.formatLine(`${si.qty_sold}${u}x${this.formatCurrency(si.price)}`, this.formatCurrency(si.qty_sold * si.price))));
         d.push(...this.commands.LINE_FEED);
       });
     } else {
-      order.items.forEach(item => {
+      order.items.filter(item => (item.quantity || 0) > 0).forEach(item => {
         d.push(...this.textToBytes(item.product_name)); d.push(...this.commands.LINE_FEED);
-        d.push(...this.textToBytes(this.formatLine(`${item.quantity}x${this.formatCurrency(item.price)}`, this.formatCurrency(item.subtotal))));
+        const u = item.unit ? ` ${displayUnit(item.product_name, item.unit)}` : '';
+        d.push(...this.textToBytes(this.formatLine(`${item.quantity}${u}x${this.formatCurrency(item.price)}`, this.formatCurrency(item.subtotal))));
         d.push(...this.commands.LINE_FEED);
       });
     }
@@ -341,7 +344,7 @@ class ThermalPrinter {
       if (this.connectionType === 'bluetooth' && this.device?.gatt) this.device.gatt.disconnect();
       this.device = null;
       this.characteristic = null;
-    } catch {}
+    } catch (e) { console.error(e); }
   }
 
   isConnected() {

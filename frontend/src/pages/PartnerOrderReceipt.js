@@ -1,10 +1,14 @@
 import React, { useEffect, useState, useCallback } from 'react';
+import { PageSkeleton } from '../components/PageSkeleton';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from '../context/AuthContext';
 import { Button } from '../components/ui/button';
-import { ArrowLeft, Bluetooth, Loader2, Printer } from 'lucide-react';
+import { ArrowLeft, Bluetooth, Loader2, Printer, FileText } from '../components/icons';
 import { toast } from 'sonner';
 import { thermalPrinter } from '../utils/ThermalPrinter';
+import { dotMatrixPrinter } from '../utils/DotMatrixPrinter';
+import { escapeHtml as e } from '../utils/htmlEscape';
+import { displayUnit } from '../utils/unitDisplay';
 
 const SEP = '================================';
 const CHAR_W = 32;
@@ -18,13 +22,13 @@ function browserPrintFallback(lines, title = 'Struk') {
   const win = window.open('', '_blank', 'width=400,height=600');
   if (!win) { toast.error('Pop-up diblokir. Izinkan pop-up untuk mencetak.'); return; }
   const body = lines.map(l => {
-    if (l.startsWith('##')) return `<div style="text-align:center;font-weight:bold;font-size:13px">${l.slice(2)}</div>`;
-    if (l.startsWith('#')) return `<div style="text-align:center;font-size:11px">${l.slice(1)}</div>`;
+    if (l.startsWith('##')) return `<div style="text-align:center;font-weight:bold;font-size:13px">${e(l.slice(2))}</div>`;
+    if (l.startsWith('#')) return `<div style="text-align:center;font-size:11px">${e(l.slice(1))}</div>`;
     if (l === SEP) return `<div style="border-top:1px dashed #000;margin:3px 0"></div>`;
-    if (l.startsWith('**')) return `<div style="font-weight:bold">${l.slice(2)}</div>`;
-    return `<div>${l}</div>`;
+    if (l.startsWith('**')) return `<div style="font-weight:bold">${e(l.slice(2))}</div>`;
+    return `<div>${e(l)}</div>`;
   }).join('');
-  win.document.write(`<!DOCTYPE html><html><head><title>${title}</title><style>
+  win.document.write(`<!DOCTYPE html><html><head><title>${e(title)}</title><style>
 @page{size:58mm auto;margin:0}*{margin:0;padding:0;box-sizing:border-box}
 body{width:48mm;max-width:48mm;padding:2mm 1mm;font:12px/1.5 'Courier New',monospace;color:#000;-webkit-text-size-adjust:none}
 @media print{body{width:48mm;max-width:48mm;padding:1mm 0.5mm;font-size:12px}@page{size:58mm auto;margin:0}}
@@ -41,6 +45,8 @@ export const PartnerOrderReceipt = () => {
   const [loading, setLoading] = useState(true);
   const [printStatus, setPrintStatus] = useState('idle');
   const [btStatus, setBtStatus] = useState('idle');
+  const [dmStatus, setDmStatus] = useState('idle');
+  const [sjStatus, setSjStatus] = useState('idle');
   const [serverAvailable, setServerAvailable] = useState(null);
 
   useEffect(() => {
@@ -79,12 +85,15 @@ export const PartnerOrderReceipt = () => {
     if (order.is_settled && order.settled_items) {
       order.settled_items.filter(si => si.qty_sold > 0).forEach(si => {
         lines.push(`**${si.product_name}`);
-        lines.push(rightAlign(`  ${si.qty_sold} x ${fmtN(si.price)}`, fmtN(si.qty_sold * si.price)));
+        const u = si.unit ? ` ${displayUnit(si.product_name, si.unit)}` : '';
+        lines.push(rightAlign(`  ${si.qty_sold}${u} x ${fmtN(si.price)}`, fmtN(si.qty_sold * si.price)));
       });
     } else {
       order.items.forEach(item => {
+        if ((item.quantity || 0) <= 0) return;
         lines.push(`**${item.product_name}`);
-        lines.push(rightAlign(`  ${item.quantity} x ${fmtN(item.price)}`, fmtN(item.subtotal)));
+        const u = item.unit ? ` ${displayUnit(item.product_name, item.unit)}` : '';
+        lines.push(rightAlign(`  ${item.quantity}${u} x ${fmtN(item.price)}`, fmtN(item.subtotal)));
       });
     }
     lines.push(SEP);
@@ -119,6 +128,31 @@ export const PartnerOrderReceipt = () => {
     finally { setBtStatus('idle'); }
   };
 
+  const handleDotMatrixPrint = async () => {
+    if (!order) return;
+    setDmStatus('printing');
+    try {
+      await dotMatrixPrinter.printPartnerInvoice(order, storeSettings);
+      toast.success('Faktur berhasil dicetak! (font bawaan printer)');
+    } catch {
+      // Fallback: buka preview HTML
+      dotMatrixPrinter.browserPrintFallback(order, storeSettings);
+      toast.info('Print Server tidak aktif. Faktur dibuka di browser - pilih printer Epson LX-310.', { duration: 5000 });
+    } finally { setDmStatus('idle'); }
+  };
+
+  const handleSuratJalanPrint = async () => {
+    if (!order) return;
+    setSjStatus('printing');
+    try {
+      await dotMatrixPrinter.printSuratJalan(order, storeSettings);
+      toast.success('Surat Jalan berhasil dicetak! (font bawaan printer)');
+    } catch (e) {
+      toast.error('Print Server tidak aktif. Jalankan print_server.py di PC.', { duration: 5000 });
+    }
+    finally { setSjStatus('idle'); }
+  };
+
   useEffect(() => {
     const orderId = searchParams.get('id');
     if (orderId) fetchData(orderId);
@@ -136,7 +170,7 @@ export const PartnerOrderReceipt = () => {
 
   const fmt = (v) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(v);
 
-  if (loading) return <div className="min-h-screen flex items-center justify-center"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div></div>;
+  if (loading) return <PageSkeleton variant="receipt" />;
   if (!order) return null;
 
   const previousDebt = Math.max(0, (order.partner_debt_total || 0) - (order.remaining || 0));
@@ -157,6 +191,14 @@ export const PartnerOrderReceipt = () => {
             <Button variant="outline" onClick={handleBluetoothPrint} disabled={btStatus !== 'idle'} data-testid="bluetooth-print-button">
               {btStatus !== 'idle' ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Bluetooth className="w-4 h-4 mr-2" />}
               {btStatus === 'connecting' ? 'Menghubungkan...' : btStatus === 'printing' ? 'Mencetak...' : 'Cetak Bluetooth'}
+            </Button>
+            <Button variant="secondary" onClick={handleDotMatrixPrint} disabled={dmStatus !== 'idle'} data-testid="dotmatrix-print-button">
+              {dmStatus !== 'idle' ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Printer className="w-4 h-4 mr-2" />}
+              {dmStatus === 'printing' ? 'Mencetak...' : 'Cetak Faktur'}
+            </Button>
+            <Button variant="secondary" onClick={handleSuratJalanPrint} disabled={sjStatus !== 'idle'} data-testid="surat-jalan-print-button">
+              {sjStatus !== 'idle' ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <FileText className="w-4 h-4 mr-2" />}
+              {sjStatus === 'printing' ? 'Mencetak...' : 'Cetak Surat Jalan'}
             </Button>
           </div>
         </div>
@@ -181,13 +223,13 @@ export const PartnerOrderReceipt = () => {
             ? order.settled_items.filter(si => si.qty_sold > 0).map((si, i) => (
               <div key={i} className="mb-1 text-xs">
                 <div className="font-semibold">{si.product_name}</div>
-                <div className="flex justify-between"><span>{si.qty_sold} x {fmt(si.price)}</span><span className="font-semibold">{fmt(si.qty_sold * si.price)}</span></div>
+                <div className="flex justify-between"><span>{si.qty_sold}{si.unit ? ` ${displayUnit(si.product_name, si.unit)}` : ''} x {fmt(si.price)}</span><span className="font-semibold">{fmt(si.qty_sold * si.price)}</span></div>
               </div>
             ))
-            : order.items.map((item, i) => (
+            : order.items.filter(item => (item.quantity || 0) > 0).map((item, i) => (
               <div key={i} className="mb-1 text-xs">
                 <div className="font-semibold">{item.product_name}</div>
-                <div className="flex justify-between"><span>{item.quantity} x {fmt(item.price)}</span><span className="font-semibold">{fmt(item.subtotal)}</span></div>
+                <div className="flex justify-between"><span>{item.quantity}{item.unit ? ` ${displayUnit(item.product_name, item.unit)}` : ''} x {fmt(item.price)}</span><span className="font-semibold">{fmt(item.subtotal)}</span></div>
               </div>
             ))
           )}
@@ -207,11 +249,10 @@ export const PartnerOrderReceipt = () => {
         </div>
         <div className={`mt-4 p-3 rounded-lg border text-sm ${serverAvailable ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-amber-50 border-amber-200 text-amber-800'}`} data-testid="print-server-status">
           {serverAvailable ? (
-            <p><strong>Print Server terdeteksi.</strong> Struk akan dicetak menggunakan font firmware printer (kualitas terbaik).</p>
+            <p><strong>Print Server terdeteksi.</strong> Struk thermal & faktur dot matrix siap dicetak (font bawaan printer, kualitas terbaik).</p>
           ) : (
             <div>
-              <p><strong>Print Server tidak aktif.</strong> "Cetak Struk" akan menggunakan browser print.</p>
-              <p className="mt-1">Untuk kualitas terbaik, <a href={`${process.env.REACT_APP_BACKEND_URL}/api/download/print-server`} download="print_server.py" className="underline font-semibold hover:text-amber-900">download print_server.py</a> dan jalankan di PC Anda.</p>
+              <p><strong>Print Server tidak aktif.</strong> Jalankan <a href={`${process.env.REACT_APP_BACKEND_URL}/api/download/print-server`} download="print_server.py" className="underline font-semibold">print_server.py</a> di PC untuk cetak struk thermal & faktur dot matrix dengan font bawaan printer.</p>
             </div>
           )}
         </div>

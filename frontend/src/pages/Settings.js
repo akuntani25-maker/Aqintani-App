@@ -3,7 +3,7 @@ import { Button } from '../components/ui/button';
 import { Card } from '../components/ui/card';
 import { Label } from '../components/ui/label';
 import { toast } from 'sonner';
-import { Printer, Usb, Bluetooth, CheckCircle, XCircle, Settings as SettingsIcon } from 'lucide-react';
+import { Printer, Usb, Bluetooth, CheckCircle, XCircle, Settings as SettingsIcon } from '../components/icons';
 import ThermalPrinter from '../utils/ThermalPrinter';
 
 export const Settings = () => {

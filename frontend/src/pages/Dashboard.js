@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { PageSkeleton } from '../components/PageSkeleton';
 import { api } from '../context/AuthContext';
 import { Card } from '../components/ui/card';
 import { Calendar } from '../components/ui/calendar';
@@ -6,7 +7,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import {
   TrendingUp, TrendingDown, ShoppingCart, Package, AlertTriangle, DollarSign,
   Warehouse, CreditCard, Store, CalendarDays, Bell, ArrowDownToLine, ArrowUpFromLine, Landmark
-} from 'lucide-react';
+} from '../components/icons';
 import { toast } from 'sonner';
 
 const fmt = (v) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(v);
@@ -27,7 +28,7 @@ export const Dashboard = () => {
       const m = date.getMonth() + 1;
       const res = await api.get(`/dashboard/due-calendar?year=${y}&month=${m}`);
       setCalData(res.data);
-    } catch {}
+    } catch (e) { console.error(e); }
   }, []);
 
   useEffect(() => { fetchCalendar(calMonth); }, [calMonth, fetchCalendar]);
@@ -45,9 +46,7 @@ export const Dashboard = () => {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
-      </div>
+      <PageSkeleton variant="dashboard" />
     );
   }
 
@@ -98,7 +97,7 @@ export const Dashboard = () => {
             <p className="text-[10px] md:text-xs font-bold uppercase tracking-wider text-slate-300 mb-1">Nilai Aset Bersih</p>
             <p className="text-xl md:text-2xl lg:text-3xl font-bold">{fmt(stats?.total_assets || 0)}</p>
             <p className="text-xs text-slate-400 mt-1">
-              Gudang ({fmt(stats?.inventory_value || 0)}) + Piutang ({fmt(stats?.total_personal_loans || 0)}) + Hutang Petani ({fmt(stats?.total_farmer_debt || 0)}) - Bon Supplier ({fmt(stats?.total_supplier_debt || 0)})
+              Gudang ({fmt(stats?.inventory_value || 0)}) + Stok Mobil ({fmt(stats?.total_vehicle_stock || 0)}) + Piutang ({fmt(stats?.total_personal_loans || 0)}) + Hutang Petani ({fmt(stats?.total_farmer_debt || 0)}) - Bon Supplier ({fmt(stats?.total_supplier_debt || 0)})
             </p>
             {/* Bon Mitra per Armada breakdown */}
             <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1">
@@ -122,13 +121,13 @@ export const Dashboard = () => {
       {/* Stat Cards Row 1 */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
         {statCards.map((card, index) => (
-          <Card key={index} className="p-4 md:p-6 hover:shadow-md transition-shadow" data-testid={card.testId}>
+          <Card key={index} className="p-3.5 md:p-6 hover:shadow-md transition-shadow" data-testid={card.testId}>
             <div className="flex items-start justify-between">
               <div className="min-w-0 flex-1">
                 <p className="text-[10px] md:text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1 md:mb-2">{card.title}</p>
-                <p className="text-base md:text-xl lg:text-2xl font-bold truncate">{card.value}</p>
+                <p className="text-[15px] sm:text-base md:text-lg xl:text-xl 2xl:text-2xl font-bold tabular-nums break-normal leading-tight">{card.value}</p>
               </div>
-              <div className={`${card.color} text-white p-2 md:p-3 rounded-lg shrink-0`}>
+              <div className={`${card.color} text-white p-2 md:p-3 rounded-lg shrink-0 hidden 2xl:block`}>
                 <card.icon className="w-4 h-4 md:w-5 md:h-5" />
               </div>
             </div>
@@ -139,14 +138,14 @@ export const Dashboard = () => {
       {/* Finance Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
         {financeCards.map((card, index) => (
-          <Card key={index} className="p-4 md:p-6 hover:shadow-md transition-shadow" data-testid={card.testId}>
+          <Card key={index} className="p-3.5 md:p-6 hover:shadow-md transition-shadow" data-testid={card.testId}>
             <div className="flex items-start justify-between">
               <div className="min-w-0 flex-1">
                 <p className="text-[10px] md:text-xs font-bold uppercase tracking-wider text-muted-foreground mb-1 md:mb-2">{card.title}</p>
-                <p className="text-base md:text-xl lg:text-2xl font-bold truncate">{card.value}</p>
+                <p className="text-[15px] sm:text-base md:text-lg xl:text-xl 2xl:text-2xl font-bold tabular-nums break-normal leading-tight">{card.value}</p>
                 {card.sub && <p className="text-xs text-muted-foreground mt-1">{card.sub}</p>}
               </div>
-              <div className={`${card.color} text-white p-2 md:p-3 rounded-lg shrink-0`}>
+              <div className={`${card.color} text-white p-2 md:p-3 rounded-lg shrink-0 hidden 2xl:block`}>
                 <card.icon className="w-4 h-4 md:w-5 md:h-5" />
               </div>
             </div>

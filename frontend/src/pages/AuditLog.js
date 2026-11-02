@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
+import { PageSkeleton } from '../components/PageSkeleton';
 import { api } from '../context/AuthContext';
 import { Card } from '../components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
 import { toast } from 'sonner';
-import { ClipboardList, User, Clock, Tag } from 'lucide-react';
+import { ClipboardList, User, Clock, Tag } from '../components/icons';
 import { Pagination } from '../components/Pagination';
 
 const ACTION_LABELS = { create: 'Tambah', update: 'Edit', delete: 'Hapus' };
@@ -48,9 +49,7 @@ export const AuditLog = () => {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
-      </div>
+      <PageSkeleton variant="list" />
     );
   }
 

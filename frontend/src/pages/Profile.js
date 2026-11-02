@@ -5,7 +5,7 @@ import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { Card } from '../components/ui/card';
 import { toast } from 'sonner';
-import { User, Mail, Lock, Save } from 'lucide-react';
+import { User, Mail, Lock, Save } from '../components/icons';
 
 export const Profile = () => {
   const { user, logout } = useAuth();

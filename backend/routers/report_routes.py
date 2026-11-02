@@ -5,6 +5,7 @@ import uuid
 import os
 
 from database import db
+from metrics import low_stock_products as fetch_low_stock, product_map, warehouse_units, pos_cost, order_cost, order_units_sold, item_units
 from auth import get_current_user, require_admin, require_admin_panel_access
 
 router = APIRouter()
@@ -18,14 +19,21 @@ async def get_dashboard_stats(admin: dict = Depends(require_admin_panel_access))
     today_transactions = await db.transactions.find({"date": today}, {"_id": 0}).to_list(10000)
     today_sales = sum(t.get("total", 0) for t in today_transactions)
     total_products = await db.products.count_documents({})
-    low_stock_count = await db.products.count_documents({"$expr": {"$lte": ["$stock", "$min_stock_alert"]}})
+    low_list = await fetch_low_stock()
+    low_stock_count = len(low_list)
 
-    last_7_days = []
-    for i in range(6, -1, -1):
-        d = (now_wita - timedelta(days=i)).strftime("%Y-%m-%d")
-        day_txns = await db.transactions.find({"date": d}, {"_id": 0}).to_list(10000)
-        day_total = sum(t.get("total", 0) for t in day_txns)
-        last_7_days.append({"date": d, "sales": day_total, "count": len(day_txns)})
+    # last 7 days in ONE query instead of seven, ending on the same business date as "today"
+    today_dt = datetime.strptime(today, "%Y-%m-%d")
+    days = [(today_dt - timedelta(days=i)).strftime("%Y-%m-%d") for i in range(6, -1, -1)]
+    week_txns = await db.transactions.find(
+        {"date": {"$gte": days[0], "$lte": days[-1]}}, {"_id": 0, "date": 1, "total": 1}
+    ).to_list(100000)
+    by_day = {d: {"date": d, "sales": 0, "count": 0} for d in days}
+    for t in week_txns:
+        if t.get("date") in by_day:
+            by_day[t["date"]]["sales"] += t.get("total", 0)
+            by_day[t["date"]]["count"] += 1
+    last_7_days = [by_day[d] for d in days]
 
     # Warehouse inventory value + chart
     warehouses = await db.warehouses.find({}, {"_id": 0}).to_list(100)
@@ -135,7 +143,18 @@ async def get_dashboard_stats(admin: dict = Depends(require_admin_panel_access))
     farmers = await db.farmers.find({}, {"_id": 0, "current_debt": 1}).to_list(10000)
     total_farmer_debt = sum(f.get("current_debt", 0) for f in farmers)
 
-    total_assets = total_inventory + total_partner_debt + total_personal_loans + total_farmer_debt - total_supplier_debt
+    # Vehicle stock value (barang kondisional di mobil)
+    v_stocks = await db.vehicle_stock.find({"remaining_qty": {"$gt": 0}}, {"_id": 0}).to_list(10000)
+    total_vehicle_stock = 0
+    for vs in v_stocks:
+        prod = prod_map.get(vs["product_id"])
+        if prod:
+            cp = prod.get("cost_price", 0) or 0
+            ipb = prod.get("items_per_box", 1) or 1
+            total_vehicle_stock += (cp / ipb) * vs["remaining_qty"]
+    total_vehicle_stock = round(total_vehicle_stock)
+
+    total_assets = total_inventory + total_vehicle_stock + total_partner_debt + total_personal_loans + total_farmer_debt - total_supplier_debt
 
     # Due this month
     now = datetime.now(timezone.utc)
@@ -146,10 +165,9 @@ async def get_dashboard_stats(admin: dict = Depends(require_admin_panel_access))
     ).to_list(100)
 
     # Low stock product details
-    low_stock_products = await db.products.find(
-        {"$expr": {"$lte": ["$stock", "$min_stock_alert"]}},
-        {"_id": 0, "id": 1, "name": 1, "stock": 1, "min_stock_alert": 1, "items_per_box": 1}
-    ).sort("stock", 1).limit(10).to_list(10)
+    low_stock_products = [
+        {k: p.get(k) for k in ("id", "name", "stock", "min_stock_alert", "items_per_box")} for p in low_list[:10]
+    ]
 
     return {
         "today_sales": today_sales, "today_transactions": len(today_transactions),
@@ -165,6 +183,7 @@ async def get_dashboard_stats(admin: dict = Depends(require_admin_panel_access))
         "partner_debt_vehicles": partner_debt_vehicles,
         "total_personal_loans": total_personal_loans,
         "total_farmer_debt": total_farmer_debt, "total_assets": total_assets,
+        "total_vehicle_stock": total_vehicle_stock,
         "due_this_month": [{k: v for k, v in d.items() if k != "_id"} for d in due_this_month]
     }
 
@@ -426,51 +445,96 @@ async def get_product_analytics(admin: dict = Depends(require_admin_panel_access
 
 
 @router.get("/analytics/summary")
-async def get_analytics_summary(admin: dict = Depends(require_admin_panel_access)):
-    now = datetime.now(timezone.utc)
-    this_month_start = now.strftime("%Y-%m-01")
-    thirty_days_ago = (now - timedelta(days=30)).strftime("%Y-%m-%d")
-    month_transactions = await db.transactions.find({"date": {"$gte": this_month_start}}, {"_id": 0}).to_list(10000)
-    monthly_sales = sum(t["total"] for t in month_transactions)
-    monthly_cost = sum(
-        sum(item.get("price", 0) * item.get("quantity", 0) * 0.7 for item in t.get("items", []))
-        for t in month_transactions
-    )
-    month_purchases = await db.purchases.find({"date": {"$gte": this_month_start}}, {"_id": 0}).to_list(10000)
-    monthly_purchases_total = sum(p.get("total", 0) for p in month_purchases)
-    monthly_purchases_unpaid = sum(p.get("remaining", 0) for p in month_purchases)
-    all_partner_orders = await db.partner_orders.find({}, {"_id": 0}).to_list(10000)
-    total_partner_sales = sum(o.get("total", 0) for o in all_partner_orders)
-    total_partner_unpaid = sum(o.get("remaining", 0) for o in all_partner_orders)
-    daily_sales = {}
-    for i in range(29, -1, -1):
-        date = (now - timedelta(days=i)).strftime("%Y-%m-%d")
-        daily_sales[date] = {"sales": 0, "transactions": 0}
-    all_30_transactions = await db.transactions.find({"date": {"$gte": thirty_days_ago}}, {"_id": 0}).to_list(10000)
-    for t in all_30_transactions:
-        d = t.get("date", "")
-        if d in daily_sales:
-            daily_sales[d]["sales"] += t.get("total", 0)
-            daily_sales[d]["transactions"] += 1
-    chart_data = [{"date": k, **v} for k, v in daily_sales.items()]
-    products = await db.products.find({}, {"_id": 0}).to_list(10000)
-    categories = await db.categories.find({}, {"_id": 0}).to_list(1000)
-    cat_map = {c["id"]: c["name"] for c in categories}
-    category_stock = {}
-    for p in products:
-        cat_name = cat_map.get(p.get("category_id", ""), "Tanpa Kategori")
-        if cat_name not in category_stock:
-            category_stock[cat_name] = {"name": cat_name, "count": 0, "stock_value": 0}
-        category_stock[cat_name]["count"] += 1
-        ipb = p.get("items_per_box", 1) or 1
-        cost_per_unit = (p.get("cost_price", 0) or 0) / ipb
-        category_stock[cat_name]["stock_value"] += p.get("stock", 0) * cost_per_unit
+async def get_analytics_summary(days: int = 30, admin: dict = Depends(require_admin_panel_access)):
+    """Last N days (default 30), POS + partner orders, with real cost per unit.
+    Returns the fields the Analytics page reads (total_revenue, daily_trend, ...);
+    the old monthly_* fields are kept for anything else that still uses them."""
+    days = max(1, min(days, 366))
+    WITA = timezone(timedelta(hours=8))
+    today = datetime.now(WITA).strftime("%Y-%m-%d")
+    start = (datetime.now(WITA) - timedelta(days=days - 1)).strftime("%Y-%m-%d")
+
+    txns = await db.transactions.find(
+        {"date": {"$gte": start, "$lte": today}, "status": {"$ne": "returned"}}, {"_id": 0}
+    ).to_list(100000)
+    orders = await db.partner_orders.find(
+        {"date": {"$gte": start, "$lte": today}, "status": {"$nin": ["cancelled", "canceled"]}}, {"_id": 0}
+    ).to_list(100000)
+    pids = {it.get("product_id") for t in txns for it in t.get("items", [])}
+    pids |= {it.get("product_id") for o in orders for it in o.get("items", [])}
+    pids |= {si.get("product_id") for o in orders for si in (o.get("settled_items") or [])}
+    pmap = await product_map(pids)
+    wh_units = await warehouse_units()
+    cats = {c["id"]: c["name"] for c in await db.categories.find({}, {"_id": 0, "id": 1, "name": 1}).to_list(1000)}
+
+    pos_rev = sum(t.get("total", 0) for t in txns)
+    kios_rev = sum(o.get("total", 0) for o in orders)
+    cost = sum(pos_cost(t, pmap) for t in txns) + sum(order_cost(o, pmap, wh_units) for o in orders)
+    units_sold = sum(it.get("quantity", 0) or 0 for t in txns for it in t.get("items", []))
+    units_sold += sum(order_units_sold(o, pmap, wh_units) for o in orders)
+
+    trend = {}
+    d = datetime.strptime(start, "%Y-%m-%d")
+    for _ in range(days):
+        k = d.strftime("%Y-%m-%d")
+        trend[k] = {"date": k, "revenue": 0, "pos": 0, "partner": 0, "transactions": 0}
+        d += timedelta(days=1)
+    for t in txns:
+        row = trend.get(t.get("date"))
+        if row:
+            row["revenue"] += t.get("total", 0); row["pos"] += t.get("total", 0); row["transactions"] += 1
+    for o in orders:
+        row = trend.get(o.get("date"))
+        if row:
+            row["revenue"] += o.get("total", 0); row["partner"] += o.get("total", 0); row["transactions"] += 1
+
+    by_cat, by_prod = {}, {}
+    def add_line(pid, name, units, value):
+        cname = cats.get((pmap.get(pid) or {}).get("category_id", ""), "Tanpa Kategori")
+        by_cat[cname] = by_cat.get(cname, 0) + value
+        key = pid or name
+        row = by_prod.setdefault(key, {"name": name or (pmap.get(pid) or {}).get("name", "-"), "quantity": 0, "revenue": 0})
+        row["quantity"] += units; row["revenue"] += value
+    for t in txns:
+        for it in t.get("items", []):
+            add_line(it.get("product_id"), it.get("product_name"), it.get("quantity", 0) or 0,
+                     it.get("subtotal", (it.get("price", 0) or 0) * (it.get("quantity", 0) or 0)))
+    for o in orders:
+        dwh = o.get("warehouse_id") or "gudang_toko"
+        for it in o.get("items", []):
+            prod = pmap.get(it.get("product_id", ""))
+            add_line(it.get("product_id"), it.get("product_name"), item_units(it, prod, wh_units, dwh),
+                     it.get("subtotal", 0) or 0)
+
+    revenue = pos_rev + kios_rev
+    n_orders = len(txns) + len(orders)
+    month_start = datetime.now(WITA).strftime("%Y-%m-01")
+    month_txns = [t for t in txns if t.get("date", "") >= month_start]
+    month_purchases = await db.purchases.find({"date": {"$gte": month_start}}, {"_id": 0, "total": 1, "remaining": 1}).to_list(10000)
     return {
-        "monthly_sales": monthly_sales, "monthly_transactions": len(month_transactions),
-        "monthly_purchases": monthly_purchases_total, "monthly_purchases_unpaid": monthly_purchases_unpaid,
-        "total_partner_sales": total_partner_sales, "total_partner_unpaid": total_partner_unpaid,
-        "estimated_margin": monthly_sales - monthly_cost,
-        "chart_data": chart_data, "category_breakdown": list(category_stock.values())
+        "period": {"from": start, "to": today, "days": days},
+        "total_revenue": round(revenue),
+        "pos_revenue": round(pos_rev),
+        "partner_revenue": round(kios_rev),
+        "total_cost": round(cost),
+        "gross_profit": round(revenue - cost),
+        "margin_pct": round((revenue - cost) / revenue * 100, 1) if revenue else 0,
+        "total_orders": n_orders,
+        "pos_transactions": len(txns),
+        "partner_orders": len(orders),
+        "total_products_sold": round(units_sold, 2),
+        "avg_order_value": round(revenue / n_orders) if n_orders else 0,
+        "daily_trend": [{**v, "revenue": round(v["revenue"])} for v in trend.values()],
+        "category_breakdown": sorted(
+            [{"name": k, "value": round(v)} for k, v in by_cat.items() if v > 0], key=lambda x: -x["value"]),
+        "top_products": sorted(by_prod.values(), key=lambda x: -x["quantity"])[:10],
+        # legacy keys
+        "monthly_sales": sum(t.get("total", 0) for t in month_txns),
+        "monthly_transactions": len(month_txns),
+        "monthly_purchases": sum(p.get("total", 0) for p in month_purchases),
+        "monthly_purchases_unpaid": sum(p.get("remaining", 0) for p in month_purchases),
+        "estimated_margin": round(revenue - cost),
+        "chart_data": [{"date": v["date"], "sales": v["pos"], "transactions": v["transactions"]} for v in trend.values()],
     }
 
 
@@ -484,93 +548,43 @@ async def get_profit_loss_report(date_from: str, date_to: str, admin: dict = Dep
         {"_id": 0}
     ).to_list(100000)
 
-    products_cache = {}
-    async def get_product(pid):
-        if pid not in products_cache:
-            p = await db.products.find_one({"id": pid}, {"_id": 0, "cost_price": 1, "items_per_box": 1})
-            products_cache[pid] = p
-        return products_cache[pid]
-
-    pos_revenue = 0
-    pos_cogs = 0
-    for t in transactions:
-        pos_revenue += t.get("total", 0)
-        for item in t.get("items", []):
-            pid = item.get("product_id", "")
-            qty = item.get("quantity", 0)
-            prod = await get_product(pid)
-            if prod:
-                ipb = prod.get("items_per_box", 1) or 1
-                cost_per_unit = (prod.get("cost_price", 0) or 0) / ipb
-                pos_cogs += qty * cost_per_unit
-
-    # Partner Orders
+    # Partner Orders (cancelled orders are not sales)
     partner_orders = await db.partner_orders.find(
-        {"date": {"$gte": date_from, "$lte": date_to}},
+        {"date": {"$gte": date_from, "$lte": date_to}, "status": {"$nin": ["cancelled", "canceled"]}},
         {"_id": 0}
     ).to_list(100000)
 
-    partner_revenue = 0
-    partner_cogs = 0
+    # one batched product lookup; costs follow the shared rules in metrics.py
+    # (items taken from a "dus" warehouse are converted to units before costing)
+    pids = {it.get("product_id") for t in transactions for it in t.get("items", [])}
+    pids |= {it.get("product_id") for o in partner_orders for it in o.get("items", [])}
+    pids |= {si.get("product_id") for o in partner_orders for si in (o.get("settled_items") or [])}
+    pmap = await product_map(pids)
+    wh_units = await warehouse_units()
+
+    daily = {}
+    pos_revenue = pos_cogs = 0
+    for t in transactions:
+        c = pos_cost(t, pmap)
+        pos_revenue += t.get("total", 0)
+        pos_cogs += c
+        row = daily.setdefault(t.get("date", ""), {"date": t.get("date", ""), "revenue": 0, "cogs": 0})
+        row["revenue"] += t.get("total", 0)
+        row["cogs"] += c
+
+    partner_revenue = partner_cogs = 0
     for o in partner_orders:
+        c = order_cost(o, pmap, wh_units)
         partner_revenue += o.get("total", 0)
-        if o.get("is_settled") and o.get("settled_items"):
-            for si in o["settled_items"]:
-                if si.get("qty_sold", 0) <= 0:
-                    continue
-                pid = si.get("product_id", "")
-                prod = await get_product(pid)
-                if prod:
-                    ipb = prod.get("items_per_box", 1) or 1
-                    cost_per_unit = (prod.get("cost_price", 0) or 0) / ipb
-                    partner_cogs += si["qty_sold"] * cost_per_unit
-        else:
-            for item in o.get("items", []):
-                pid = item.get("product_id", "")
-                qty = item.get("quantity", 0)
-                prod = await get_product(pid)
-                if prod:
-                    ipb = prod.get("items_per_box", 1) or 1
-                    cost_per_unit = (prod.get("cost_price", 0) or 0) / ipb
-                    partner_cogs += qty * cost_per_unit
+        partner_cogs += c
+        row = daily.setdefault(o.get("date", ""), {"date": o.get("date", ""), "revenue": 0, "cogs": 0})
+        row["revenue"] += o.get("total", 0)
+        row["cogs"] += c
 
     total_revenue = pos_revenue + partner_revenue
     total_cogs = pos_cogs + partner_cogs
     gross_profit = total_revenue - total_cogs
     margin_pct = (gross_profit / total_revenue * 100) if total_revenue > 0 else 0
-
-    # Daily breakdown
-    daily = {}
-    for t in transactions:
-        d = t.get("date", "")
-        if d not in daily:
-            daily[d] = {"date": d, "revenue": 0, "cogs": 0}
-        daily[d]["revenue"] += t.get("total", 0)
-        for item in t.get("items", []):
-            prod = await get_product(item.get("product_id", ""))
-            if prod:
-                ipb = prod.get("items_per_box", 1) or 1
-                daily[d]["cogs"] += item.get("quantity", 0) * ((prod.get("cost_price", 0) or 0) / ipb)
-
-    for o in partner_orders:
-        d = o.get("date", "")
-        if d not in daily:
-            daily[d] = {"date": d, "revenue": 0, "cogs": 0}
-        daily[d]["revenue"] += o.get("total", 0)
-        if o.get("is_settled") and o.get("settled_items"):
-            for si in o["settled_items"]:
-                if si.get("qty_sold", 0) <= 0:
-                    continue
-                prod = await get_product(si.get("product_id", ""))
-                if prod:
-                    ipb = prod.get("items_per_box", 1) or 1
-                    daily[d]["cogs"] += si["qty_sold"] * ((prod.get("cost_price", 0) or 0) / ipb)
-        else:
-            for item in o.get("items", []):
-                prod = await get_product(item.get("product_id", ""))
-                if prod:
-                    ipb = prod.get("items_per_box", 1) or 1
-                    daily[d]["cogs"] += item.get("quantity", 0) * ((prod.get("cost_price", 0) or 0) / ipb)
 
     daily_data = sorted(
         [{"date": v["date"], "revenue": round(v["revenue"]), "cogs": round(v["cogs"]), "profit": round(v["revenue"] - v["cogs"])} for v in daily.values()],
@@ -594,6 +608,268 @@ async def get_profit_loss_report(date_from: str, date_to: str, admin: dict = Dep
 
 
 # ============= AI STOCK FORECAST =============
+@router.post("/agriculture/lombok-info")
+async def get_lombok_agriculture_info(admin: dict = Depends(get_current_user)):
+    """Info cuaca, berita pertanian real, & rekomendasi AI untuk Lombok."""
+    import httpx
+    from bs4 import BeautifulSoup
+    from emergentintegrations.llm.openai import LlmChat, UserMessage
+
+    WMO_CODES = {
+        0: "Cerah", 1: "Sebagian Cerah", 2: "Berawan Sebagian", 3: "Berawan",
+        45: "Berkabut", 48: "Kabut Tebal",
+        51: "Gerimis Ringan", 53: "Gerimis", 55: "Gerimis Lebat",
+        61: "Hujan Ringan", 63: "Hujan Sedang", 65: "Hujan Lebat",
+        80: "Hujan Singkat", 81: "Hujan Singkat Sedang", 82: "Hujan Singkat Lebat",
+        95: "Hujan Petir", 96: "Hujan Petir + Hujan Es", 99: "Hujan Petir Hebat"
+    }
+
+    regions = [
+        {"name": "Lombok Barat", "city": "Mataram", "lat": -8.5833, "lon": 116.1167},
+        {"name": "Lombok Tengah", "city": "Praya", "lat": -8.7167, "lon": 116.2833},
+        {"name": "Lombok Timur", "city": "Selong", "lat": -8.6500, "lon": 116.5500},
+        {"name": "Lombok Utara", "city": "Tanjung", "lat": -8.3500, "lon": 116.3000},
+    ]
+
+    weather_data = []
+    news_articles = []
+
+    async with httpx.AsyncClient(timeout=15, follow_redirects=True, headers={
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+    }) as client:
+        # 1. Fetch weather
+        for region in regions:
+            try:
+                resp = await client.get("https://api.open-meteo.com/v1/forecast", params={
+                    "latitude": region["lat"], "longitude": region["lon"],
+                    "current": "temperature_2m,relative_humidity_2m,rain,wind_speed_10m,weather_code",
+                    "daily": "temperature_2m_max,temperature_2m_min,rain_sum,precipitation_probability_max",
+                    "timezone": "Asia/Makassar", "forecast_days": 7
+                })
+                data = resp.json()
+                current = data.get("current", {})
+                daily = data.get("daily", {})
+                weather_code = current.get("weather_code", 0)
+                weather_data.append({
+                    "region": region["name"], "city": region["city"],
+                    "temperature": current.get("temperature_2m"),
+                    "humidity": current.get("relative_humidity_2m"),
+                    "rain": current.get("rain", 0),
+                    "wind_speed": current.get("wind_speed_10m"),
+                    "weather_code": weather_code,
+                    "weather_desc": WMO_CODES.get(weather_code, "Tidak Diketahui"),
+                    "forecast_7d": {
+                        "dates": daily.get("time", []),
+                        "temp_max": daily.get("temperature_2m_max", []),
+                        "temp_min": daily.get("temperature_2m_min", []),
+                        "rain_sum": daily.get("rain_sum", []),
+                        "rain_prob": daily.get("precipitation_probability_max", [])
+                    }
+                })
+            except Exception:
+                weather_data.append({
+                    "region": region["name"], "city": region["city"],
+                    "temperature": None, "humidity": None, "rain": 0,
+                    "wind_speed": None, "weather_code": 0,
+                    "weather_desc": "Data tidak tersedia", "forecast_7d": {}
+                })
+
+        # 2. Fetch news from Google News RSS
+        search_queries = [
+            "pertanian+lombok+NTB+petani",
+            "tanam+panen+lombok+NTB",
+            "pupuk+pestisida+lombok+petani",
+            "harga+cabai+bawang+lombok+NTB",
+            "tembakau+padi+jagung+lombok",
+        ]
+        seen_titles = set()
+        for query in search_queries:
+            try:
+                rss_url = f"https://news.google.com/rss/search?q={query}&hl=id&gl=ID&ceid=ID:id"
+                resp = await client.get(rss_url)
+                if resp.status_code == 200:
+                    soup = BeautifulSoup(resp.text, "xml")
+                    items = soup.find_all("item")
+                    for item in items[:5]:
+                        title = item.find("title").text.strip() if item.find("title") else ""
+                        if not title or title in seen_titles:
+                            continue
+                        seen_titles.add(title)
+                        description = ""
+                        if item.find("description"):
+                            desc_soup = BeautifulSoup(item.find("description").text, "html.parser")
+                            description = desc_soup.get_text(strip=True)[:300]
+                        link = item.find("link").text.strip() if item.find("link") else ""
+                        pub_date = item.find("pubDate").text.strip() if item.find("pubDate") else ""
+                        source_el = item.find("source")
+                        source = source_el.text.strip() if source_el else ""
+                        news_articles.append({
+                            "title": title, "description": description,
+                            "link": link, "date": pub_date, "source": source
+                        })
+            except Exception:
+                continue
+
+        # 3. Scrape ntbprov.go.id for official news
+        try:
+            resp = await client.get("https://ntbprov.go.id/kategori/pertanian", timeout=10)
+            if resp.status_code == 200:
+                soup = BeautifulSoup(resp.text, "html.parser")
+                for article in soup.select("article, .post-item, .news-item, .card")[:5]:
+                    title_el = article.find("h2") or article.find("h3") or article.find("a")
+                    if title_el:
+                        title = title_el.get_text(strip=True)
+                        if title and title not in seen_titles and len(title) > 15:
+                            seen_titles.add(title)
+                            link_el = article.find("a", href=True)
+                            link = link_el["href"] if link_el else ""
+                            if link and not link.startswith("http"):
+                                link = "https://ntbprov.go.id" + link
+                            news_articles.append({
+                                "title": title, "description": "",
+                                "link": link, "date": "", "source": "ntbprov.go.id"
+                            })
+        except Exception:
+            pass
+
+        # 4. Scrape lombokpost
+        try:
+            resp = await client.get("https://lombokpost.jawapos.com/ntb/", timeout=10)
+            if resp.status_code == 200:
+                soup = BeautifulSoup(resp.text, "html.parser")
+                for article in soup.select("article, .latest__item, .post")[:5]:
+                    title_el = article.find("h2") or article.find("h3") or article.find("a")
+                    if title_el:
+                        title = title_el.get_text(strip=True)
+                        if title and title not in seen_titles and len(title) > 15 and any(
+                            kw in title.lower() for kw in ["tani", "padi", "jagung", "cabai", "bawang", "pupuk", "panen", "tanam", "pertanian", "petani", "tembakau"]
+                        ):
+                            seen_titles.add(title)
+                            link_el = article.find("a", href=True)
+                            link = link_el["href"] if link_el else ""
+                            news_articles.append({
+                                "title": title, "description": "",
+                                "link": link, "date": "", "source": "Lombok Post"
+                            })
+        except Exception:
+            pass
+
+    # Deduplicate and limit
+    news_articles = news_articles[:20]
+
+    now = datetime.now(timezone.utc)
+    month_name = ["Januari", "Februari", "Maret", "April", "Mei", "Juni",
+                  "Juli", "Agustus", "September", "Oktober", "November", "Desember"][now.month - 1]
+
+    weather_summary = "\n".join([
+        f"- {w['region']} ({w['city']}): {w['weather_desc']}, Suhu {w['temperature']}°C, "
+        f"Kelembaban {w['humidity']}%, Hujan {w['rain']}mm, Angin {w['wind_speed']}km/h"
+        for w in weather_data if w['temperature'] is not None
+    ])
+
+    news_summary = "\n".join([
+        f"- [{a['source']}] {a['title']}" + (f" - {a['description'][:150]}" if a['description'] else "")
+        for a in news_articles[:15]
+    ]) or "Tidak ada berita terkini yang ditemukan."
+
+    prompt = f"""Kamu adalah ahli pertanian berpengalaman di Pulau Lombok, Nusa Tenggara Barat, Indonesia.
+
+Bulan saat ini: {month_name} {now.year}
+
+=== CUACA SAAT INI ===
+{weather_summary}
+
+=== BERITA PERTANIAN TERKINI DARI BERBAGAI SUMBER ===
+{news_summary}
+
+Berdasarkan DATA REAL dari berita terkini di atas DAN kondisi cuaca saat ini, berikan analisis KOMPREHENSIF dalam format JSON (tanpa markdown code block):
+{{
+  "ringkasan_cuaca": "Deskripsi kondisi cuaca Lombok saat ini dan dampaknya untuk pertanian (2-3 kalimat)",
+  "musim": "hujan / kemarau / peralihan",
+  "aktivitas_pertanian_terkini": [
+    {{
+      "tanaman": "Nama tanaman yang SEDANG ditanam/dipanen petani Lombok (berdasarkan berita)",
+      "wilayah": "Wilayah di Lombok",
+      "status": "sedang tanam / sedang panen / persiapan lahan",
+      "detail": "Detail informasi dari berita (luas lahan, produksi, dll)",
+      "sumber_info": "Nama media/sumber berita yang melaporkan"
+    }}
+  ],
+  "kondisi_pasar": [
+    {{
+      "komoditas": "Nama komoditas",
+      "harga": "Harga terkini jika ada di berita",
+      "tren": "naik / turun / stabil",
+      "keterangan": "Konteks harga dan supply"
+    }}
+  ],
+  "tanaman_rekomendasi": [
+    {{
+      "nama": "Nama tanaman",
+      "jenis": "pangan/hortikultura/perkebunan",
+      "keterangan": "Kenapa cocok ditanam sekarang BERDASARKAN data real cuaca dan tren berita",
+      "wilayah_ideal": "Wilayah di Lombok yang paling cocok",
+      "masa_tanam": "Estimasi waktu tanam hingga panen",
+      "tips": "Tips singkat"
+    }}
+  ],
+  "kebutuhan_pupuk_obat": [
+    {{
+      "nama": "Nama pupuk/pestisida/obat",
+      "kategori": "pupuk/pestisida/fungisida/herbisida",
+      "kegunaan": "Untuk tanaman apa dan kenapa dibutuhkan",
+      "dosis": "Dosis yang disarankan",
+      "prioritas": "tinggi/sedang/rendah",
+      "alasan_prioritas": "Kenapa prioritas ini"
+    }}
+  ],
+  "hama_penyakit_waspada": [
+    {{
+      "nama": "Nama hama/penyakit",
+      "tanaman_target": "Tanaman yang rentan",
+      "tanda": "Tanda serangan",
+      "pencegahan": "Cara pencegahan"
+    }}
+  ],
+  "tips_musiman": ["Tip 1", "Tip 2", "Tip 3", "Tip 4"],
+  "peringatan": ["Peringatan penting jika ada"]
+}}
+
+PENTING: Untuk bagian "aktivitas_pertanian_terkini" dan "kondisi_pasar", HANYA gunakan data yang benar-benar ada di berita. Jangan mengarang. Jika tidak ada data, kosongkan array.
+Untuk "tanaman_rekomendasi" dan "kebutuhan_pupuk_obat", gunakan kombinasi data berita + pengetahuan ahli.
+Berikan minimal 5 tanaman rekomendasi, 6 pupuk/obat, dan 3 hama/penyakit."""
+
+    try:
+        llm_key = os.environ.get("EMERGENT_LLM_KEY", "")
+        chat = LlmChat(api_key=llm_key, session_id=str(uuid.uuid4()),
+            system_message="Kamu adalah ahli pertanian Lombok. Selalu balas dalam format JSON valid tanpa markdown code block. Gunakan bahasa Indonesia.")
+        chat = chat.with_model("openai", "gpt-4o")
+        chat = chat.with_params(temperature=0.3)
+        result_text = await chat.send_message(UserMessage(text=prompt))
+        import json as json_module
+        try:
+            ai_data = json_module.loads(result_text)
+        except json_module.JSONDecodeError:
+            if "```" in result_text:
+                json_str = result_text.split("```")[1]
+                if json_str.startswith("json"):
+                    json_str = json_str[4:]
+                ai_data = json_module.loads(json_str.strip())
+            else:
+                ai_data = {"ringkasan_cuaca": result_text, "musim": "", "aktivitas_pertanian_terkini": [],
+                           "kondisi_pasar": [], "tanaman_rekomendasi": [], "kebutuhan_pupuk_obat": [],
+                           "hama_penyakit_waspada": [], "tips_musiman": [], "peringatan": []}
+        return {"status": "success", "weather": weather_data, "news": news_articles,
+                "ai": ai_data, "bulan": f"{month_name} {now.year}"}
+    except Exception as e:
+        return {"status": "fallback", "weather": weather_data, "news": news_articles,
+                "ai": {"ringkasan_cuaca": f"AI tidak tersedia: {str(e)}", "musim": "",
+                        "aktivitas_pertanian_terkini": [], "kondisi_pasar": [],
+                        "tanaman_rekomendasi": [], "kebutuhan_pupuk_obat": [],
+                        "hama_penyakit_waspada": [], "tips_musiman": [], "peringatan": []},
+                "bulan": f"{month_name} {now.year}"}
+
+
 @router.post("/forecast/stock")
 async def forecast_stock(admin: dict = Depends(require_admin_panel_access)):
     from emergentintegrations.llm.openai import LlmChat, UserMessage

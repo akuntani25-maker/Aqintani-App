@@ -6,7 +6,7 @@ import { Label } from '../components/ui/label';
 import { Card } from '../components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
 import { toast } from 'sonner';
-import { FileText, Download, TrendingUp, TrendingDown, DollarSign, ShoppingCart, Store, Award, FileDown, BarChart3, Users } from 'lucide-react';
+import { FileText, Download, TrendingUp, TrendingDown, DollarSign, ShoppingCart, Store, Award, FileDown, BarChart3, Users } from '../components/icons';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';

@@ -10,14 +10,20 @@ from database import db
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 security = HTTPBearer()
 
-SECRET_KEY = os.environ.get('SECRET_KEY', 'your-secret-key-change-this-in-production')
+SECRET_KEY = os.environ.get('SECRET_KEY') or os.environ.get('JWT_SECRET')
+if not SECRET_KEY:
+    # Never fall back to a fixed, publicly known key: anyone could sign their own login tokens.
+    import secrets, logging
+    SECRET_KEY = secrets.token_urlsafe(48)
+    logging.getLogger(__name__).warning(
+        "SECRET_KEY is not set: using a random key for this run. Everyone is logged out on restart; set SECRET_KEY in .env.")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_DAYS = 7
 
 ROLE_PERMISSIONS = {
-    "admin": ["dashboard", "products", "categories", "suppliers", "supplier_debts", "partner_stores", "partner_orders", "canvassers", "analytics", "reports", "users", "store_settings", "import_data", "printer", "profile", "vehicles", "audit_log", "pos", "personal_loans"],
-    "manager": ["dashboard", "products", "categories", "suppliers", "supplier_debts", "partner_stores", "partner_orders", "canvassers", "analytics", "reports", "store_settings", "import_data", "printer", "profile", "vehicles", "audit_log", "pos", "personal_loans"],
-    "office_staff": ["dashboard", "products", "categories", "suppliers", "supplier_debts", "partner_stores", "partner_orders", "analytics", "reports", "profile", "vehicles", "pos"],
+    "admin": ["dashboard", "products", "categories", "suppliers", "supplier_debts", "partner_stores", "partner_orders", "canvassers", "analytics", "reports", "users", "store_settings", "import_data", "printer", "profile", "vehicles", "vehicle_stock", "audit_log", "pos", "personal_loans"],
+    "manager": ["dashboard", "products", "categories", "suppliers", "supplier_debts", "partner_stores", "partner_orders", "canvassers", "analytics", "reports", "store_settings", "import_data", "printer", "profile", "vehicles", "vehicle_stock", "audit_log", "pos", "personal_loans"],
+    "office_staff": ["dashboard", "products", "categories", "suppliers", "supplier_debts", "partner_stores", "partner_orders", "analytics", "reports", "profile", "vehicles", "vehicle_stock", "pos"],
     "cashier": ["pos", "profile"],
     "canvasser": ["canvasser_dashboard", "profile"],
 }

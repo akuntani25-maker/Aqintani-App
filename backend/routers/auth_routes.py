@@ -113,4 +113,4 @@ async def update_store_settings(settings: StoreSettings, admin: dict = Depends(r
     settings_doc = settings.model_dump()
     await db.store_settings.delete_many({})
     await db.store_settings.insert_one(settings_doc)
-    return settings_doc
+    return settings.model_dump()

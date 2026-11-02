@@ -301,6 +301,119 @@ async def get_supplier_debts_summary(admin: dict = Depends(require_admin_panel_a
     }
 
 
+@router.get("/supplier-debts/{supplier_id}/purchase-items")
+async def get_supplier_purchase_items(
+    supplier_id: str, search: str = "", date_from: str = "", date_to: str = "",
+    admin: dict = Depends(require_admin_panel_access)
+):
+    """Flatten purchase items for detailed view with search/filter."""
+    query = {"supplier_id": supplier_id}
+    date_filter = {}
+    if date_from:
+        date_filter["$gte"] = date_from
+    if date_to:
+        date_filter["$lte"] = date_to
+    if date_filter:
+        query["date"] = date_filter
+
+    purchases = await db.purchases.find(query, {"_id": 0}).sort("date", -1).to_list(10000)
+
+    # Batch fetch products for items_per_box
+    all_pids = set()
+    for p in purchases:
+        for item in p.get("items", []):
+            pid = item.get("product_id", "")
+            if pid:
+                all_pids.add(pid)
+    products_map = {}
+    if all_pids:
+        prods = await db.products.find({"id": {"$in": list(all_pids)}}, {"_id": 0, "id": 1, "items_per_box": 1}).to_list(10000)
+        products_map = {pr["id"]: pr for pr in prods}
+
+    result = []
+    for p in purchases:
+        for item in p.get("items", []):
+            product_name = item.get("product_name", "")
+            if search and search.lower() not in product_name.lower():
+                continue
+            prod = products_map.get(item.get("product_id", ""), {})
+            ipb = item.get("items_per_box") or prod.get("items_per_box", 1) or 1
+            qty = item.get("quantity", 0)
+            result.append({
+                "purchase_id": p["id"], "date": p.get("date", ""),
+                "product_name": product_name,
+                "qty_dus": qty, "items_per_box": ipb,
+                "qty_satuan": int(qty * ipb),
+                "cost_price": item.get("cost_price", 0),
+                "subtotal": item.get("subtotal", qty * item.get("cost_price", 0)),
+                "due_date": p.get("due_date", ""),
+                "purchase_remaining": p.get("remaining", 0),
+            })
+    # Ensure sorted by date descending
+    result.sort(key=lambda x: x.get("date", ""), reverse=True)
+    return result
+
+
+@router.post("/supplier-debts/{supplier_id}/import-csv")
+async def import_supplier_purchases_csv(supplier_id: str, request: Request, admin: dict = Depends(require_admin_panel_access)):
+    """Import riwayat pembelian dari CSV."""
+    body = await request.json()
+    rows = body.get("rows", [])
+    if not rows:
+        raise HTTPException(status_code=400, detail="Data import kosong")
+
+    supplier = await db.suppliers.find_one({"id": supplier_id}, {"_id": 0})
+    if not supplier:
+        raise HTTPException(status_code=404, detail="Supplier tidak ditemukan")
+
+    now = datetime.now(timezone.utc)
+
+    # Group rows by date
+    grouped = {}
+    for row in rows:
+        date = row.get("date", now.strftime("%Y-%m-%d"))
+        if date not in grouped:
+            grouped[date] = {"items": [], "due_date": row.get("due_date", "")}
+        if not grouped[date]["due_date"] and row.get("due_date"):
+            grouped[date]["due_date"] = row["due_date"]
+        grouped[date]["items"].append(row)
+
+    total_items = 0
+    for date, group in grouped.items():
+        items = []
+        total = 0
+        for row in group["items"]:
+            qty = int(row.get("qty_dus", 0) or 0)
+            cost = float(row.get("cost_price", 0) or 0)
+            ipb = float(row.get("items_per_box", 1) or 1)
+            subtotal = cost * qty
+            items.append({
+                "product_name": row.get("product_name", ""),
+                "product_id": "", "quantity": qty,
+                "items_per_box": ipb,
+                "cost_price": cost, "subtotal": subtotal
+            })
+            total += subtotal
+            total_items += 1
+
+        purchase_doc = {
+            "id": str(uuid.uuid4()), "supplier_id": supplier_id,
+            "supplier_name": supplier["name"], "items": items,
+            "total": total, "paid": 0, "remaining": total,
+            "due_date": group["due_date"], "date": date,
+            "notes": f"Import CSV - {len(items)} item",
+            "source": "csv_import", "created_at": now.isoformat()
+        }
+        await db.purchases.insert_one(purchase_doc)
+
+    from services import log_audit
+    await log_audit(admin, "import_csv", "purchases", supplier_id, {
+        "supplier": supplier["name"], "dates": len(grouped), "items": total_items
+    })
+
+    return {"message": f"Berhasil import {total_items} item dari {len(grouped)} tanggal pembelian"}
+
+
 @router.get("/supplier-debts/{supplier_id}/purchases")
 async def get_supplier_unpaid_purchases(supplier_id: str, show_all: bool = False, admin: dict = Depends(require_admin_panel_access)):
     query = {"supplier_id": supplier_id}
@@ -349,6 +462,140 @@ async def pay_supplier_debt(supplier_id: str, amount: float, notes: str = "", ad
         "message": "Pembayaran berhasil dicatat", "amount_paid": amount,
         "new_total_debt": new_total_debt, "paid_purchases": paid_purchases, "payment_id": payment_doc["id"]
     }
+
+
+@router.post("/supplier-debts/{supplier_id}/import-payments-csv")
+async def import_supplier_payments_csv(supplier_id: str, req: Request, admin: dict = Depends(require_admin_panel_access)):
+    """Import riwayat pembayaran supplier dari CSV. Mengurangi hutang (FIFO terlama dulu)."""
+    body = await req.json()
+    rows = body.get("rows", [])
+    if not rows:
+        raise HTTPException(status_code=400, detail="Data import kosong")
+
+    supplier = await db.suppliers.find_one({"id": supplier_id}, {"_id": 0})
+    if not supplier:
+        raise HTTPException(status_code=404, detail="Supplier tidak ditemukan")
+
+    total_paid = 0
+    for row in rows:
+        amount = float(row.get("amount", 0) or 0)
+        if amount <= 0:
+            continue
+        date = row.get("date", datetime.now(timezone.utc).strftime("%Y-%m-%d"))
+        notes = row.get("notes", "Import CSV")
+
+        # Reduce debt from oldest unpaid purchases (FIFO)
+        unpaid = await db.purchases.find(
+            {"supplier_id": supplier_id, "remaining": {"$gt": 0}}, {"_id": 0}
+        ).sort("date", 1).to_list(1000)
+
+        remaining_amount = amount
+        paid_purchases = []
+        for purchase in unpaid:
+            if remaining_amount <= 0:
+                break
+            purchase_remaining = purchase.get("remaining", 0)
+            pay_this = min(remaining_amount, purchase_remaining)
+            new_paid = purchase["paid"] + pay_this
+            new_remaining = purchase["total"] - new_paid
+            await db.purchases.update_one(
+                {"id": purchase["id"]},
+                {"$set": {"paid": new_paid, "remaining": max(0, new_remaining)}}
+            )
+            paid_purchases.append({"purchase_id": purchase["id"], "amount": pay_this})
+            remaining_amount -= pay_this
+
+        payment_doc = {
+            "id": str(uuid.uuid4()), "type": "supplier", "reference_id": supplier_id,
+            "supplier_id": supplier_id, "supplier_name": supplier["name"], "amount": amount,
+            "notes": notes,
+            "paid_purchases": paid_purchases,
+            "created_at": f"{date}T00:00:00", "date": date
+        }
+        await db.payment_history.insert_one(payment_doc)
+        total_paid += amount
+
+    from services import log_audit
+    await log_audit(admin, "import_payments_csv", "supplier", supplier_id, {
+        "supplier": supplier["name"], "count": len(rows), "total": total_paid
+    })
+
+    return {"message": f"Berhasil import {len([r for r in rows if float(r.get('amount',0) or 0) > 0])} pembayaran senilai Rp {total_paid:,.0f}"}
+
+
+@router.put("/supplier-debts/{supplier_id}/correct")
+async def correct_supplier_debt(supplier_id: str, req: Request, admin: dict = Depends(require_admin_panel_access)):
+    """Koreksi manual hutang supplier: set nilai hutang baru."""
+    body = await req.json()
+    new_debt = float(body.get("new_debt", 0))
+    notes = body.get("notes", "")
+
+    if new_debt < 0:
+        raise HTTPException(status_code=400, detail="Nilai hutang tidak boleh negatif")
+
+    supplier = await db.suppliers.find_one({"id": supplier_id}, {"_id": 0})
+    if not supplier:
+        raise HTTPException(status_code=404, detail="Supplier tidak ditemukan")
+
+    # Calculate current total debt
+    purchases = await db.purchases.find({"supplier_id": supplier_id}, {"_id": 0}).to_list(10000)
+    old_debt = sum(max(0, p.get("remaining", 0)) for p in purchases)
+    diff = new_debt - old_debt
+
+    if diff == 0:
+        return {"message": "Tidak ada perubahan", "old_debt": old_debt, "new_debt": new_debt}
+
+    # Distribute adjustment across purchases
+    if diff < 0:
+        # Debt reduced: pay off from oldest first
+        reduce = abs(diff)
+        unpaid = sorted([p for p in purchases if p.get("remaining", 0) > 0], key=lambda x: x.get("date", ""))
+        for p in unpaid:
+            if reduce <= 0:
+                break
+            rem = p.get("remaining", 0)
+            adj = min(reduce, rem)
+            await db.purchases.update_one(
+                {"id": p["id"]},
+                {"$set": {"paid": p["paid"] + adj, "remaining": max(0, rem - adj)}}
+            )
+            reduce -= adj
+    else:
+        # Debt increased: add adjustment to the newest purchase
+        unpaid = sorted(purchases, key=lambda x: x.get("date", ""), reverse=True)
+        if unpaid:
+            target = unpaid[0]
+            await db.purchases.update_one(
+                {"id": target["id"]},
+                {"$inc": {"remaining": diff, "total": diff}}
+            )
+        else:
+            # No purchases exist, create an adjustment record
+            WITA = timezone(timedelta(hours=8))
+            now = datetime.now(WITA)
+            adj_doc = {
+                "id": str(uuid.uuid4()), "supplier_id": supplier_id,
+                "supplier_name": supplier["name"], "date": now.strftime("%Y-%m-%d"),
+                "items": [{"product_name": "Koreksi Manual", "quantity": 1, "price": diff, "subtotal": diff}],
+                "total": diff, "paid": 0, "remaining": diff,
+                "notes": notes or "Koreksi manual hutang supplier",
+                "created_at": now.isoformat(), "source": "correction"
+            }
+            await db.purchases.insert_one(adj_doc)
+
+    # Log audit
+    from services import log_audit
+    await log_audit(
+        user=admin, action="KOREKSI_HUTANG_SUPPLIER", entity_type="supplier",
+        entity_id=supplier_id,
+        details={
+            "supplier_name": supplier["name"],
+            "old_debt": old_debt, "new_debt": new_debt,
+            "difference": diff, "notes": notes
+        }
+    )
+
+    return {"message": "Hutang supplier berhasil dikoreksi", "old_debt": old_debt, "new_debt": new_debt}
 
 
 @router.get("/supplier-debts/export-csv")

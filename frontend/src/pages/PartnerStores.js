@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { PageSkeleton } from '../components/PageSkeleton';
 import { api } from '../context/AuthContext';
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
@@ -7,13 +8,11 @@ import { Card } from '../components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from '../components/ui/dialog';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../components/ui/table';
 import { toast } from 'sonner';
-import { Plus, Pencil, Trash2, MapPin, DollarSign, Eye, Search, Truck, CreditCard } from 'lucide-react';
+import { Plus, Pencil, Trash2, MapPin, DollarSign, Eye, Search, Truck, CreditCard } from '../components/icons';
 import { Pagination } from '../components/Pagination';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
-import { GoogleMap, LoadScript, Marker, InfoWindow } from '@react-google-maps/api';
+import { StoreMap, LocationPicker, hasLocation } from '../components/StoreMap';
 import { useNavigate } from 'react-router-dom';
-
-const GOOGLE_MAPS_API_KEY = process.env.REACT_APP_GOOGLE_MAPS_API_KEY || '';
 
 export const PartnerStores = () => {
   const navigate = useNavigate();
@@ -21,7 +20,6 @@ export const PartnerStores = () => {
   const [loading, setLoading] = useState(true);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingStore, setEditingStore] = useState(null);
-  const [selectedStore, setSelectedStore] = useState(null);
   const [showMap, setShowMap] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterVehicle, setFilterVehicle] = useState('all');
@@ -42,15 +40,6 @@ export const PartnerStores = () => {
     vehicle_id: ''
   });
 
-  const mapContainerStyle = {
-    width: '100%',
-    height: '500px'
-  };
-
-  const defaultCenter = {
-    lat: -6.2088,
-    lng: 106.8456
-  };
 
   useEffect(() => {
     fetchStores();
@@ -85,7 +74,7 @@ export const PartnerStores = () => {
       resetForm();
       fetchStores();
     } catch (error) {
-      toast.error('Gagal menyimpan kios mitra');
+      toast.error(error.response?.data?.detail || 'Gagal menyimpan kios mitra');
     }
   };
 
@@ -104,11 +93,11 @@ export const PartnerStores = () => {
     setEditingStore(store);
     setFormData({
       name: store.name,
-      owner_name: store.owner_name,
-      phone: store.phone,
-      address: store.address,
-      latitude: store.latitude,
-      longitude: store.longitude,
+      owner_name: store.owner_name || '',
+      phone: store.phone || '',
+      address: store.address || '',
+      latitude: store.latitude ?? null,
+      longitude: store.longitude ?? null,
       credit_limit: store.credit_limit,
       vehicle_id: store.vehicle_id || ''
     });
@@ -154,14 +143,6 @@ export const PartnerStores = () => {
     } finally { setDebtSaving(false); }
   };
 
-  const handleMapClick = useCallback((e) => {
-    setFormData(prev => ({
-      ...prev,
-      latitude: e.latLng.lat(),
-      longitude: e.latLng.lng()
-    }));
-  }, []);
-
   const formatCurrency = (value) => {
     return new Intl.NumberFormat('id-ID', {
       style: 'currency',
@@ -174,13 +155,16 @@ export const PartnerStores = () => {
     navigate(`/admin/partner-stores/${storeId}`);
   };
 
-  const filteredStores = stores.filter(s =>
+  const vehicleName = useCallback((id) => (vehicles.find(v => v.id === id) || {}).name || '', [vehicles]);
+
+  // useMemo: peta tidak diatur ulang setiap kali halaman digambar ulang
+  const filteredStores = useMemo(() => stores.filter(s =>
     (!searchTerm || s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
     s.owner_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     s.phone?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     s.address?.toLowerCase().includes(searchTerm.toLowerCase())) &&
     (filterVehicle === 'all' || (filterVehicle === 'unassigned' ? !s.vehicle_id : s.vehicle_id === filterVehicle))
-  );
+  ), [stores, searchTerm, filterVehicle]);
 
   const filteredTotalDebt = filteredStores.reduce((sum, s) => sum + (s.current_debt || 0), 0);
 
@@ -193,9 +177,7 @@ export const PartnerStores = () => {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
-      </div>
+      <PageSkeleton variant="table" />
     );
   }
 
@@ -206,7 +188,7 @@ export const PartnerStores = () => {
           <h1 className="text-2xl md:text-3xl lg:text-4xl font-bold tracking-tight">Kios Mitra</h1>
           <p className="text-sm text-muted-foreground mt-2">Kelola data kios mitra dan tracking piutang</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           <Button
             variant="outline"
             onClick={() => setShowMap(!showMap)}
@@ -243,12 +225,11 @@ export const PartnerStores = () => {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="owner_name">Nama Pemilik *</Label>
+                    <Label htmlFor="owner_name">Nama Pemilik</Label>
                     <Input
                       id="owner_name"
                       value={formData.owner_name}
                       onChange={(e) => setFormData({ ...formData, owner_name: e.target.value })}
-                      required
                       data-testid="owner-name-input"
                       placeholder="Bapak Ahmad"
                     />
@@ -256,24 +237,22 @@ export const PartnerStores = () => {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="phone">Telepon *</Label>
+                  <Label htmlFor="phone">Telepon</Label>
                   <Input
                     id="phone"
                     value={formData.phone}
                     onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                    required
                     data-testid="store-phone-input"
                     placeholder="0812-3456-7890"
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="address">Alamat Lengkap *</Label>
+                  <Label htmlFor="address">Alamat Lengkap</Label>
                   <Input
                     id="address"
                     value={formData.address}
                     onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                    required
                     data-testid="store-address-input"
                     placeholder="Jl. Raya Desa No. 45, Kecamatan..."
                   />
@@ -305,39 +284,13 @@ export const PartnerStores = () => {
                 <div className="space-y-2">
                   <Label>Lokasi pada Peta (Optional)</Label>
                   <p className="text-xs text-muted-foreground mb-2">
-                    Klik pada peta untuk menandai lokasi kios mitra
+                    Klik di peta atau geser penanda. Saat berada di kios, tekan "Pakai lokasi saya".
                   </p>
-                  {GOOGLE_MAPS_API_KEY ? (
-                    <LoadScript googleMapsApiKey={GOOGLE_MAPS_API_KEY}>
-                      <GoogleMap
-                        mapContainerStyle={{ width: '100%', height: '300px' }}
-                        center={
-                          formData.latitude && formData.longitude
-                            ? { lat: formData.latitude, lng: formData.longitude }
-                            : defaultCenter
-                        }
-                        zoom={13}
-                        onClick={handleMapClick}
-                      >
-                        {formData.latitude && formData.longitude && (
-                          <Marker
-                            position={{ lat: formData.latitude, lng: formData.longitude }}
-                          />
-                        )}
-                      </GoogleMap>
-                    </LoadScript>
-                  ) : (
-                    <div className="p-4 bg-yellow-50 rounded-lg border border-yellow-200">
-                      <p className="text-sm text-yellow-800">
-                        Google Maps API key belum dikonfigurasi. Tambahkan REACT_APP_GOOGLE_MAPS_API_KEY di .env
-                      </p>
-                    </div>
-                  )}
-                  {formData.latitude && formData.longitude && (
-                    <p className="text-xs text-muted-foreground mt-2">
-                      Koordinat: {formData.latitude.toFixed(6)}, {formData.longitude.toFixed(6)}
-                    </p>
-                  )}
+                  <LocationPicker
+                    latitude={formData.latitude}
+                    longitude={formData.longitude}
+                    onChange={(loc) => setFormData(prev => ({ ...prev, ...loc }))}
+                  />
                 </div>
 
                 <div className="flex gap-2 justify-end pt-4">
@@ -376,64 +329,47 @@ export const PartnerStores = () => {
       </Card>
 
       {/* Map View */}
-      {showMap && GOOGLE_MAPS_API_KEY && (
-        <Card className="p-6">
-          <h2 className="text-xl font-semibold mb-4">Peta Lokasi Kios Mitra</h2>
-          <LoadScript googleMapsApiKey={GOOGLE_MAPS_API_KEY}>
-            <GoogleMap
-              mapContainerStyle={mapContainerStyle}
-              center={defaultCenter}
-              zoom={11}
-            >
-              {stores.filter(s => s.latitude && s.longitude).map((store) => (
-                <Marker
-                  key={store.id}
-                  position={{ lat: store.latitude, lng: store.longitude }}
-                  onClick={() => setSelectedStore(store)}
-                />
-              ))}
-              
-              {selectedStore && (
-                <InfoWindow
-                  position={{ lat: selectedStore.latitude, lng: selectedStore.longitude }}
-                  onCloseClick={() => setSelectedStore(null)}
-                >
-                  <div className="p-2">
-                    <h3 className="font-semibold">{selectedStore.name}</h3>
-                    <p className="text-sm">{selectedStore.owner_name}</p>
-                    <p className="text-sm">{selectedStore.phone}</p>
-                    <p className="text-xs text-gray-600 mt-1">{selectedStore.address}</p>
-                  </div>
-                </InfoWindow>
-              )}
-            </GoogleMap>
-          </LoadScript>
+      {showMap && (
+        <Card className="p-4 md:p-6">
+          <div className="flex flex-wrap items-baseline justify-between gap-2 mb-3">
+            <h2 className="text-lg md:text-xl font-semibold">Peta Lokasi Kios Mitra</h2>
+            <p className="text-xs text-muted-foreground">
+              {filteredStores.filter(hasLocation).length} dari {filteredStores.length} kios sudah punya lokasi ·
+              <span className="inline-block w-2.5 h-2.5 rounded-full mx-1 align-middle" style={{ background: '#1b6a41' }} />lunas
+              <span className="inline-block w-2.5 h-2.5 rounded-full mx-1 align-middle" style={{ background: '#b7791f' }} />ada piutang
+              <span className="inline-block w-2.5 h-2.5 rounded-full mx-1 align-middle" style={{ background: '#c2410c' }} />lewat limit
+            </p>
+          </div>
+          <StoreMap stores={filteredStores} height={460} vehicleName={vehicleName} />
+          {filteredStores.filter(hasLocation).length === 0 && (
+            <p className="text-sm text-muted-foreground mt-3">Belum ada kios yang ditandai. Buka edit kios lalu tandai lokasinya, atau minta kanvaser menekan "Simpan lokasi kios" saat berkunjung.</p>
+          )}
         </Card>
       )}
 
       {/* Summary Cards */}
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
-        <Card className="p-6">
+        <Card className="p-4 md:p-6 min-w-0">
           <div className="flex items-center gap-3">
-            <div className="w-12 h-12 bg-primary/10 rounded-xl flex items-center justify-center">
+            <div className="hidden sm:flex w-12 h-12 shrink-0 bg-primary/10 rounded-xl items-center justify-center">
               <MapPin className="w-6 h-6 text-primary" />
             </div>
             <div>
               <p className="text-xs text-muted-foreground uppercase tracking-wider">{filterVehicle !== 'all' ? 'Kios (Filter)' : 'Total Kios'}</p>
-              <p className="text-base md:text-xl lg:text-2xl font-bold truncate">{filteredStores.length}</p>
+              <p className="text-[15px] sm:text-base md:text-lg xl:text-xl 2xl:text-2xl font-bold tabular-nums break-normal leading-tight">{filteredStores.length}</p>
               {filterVehicle !== 'all' && <p className="text-xs text-muted-foreground">dari {stores.length} kios</p>}
             </div>
           </div>
         </Card>
         
-        <Card className="p-6">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 bg-orange-100 rounded-xl flex items-center justify-center">
+        <Card className="p-4 md:p-6 min-w-0">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="hidden sm:flex w-12 h-12 shrink-0 bg-orange-100 rounded-xl items-center justify-center">
               <DollarSign className="w-6 h-6 text-orange-600" />
             </div>
             <div>
               <p className="text-xs text-muted-foreground uppercase tracking-wider">{filterVehicle !== 'all' ? 'Piutang (Filter)' : 'Total Piutang'}</p>
-              <p className="text-base md:text-xl lg:text-2xl font-bold truncate">
+              <p className="text-[15px] sm:text-base md:text-lg xl:text-xl 2xl:text-2xl font-bold tabular-nums break-normal leading-tight">
                 {formatCurrency(filteredTotalDebt)}
               </p>
               {filterVehicle !== 'all' && <p className="text-xs text-muted-foreground">dari {formatCurrency(stores.reduce((sum, s) => sum + (s.current_debt || 0), 0))}</p>}
@@ -441,15 +377,15 @@ export const PartnerStores = () => {
           </div>
         </Card>
 
-        <Card className="p-6">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 bg-green-100 rounded-xl flex items-center justify-center">
+        <Card className="p-4 md:p-6 min-w-0">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="hidden sm:flex w-12 h-12 shrink-0 bg-green-100 rounded-xl items-center justify-center">
               <MapPin className="w-6 h-6 text-green-600" />
             </div>
             <div>
               <p className="text-xs text-muted-foreground uppercase tracking-wider">Dengan Lokasi</p>
-              <p className="text-base md:text-xl lg:text-2xl font-bold truncate">
-                {stores.filter(s => s.latitude && s.longitude).length}
+              <p className="text-[15px] sm:text-base md:text-lg xl:text-xl 2xl:text-2xl font-bold tabular-nums break-normal leading-tight">
+                {stores.filter(hasLocation).length}
               </p>
             </div>
           </div>
@@ -484,7 +420,7 @@ export const PartnerStores = () => {
                     <TableCell className="font-medium">
                       <div className="flex items-center gap-2">
                         {store.name}
-                        {store.latitude && store.longitude && (
+                        {hasLocation(store) && (
                           <MapPin className="w-4 h-4 text-primary" />
                         )}
                       </div>

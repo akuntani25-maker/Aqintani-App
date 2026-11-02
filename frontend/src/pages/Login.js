@@ -5,7 +5,7 @@ import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import { toast } from 'sonner';
-import { LogIn, Sprout, Eye, EyeOff } from 'lucide-react';
+import { LogIn, Sprout, Eye, EyeOff } from '../components/icons';
 
 export const Login = () => {
   const [email, setEmail] = useState('');
@@ -42,7 +42,7 @@ export const Login = () => {
         style={{ backgroundImage: 'url(https://images.unsplash.com/photo-1625246333195-78d9c38ad449?q=85&w=1920&auto=format&fit=crop)' }}
       >
         <div className="absolute inset-0 bg-gradient-to-br from-primary/95 via-primary/90 to-primary/85"></div>
-        <div className="relative z-10 p-12 flex flex-col justify-center text-white max-w-xl">
+        <div className="relative z-10 p-12 flex flex-col justify-center text-white max-w-xl stagger">
           <div className="mb-8">
             <div className="inline-flex items-center gap-3 mb-6 bg-white/10 backdrop-blur-sm px-5 py-3 rounded-2xl border border-white/20">
               <Sprout className="w-8 h-8 text-secondary" />
@@ -75,8 +75,8 @@ export const Login = () => {
         </div>
       </div>
 
-      <div className="w-full lg:w-1/2 flex items-center justify-center p-8 bg-gradient-mesh">
-        <div className="w-full max-w-md space-y-8">
+      <div className="w-full lg:w-1/2 flex items-center justify-center p-6 sm:p-8 bg-gradient-mesh">
+        <div className="w-full max-w-md space-y-8 bg-card rounded-[24px] shadow-soft-xl border border-border/50 p-8 sm:p-10 animate-fade-up stagger">
           <div className="text-center lg:hidden mb-8">
             <div className="inline-flex items-center gap-2 mb-4 bg-primary/10 px-4 py-2 rounded-xl">
               <Sprout className="w-6 h-6 text-primary" />
@@ -95,7 +95,7 @@ export const Login = () => {
               <Input
                 id="email" type="email" placeholder="nama@contoh.com"
                 value={email} onChange={(e) => setEmail(e.target.value)} required
-                data-testid="login-email-input" className="h-12 text-base rounded-xl border-2"
+                data-testid="login-email-input" className="h-12 text-base rounded-xl"
               />
             </div>
 
@@ -105,7 +105,7 @@ export const Login = () => {
                 <Input
                   id="password" type={showPassword ? 'text' : 'password'} placeholder="••••••••"
                   value={password} onChange={(e) => setPassword(e.target.value)} required
-                  data-testid="login-password-input" className="h-12 text-base rounded-xl border-2 pr-12"
+                  data-testid="login-password-input" className="h-12 text-base rounded-xl pr-12"
                 />
                 <button
                   type="button"
@@ -120,7 +120,7 @@ export const Login = () => {
 
             <Button
               type="submit"
-              className="w-full h-12 text-base rounded-xl shadow-lg shadow-primary/20 hover:shadow-xl hover:shadow-primary/30"
+              className="w-full h-12 text-base rounded-full shadow-glow"
               disabled={loading}
               data-testid="login-submit-button"
             >

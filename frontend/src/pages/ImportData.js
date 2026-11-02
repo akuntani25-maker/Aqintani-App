@@ -5,7 +5,7 @@ import { Button } from '../components/ui/button';
 import {
   Upload, Download, CheckCircle, AlertCircle, Loader2, Trash2,
   Database, Warehouse, Tags, Users, Package, Box, Receipt, Store, ShoppingCart
-} from 'lucide-react';
+} from '../components/icons';
 import { toast } from 'sonner';
 
 const ICONS = {
