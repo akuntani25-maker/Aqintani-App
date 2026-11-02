@@ -32,13 +32,10 @@ async def create_partner_store(data: PartnerStoreCreate, admin: dict = Depends(r
 
 @router.put("/partner-stores/{store_id}", response_model=PartnerStore)
 async def update_partner_store(store_id: str, data: PartnerStoreCreate, admin: dict = Depends(require_admin_panel_access)):
-    result = await db.partner_stores.find_one_and_update(
-        {"id": store_id}, {"$set": data.model_dump()},
-        return_document=True, projection={"_id": 0}
-    )
-    if not result:
+    res = await db.partner_stores.update_one({"id": store_id}, {"$set": data.model_dump()})
+    if res.matched_count == 0:
         raise HTTPException(status_code=404, detail="Partner store not found")
-    return result
+    return await db.partner_stores.find_one({"id": store_id}, {"_id": 0})
 
 
 @router.delete("/partner-stores/{store_id}")
@@ -64,6 +61,32 @@ async def pay_partner_store(store_id: str, amount: float, notes: str = "", admin
     }
     await db.payment_history.insert_one(payment_doc)
     return {"message": "Payment recorded", "new_debt": new_debt, "payment": {k: v for k, v in payment_doc.items() if k != "_id"}}
+
+
+@router.put("/partner-stores/{store_id}/location")
+async def set_partner_store_location(store_id: str, req: FastAPIRequest, current_user: dict = Depends(get_current_user)):
+    """Simpan titik lokasi kios (dipakai admin, atau kanvaser saat berada di kios).
+    Kanvaser hanya boleh mengubah koordinat, tidak data kios lainnya."""
+    if current_user.get("role") not in ("admin", "manager", "office_staff", "canvasser"):
+        raise HTTPException(status_code=403, detail="Tidak punya akses")
+    body = await req.json()
+    try:
+        lat = float(body.get("latitude"))
+        lng = float(body.get("longitude"))
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=400, detail="Koordinat tidak valid")
+    # batas kasar wilayah Indonesia, untuk menolak titik GPS yang jelas salah
+    if not (-11.5 <= lat <= 6.5 and 94.0 <= lng <= 141.5):
+        raise HTTPException(status_code=400, detail="Lokasi di luar wilayah Indonesia, periksa GPS perangkat")
+    store = await db.partner_stores.find_one({"id": store_id}, {"_id": 0, "name": 1, "latitude": 1, "longitude": 1})
+    if not store:
+        raise HTTPException(status_code=404, detail="Kios mitra tidak ditemukan")
+    await db.partner_stores.update_one({"id": store_id}, {"$set": {"latitude": lat, "longitude": lng}})
+    await log_audit(current_user, "SET_LOKASI_KIOS", "partner_store", store_id, {
+        "store_name": store.get("name", ""), "old": [store.get("latitude"), store.get("longitude")], "new": [lat, lng],
+        "accuracy_m": body.get("accuracy"),
+    })
+    return {"message": "Lokasi kios disimpan", "latitude": lat, "longitude": lng}
 
 
 @router.get("/partner-stores/{store_id}/payments")

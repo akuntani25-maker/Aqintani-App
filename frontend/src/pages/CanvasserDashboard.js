@@ -11,6 +11,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '../components/
 import { toast } from 'sonner';
 import { Package, MapPin, DollarSign, CheckCircle, Truck, LogOut, Search, Bell, Filter, X, ShoppingBag, Warehouse, Printer, BarChart2, ArrowRightLeft } from '../components/icons';
 import { Pagination } from '../components/Pagination';
+import { hasLocation, directionsUrl, currentPosition } from '../utils/geo';
 
 const fmtCurrency = (v) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(v);
 
@@ -52,6 +53,22 @@ export const CanvasserDashboard = () => {
   const [transferStoreSearch, setTransferStoreSearch] = useState('');
   const [transferSubmitting, setTransferSubmitting] = useState(false);
   const [partnerStores, setPartnerStores] = useState([]);
+  const [locatingStore, setLocatingStore] = useState(null);
+
+  // Kanvaser merekam titik kios saat berada di lokasi (memakai GPS HP)
+  const saveStoreLocation = async (storeId, storeName) => {
+    setLocatingStore(storeId);
+    try {
+      const pos = await currentPosition();
+      const acc = Math.round(pos.accuracy);
+      if (!window.confirm(`Simpan lokasi ${storeName} di titik Anda sekarang?\nAkurasi GPS: ±${acc} m${acc > 100 ? ' (kurang akurat, sebaiknya coba di luar ruangan)' : ''}`)) return;
+      const res = await api.put(`/partner-stores/${storeId}/location`, { latitude: pos.latitude, longitude: pos.longitude, accuracy: acc });
+      setPartnerStores(prev => prev.map(s => (s.id === storeId ? { ...s, latitude: res.data.latitude, longitude: res.data.longitude } : s)));
+      toast.success(`Lokasi ${storeName} tersimpan`);
+    } catch (e) {
+      toast.error(e.response?.data?.detail || e.message || 'Gagal menyimpan lokasi');
+    } finally { setLocatingStore(null); }
+  };
 
   useEffect(() => {
     fetchMyOrders();
@@ -486,6 +503,26 @@ export const CanvasserDashboard = () => {
                           <span>{order.items.length} item</span>
                         </div>
                       </div>
+
+                      {(() => {
+                        const st = partnerStores.find(s => s.id === order.partner_store_id);
+                        if (!st) return null;
+                        return (
+                          <div className="flex flex-wrap gap-2" data-testid={`store-location-${order.id}`}>
+                            {hasLocation(st) && (
+                              <a href={directionsUrl(st.latitude, st.longitude)} target="_blank" rel="noreferrer"
+                                className="inline-flex items-center gap-1.5 h-9 px-3 rounded-md border text-sm font-medium text-primary">
+                                <MapPin className="w-4 h-4" />Arah ke kios
+                              </a>
+                            )}
+                            <Button type="button" variant="outline" size="sm" className="h-9" disabled={locatingStore === st.id}
+                              onClick={() => saveStoreLocation(st.id, st.name)}>
+                              <MapPin className="w-4 h-4 mr-1.5" />
+                              {locatingStore === st.id ? 'Mencari lokasi…' : hasLocation(st) ? 'Perbarui lokasi kios' : 'Simpan lokasi kios di sini'}
+                            </Button>
+                          </div>
+                        );
+                      })()}
 
                       <div className="flex items-center justify-between pt-3 border-t">
                         <div>

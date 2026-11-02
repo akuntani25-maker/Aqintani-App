@@ -11,6 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '.
 import { Pagination } from '../components/Pagination';
 import { parseSpreadsheetFile, parseDate } from '../utils/fileParser';
 import { toast } from 'sonner';
+import { SingleStoreMap, hasLocation, directionsUrl } from '../components/StoreMap';
 import { ArrowLeft, DollarSign, ShoppingBag, MapPin, Phone, User, CreditCard, Clock, Search, X, Upload } from '../components/icons';
 
 const fmt = (v) => new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', minimumFractionDigits: 0 }).format(v);
@@ -235,9 +236,17 @@ export const PartnerStoreDetail = () => {
         </Card>
       </div>
 
-      <Card className="p-6">
-        <div className="flex items-center gap-3 mb-2"><MapPin className="w-5 h-5 text-muted-foreground" /><span className="text-sm font-semibold">Alamat</span></div>
-        <p className="text-sm">{store.address}</p>
+      <Card className="p-4 md:p-6 space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex items-center gap-3"><MapPin className="w-5 h-5 text-muted-foreground" /><span className="text-sm font-semibold">Alamat & Lokasi</span></div>
+          {hasLocation(store) && (
+            <a href={directionsUrl(store.latitude, store.longitude)} target="_blank" rel="noreferrer" className="text-sm font-semibold text-primary" data-testid="store-directions-link">Petunjuk arah &rarr;</a>
+          )}
+        </div>
+        <p className="text-sm">{store.address || '-'}</p>
+        {hasLocation(store)
+          ? <SingleStoreMap store={store} height={220} />
+          : <p className="text-xs text-muted-foreground">Lokasi belum ditandai. Tandai lewat tombol edit di halaman Kios Mitra, atau oleh kanvaser saat berkunjung.</p>}
       </Card>
 
       {/* Payment History - Riwayat Setoran (Collapsible) */}

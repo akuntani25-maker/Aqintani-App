@@ -112,6 +112,19 @@ rusak total, salinan inilah yang menyelamatkan data.
 **Pembaruan keamanan Ubuntu**: sebulan sekali jalankan
 `sudo apt update && sudo apt upgrade -y && sudo reboot`. Aplikasi menyala lagi otomatis setelah reboot.
 
+## Peta lokasi kios mitra
+
+Peta memakai OpenStreetMap: gratis, tanpa kunci API, tanpa pengaturan.
+
+- **Admin/kantor**: menu Kios Mitra → ikon edit → bagian "Lokasi pada Peta". Klik titik kios di
+  peta (penanda bisa digeser), atau cari nama desa dulu, lalu Simpan. Tombol "Lihat Peta"
+  menampilkan semua kios; warna penanda: hijau lunas, kuning ada piutang, oranye melewati limit.
+- **Kanvaser di lapangan**: saat berada di kios, buka pesanan kios itu lalu tekan
+  "Simpan lokasi kios di sini". Lokasi diambil dari GPS HP (izinkan akses lokasi di browser).
+  Kanvaser hanya bisa mengubah lokasi, bukan data kios lainnya.
+- "Petunjuk arah" / "Arah ke kios" membuka Google Maps di HP untuk navigasi.
+- GPS hanya berfungsi lewat alamat **https://** (pakai domain, bukan `http://IP-VPS`).
+
 ## Susunan teknis
 
 - `deploy/docker-compose.yml`: tiga layanan — `mongo` (database, cache dibatasi 256 MB agar muat
