@@ -14,6 +14,7 @@
 # Aman dijalankan ulang: pengaturan dan data yang sudah ada tidak ditimpa.
 # =====================================================================
 set -euo pipefail
+trap 'echo; echo "!! Pemasangan berhenti karena error di baris $LINENO. Kirim tangkapan layar ini ke Claude."' ERR
 
 REPO="https://github.com/akuntani25-maker/Aqintani-App.git"
 BRANCH="${AQINTANI_BRANCH:-aqintani-vps}"
@@ -22,6 +23,8 @@ ENV_FILE="$DIR/deploy/.env"
 
 say()  { printf '\n\033[1;32m==> %s\033[0m\n' "$*"; }
 warn() { printf '\033[1;33m!! %s\033[0m\n' "$*"; }
+# Teks acak dari sumber terbatas (tanpa "head" yang memutus pipa: dengan pipefail itu membuat skrip berhenti diam-diam)
+randstr() { openssl rand -base64 96 | tr -dc 'A-Za-z0-9' | cut -c1-"$1"; }
 ask()  { local prompt="$1" def="${2:-}" ans; read -r -p "$prompt" ans </dev/tty || true; echo "${ans:-$def}"; }
 
 [ "$(id -u)" -eq 0 ] || { echo "Jalankan dengan sudo (sebagai root)."; exit 1; }
@@ -65,8 +68,8 @@ if [ ! -f "$ENV_FILE" ]; then
   echo "ketik di sini (contoh: toko.aqintani.online). Kosongkan bila belum punya."
   DOMAIN="$(ask 'Domain: ' '')"
   ADMIN_EMAIL="$(ask 'Email admin pertama [admin@aqintani.com]: ' 'admin@aqintani.com')"
-  ADMIN_PASSWORD="$(tr -dc 'A-Za-z0-9' </dev/urandom | head -c 14)"
-  SECRET_KEY="$(tr -dc 'A-Za-z0-9' </dev/urandom | head -c 48)"
+  ADMIN_PASSWORD="$(randstr 14)"
+  SECRET_KEY="$(randstr 48)"
   if grep -qw avx /proc/cpuinfo; then MONGO_IMAGE="mongo:7.0"; else MONGO_IMAGE="mongo:4.4"; warn "CPU tanpa AVX: memakai MongoDB 4.4"; fi
   if [ -n "$DOMAIN" ]; then SITE_ADDRESS="$DOMAIN"; ORIGIN="https://$DOMAIN"; else SITE_ADDRESS=":80"; ORIGIN="*"; fi
   umask 077
@@ -87,7 +90,7 @@ fi
 set -a; . "$ENV_FILE"; set +a
 
 # ---------- firewall ----------
-if command -v ufw >/dev/null 2>&1 && ufw status | grep -q "Status: active"; then
+if command -v ufw >/dev/null 2>&1 && ufw status | grep "Status: active" >/dev/null; then
   ufw allow 22/tcp >/dev/null; ufw allow 80/tcp >/dev/null; ufw allow 443/tcp >/dev/null
 fi
 
