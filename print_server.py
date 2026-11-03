@@ -30,7 +30,21 @@ DOTMATRIX_PRINTER_NAME = None  # Nama printer dot matrix (Epson LX-310), None = 
 
 # ========== FLASK APP ==========
 app = Flask(__name__)
-CORS(app)
+# Hanya halaman aplikasi Aqin Tani yang boleh menyuruh mencetak, bukan sembarang situs web.
+# Tambahkan alamat lain lewat variabel lingkungan AQINTANI_ORIGINS (dipisah koma) bila perlu.
+ALLOWED_ORIGINS = [r"^https://([a-z0-9-]+\.)*aqintani\.online$", r"^https?://localhost(:\d+)?$", r"^https?://127\.0\.0\.1(:\d+)?$"]
+ALLOWED_ORIGINS += [o.strip() for o in os.environ.get("AQINTANI_ORIGINS", "").split(",") if o.strip()]
+CORS(app, origins=ALLOWED_ORIGINS)
+
+
+@app.before_request
+def block_other_sites():
+    # Tolak permintaan dari situs lain walaupun browser tidak meminta izin CORS dulu
+    import re
+    from flask import request as rq
+    origin = rq.headers.get("Origin")
+    if origin and not any(re.match(p, origin) if p.startswith("^") else origin == p for p in ALLOWED_ORIGINS):
+        return jsonify({"error": "Asal permintaan tidak diizinkan"}), 403
 
 
 # ========== PRINTER HANDLER ==========
@@ -187,10 +201,12 @@ def list_printers():
 @app.route('/set-printer', methods=['POST'])
 def set_printer():
     global PRINTER_NAME
-    body = request.get_json()
-    name = body.get('name', '')
+    body = request.get_json(silent=True) or {}
+    name = str(body.get('name', ''))
     if not name:
         return jsonify({'error': 'Nama printer tidak boleh kosong'}), 400
+    if name not in get_printer_list():
+        return jsonify({'error': 'Printer tidak dikenal'}), 400
     PRINTER_NAME = name
     return jsonify({'success': True, 'printer': PRINTER_NAME})
 
@@ -216,10 +232,12 @@ def print_dotmatrix():
 def set_dotmatrix_printer():
     """Set nama printer dot matrix manual."""
     global DOTMATRIX_PRINTER_NAME
-    body = request.get_json()
-    name = body.get('name', '')
+    body = request.get_json(silent=True) or {}
+    name = str(body.get('name', ''))
     if not name:
         return jsonify({'error': 'Nama printer tidak boleh kosong'}), 400
+    if name not in get_printer_list():
+        return jsonify({'error': 'Printer tidak dikenal'}), 400
     DOTMATRIX_PRINTER_NAME = name
     return jsonify({'success': True, 'printer': DOTMATRIX_PRINTER_NAME})
 
@@ -255,7 +273,8 @@ def test_print():
 
 
 def run_server():
-    app.run(host='0.0.0.0', port=PORT, debug=False, use_reloader=False)
+    # hanya bisa diakses dari komputer kasir ini, tidak dari komputer lain di jaringan
+    app.run(host='127.0.0.1', port=PORT, debug=False, use_reloader=False)
 
 
 # ========== AUTO-START SETUP (Windows Startup Folder) ==========

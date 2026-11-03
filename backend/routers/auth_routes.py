@@ -1,20 +1,48 @@
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Request
 from typing import List
+import time
 import uuid
+from collections import defaultdict, deque
 from datetime import datetime, timezone
 
 from database import db
 from auth import (
     get_current_user, require_admin, hash_password, verify_password,
-    create_access_token, ROLE_PERMISSIONS
+    create_access_token, ROLE_PERMISSIONS, VALID_ROLES, MIN_PASSWORD_LENGTH
 )
 from models import UserCreate, UserLogin, User, TokenResponse, ProfileUpdate, StoreSettings
 
 router = APIRouter()
 
+# --- batas percobaan login (mencegah tebak password) ---
+LOGIN_WINDOW = 15 * 60          # detik
+MAX_FAILS_PER_ACCOUNT = 5       # per email + IP
+MAX_FAILS_PER_IP = 20
+_fails = defaultdict(deque)
+# hash palsu supaya waktu respons sama untuk email yang ada / tidak ada
+_DUMMY_HASH = hash_password("dummy-password-for-timing")
+
+
+def _recent(key):
+    q = _fails[key]
+    cutoff = time.monotonic() - LOGIN_WINDOW
+    while q and q[0] < cutoff:
+        q.popleft()
+    if not q:
+        _fails.pop(key, None)
+    return len(q)
+
+
+def _check_password_strength(pw: str):
+    if len(pw or "") < MIN_PASSWORD_LENGTH:
+        raise HTTPException(status_code=400, detail=f"Password minimal {MIN_PASSWORD_LENGTH} karakter")
+
 
 @router.post("/auth/register", response_model=User)
 async def register(user_data: UserCreate, admin: dict = Depends(require_admin)):
+    if user_data.role not in VALID_ROLES:
+        raise HTTPException(status_code=400, detail="Peran tidak dikenal")
+    _check_password_strength(user_data.password)
     existing = await db.users.find_one({"email": user_data.email}, {"_id": 0})
     if existing:
         raise HTTPException(status_code=400, detail="Email already registered")
@@ -33,10 +61,20 @@ async def register(user_data: UserCreate, admin: dict = Depends(require_admin)):
 
 
 @router.post("/auth/login", response_model=TokenResponse)
-async def login(credentials: UserLogin):
+async def login(credentials: UserLogin, request: Request):
+    ip = request.client.host if request.client else "?"
+    acct_key = ("acct", credentials.email.lower(), ip)
+    ip_key = ("ip", ip)
+    if _recent(acct_key) >= MAX_FAILS_PER_ACCOUNT or _recent(ip_key) >= MAX_FAILS_PER_IP:
+        raise HTTPException(status_code=429, detail="Terlalu banyak percobaan login gagal. Coba lagi 15 menit lagi.")
     user = await db.users.find_one({"email": credentials.email}, {"_id": 0})
-    if not user or not verify_password(credentials.password, user["password"]):
+    ok = verify_password(credentials.password, user["password"] if user else _DUMMY_HASH)
+    if not user or not ok:
+        now = time.monotonic()
+        _fails[acct_key].append(now)
+        _fails[ip_key].append(now)
         raise HTTPException(status_code=401, detail="Invalid email or password")
+    _fails.pop(acct_key, None)
     token = create_access_token({"sub": user["id"]})
     user.pop("password")
     return {"token": token, "user": user}
@@ -63,16 +101,14 @@ async def update_profile(profile_data: ProfileUpdate, current_user: dict = Depen
         user_full = await db.users.find_one({"id": current_user["id"]})
         if not verify_password(profile_data.current_password, user_full["password"]):
             raise HTTPException(status_code=400, detail="Current password incorrect")
+        _check_password_strength(profile_data.new_password)
         update_fields["password"] = hash_password(profile_data.new_password)
+        # semua sesi lama (HP/komputer lain) otomatis keluar
+        update_fields["password_changed_at"] = int(time.time())
     if not update_fields:
         raise HTTPException(status_code=400, detail="No fields to update")
-    result = await db.users.find_one_and_update(
-        {"id": current_user["id"]},
-        {"$set": update_fields},
-        return_document=True,
-        projection={"_id": 0, "password": 0}
-    )
-    return result
+    await db.users.update_one({"id": current_user["id"]}, {"$set": update_fields})
+    return await db.users.find_one({"id": current_user["id"]}, {"_id": 0, "password": 0})
 
 
 @router.get("/users", response_model=List[User])
@@ -83,6 +119,8 @@ async def get_users(admin: dict = Depends(require_admin)):
 
 @router.delete("/users/{user_id}")
 async def delete_user(user_id: str, admin: dict = Depends(require_admin)):
+    if user_id == admin["id"]:
+        raise HTTPException(status_code=400, detail="Tidak bisa menghapus akun sendiri")
     result = await db.users.delete_one({"id": user_id})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="User not found")

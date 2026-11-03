@@ -495,7 +495,7 @@ export const PartnerStoreDetail = () => {
 
             <div className="space-y-2">
               <Label>Pilih File CSV/XLSX</Label>
-              <Input type="file" accept=".csv,.xlsx,.xls" onChange={handleCSVFile} data-testid="import-orders-file-input" />
+              <Input type="file" accept=".csv,.xlsx" onChange={handleCSVFile} data-testid="import-orders-file-input" />
             </div>
 
             {importRows.length > 0 && (
@@ -560,7 +560,7 @@ export const PartnerStoreDetail = () => {
 
             <div className="space-y-2">
               <Label>Pilih File CSV/XLSX</Label>
-              <Input type="file" accept=".csv,.xlsx,.xls" onChange={handleCSVPayFile} data-testid="import-payments-file-input" />
+              <Input type="file" accept=".csv,.xlsx" onChange={handleCSVPayFile} data-testid="import-payments-file-input" />
             </div>
 
             {importPayRows.length > 0 && (

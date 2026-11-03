@@ -1,9 +1,10 @@
-from fastapi import Depends, HTTPException
+from fastapi import Depends, HTTPException, Request
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from passlib.context import CryptContext
-from jose import JWTError, jwt
+import jwt
 from datetime import datetime, timezone, timedelta
 import os
+import re
 
 from database import db
 
@@ -19,6 +20,8 @@ if not SECRET_KEY:
         "SECRET_KEY is not set: using a random key for this run. Everyone is logged out on restart; set SECRET_KEY in .env.")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_DAYS = 7
+VALID_ROLES = ("admin", "manager", "office_staff", "cashier", "canvasser")
+MIN_PASSWORD_LENGTH = 8
 
 ROLE_PERMISSIONS = {
     "admin": ["dashboard", "products", "categories", "suppliers", "supplier_debts", "partner_stores", "partner_orders", "canvassers", "analytics", "reports", "users", "store_settings", "import_data", "printer", "profile", "vehicles", "vehicle_stock", "audit_log", "pos", "personal_loans"],
@@ -39,24 +42,53 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
 
 def create_access_token(data: dict):
     to_encode = data.copy()
-    expire = datetime.now(timezone.utc) + timedelta(days=ACCESS_TOKEN_EXPIRE_DAYS)
-    to_encode.update({"exp": expire})
+    now = datetime.now(timezone.utc)
+    to_encode.update({"exp": now + timedelta(days=ACCESS_TOKEN_EXPIRE_DAYS), "iat": int(now.timestamp())})
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
 
-async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(security)):
+# Kasir dan kanvaser hanya boleh memanggil endpoint yang dipakai halaman mereka.
+# Semua yang tidak ada di daftar ditolak, jadi endpoint baru otomatis tertutup bagi mereka.
+_COMMON = [r"/api/auth/(me|profile)", r"/api/role-permissions", r"/api/store-settings"]
+ROLE_PATH_ALLOWLIST = {
+    "cashier": [re.compile(f"^{p}$") for p in _COMMON + [
+        r"/api/products(/[^/]+)?", r"/api/products/barcode/[^/]+", r"/api/products/search-autocomplete",
+        r"/api/products/low-stock", r"/api/categories", r"/api/warehouses", r"/api/warehouse-stock",
+        r"/api/canvassers/product-search", r"/api/transactions(/[^/]+)?", r"/api/transactions/search",
+        r"/api/transactions/[^/]+/edit-prices", r"/api/pos/[a-z-]+", r"/api/returns", r"/api/stock-transfers",
+        r"/api/shifts/(open|current|close|history)", r"/api/farmers(/[^/]+)?",
+        r"/api/farmer-debts/(overview|transaction)", r"/api/farmer-debts/[^/]+/(transactions|payments|pay)",
+    ]],
+    "canvasser": [re.compile(f"^{p}$") for p in _COMMON + [
+        r"/api/canvassers/(my-orders|notifications|my-recap|product-search)",
+        r"/api/partner-stores", r"/api/partner-stores/[^/]+/location",
+        r"/api/partner-orders/[^/]+", r"/api/partner-orders/[^/]+/(status|pay|settle|transfer)",
+    ]],
+}
+
+
+async def get_current_user(request: Request, credentials: HTTPAuthorizationCredentials = Depends(security)):
     try:
-        token = credentials.credentials
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        user_id: str = payload.get("sub")
-        if user_id is None:
+        payload = jwt.decode(credentials.credentials, SECRET_KEY, algorithms=[ALGORITHM])
+        user_id = payload.get("sub")
+        if not isinstance(user_id, str):
             raise HTTPException(status_code=401, detail="Invalid token")
-    except JWTError:
+    except jwt.PyJWTError:
         raise HTTPException(status_code=401, detail="Invalid token")
 
     user = await db.users.find_one({"id": user_id}, {"_id": 0})
     if user is None:
         raise HTTPException(status_code=401, detail="User not found")
+    # token lama tidak berlaku lagi setelah password diganti
+    changed = user.get("password_changed_at")
+    if changed and int(payload.get("iat", 0)) < int(changed):
+        raise HTTPException(status_code=401, detail="Sesi berakhir, silakan login lagi")
+
+    role = user.get("role")
+    allow = ROLE_PATH_ALLOWLIST.get(role) if role in VALID_ROLES else ROLE_PATH_ALLOWLIST["canvasser"][:len(_COMMON)]
+    if allow is not None and not any(p.match(request.url.path) for p in allow):
+        raise HTTPException(status_code=403, detail="Tidak punya akses")
+    user.pop("password", None)
     return user
 
 

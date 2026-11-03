@@ -1,3 +1,4 @@
+import re
 from fastapi import APIRouter, HTTPException, Depends, Query, Request as FastAPIRequest
 from typing import List, Optional
 import uuid
@@ -110,7 +111,7 @@ async def search_transaction(q: str = "", current_user: dict = Depends(get_curre
     if not q:
         return []
     query = {"$or": [
-        {"transaction_number": {"$regex": q, "$options": "i"}},
+        {"transaction_number": {"$regex": re.escape(q), "$options": "i"}},
         {"id": q}
     ]}
     txns = await db.transactions.find(query, {"_id": 0}).sort("created_at", -1).to_list(20)

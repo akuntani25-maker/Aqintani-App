@@ -1,4 +1,4 @@
-import * as XLSX from 'xlsx';
+import readXlsxFile from 'read-excel-file';
 
 /**
  * Parse CSV or XLSX file into array of row objects.
@@ -6,31 +6,32 @@ import * as XLSX from 'xlsx';
  */
 export function parseSpreadsheetFile(file) {
   return new Promise((resolve, reject) => {
-    const isXlsx = file.name.toLowerCase().endsWith('.xlsx') || file.name.toLowerCase().endsWith('.xls');
+    const lower = file.name.toLowerCase();
+    if (lower.endsWith('.xls')) {
+      reject(new Error('Format .xls lama tidak didukung. Simpan ulang file sebagai .xlsx atau .csv'));
+      return;
+    }
+    const isXlsx = lower.endsWith('.xlsx');
 
     if (isXlsx) {
-      const reader = new FileReader();
-      reader.onload = (evt) => {
-        try {
-          const data = new Uint8Array(evt.target.result);
-          const workbook = XLSX.read(data, { type: 'array' });
-          const sheet = workbook.Sheets[workbook.SheetNames[0]];
-          const jsonRows = XLSX.utils.sheet_to_json(sheet, { defval: '' });
-          // Normalize headers to lowercase
-          const rows = jsonRows.map(row => {
-            const normalized = {};
-            Object.keys(row).forEach(key => {
-              normalized[key.trim().toLowerCase().replace(/"/g, '')] = String(row[key]).trim();
+      readXlsxFile(file)
+        .then((sheet) => {
+          if (!sheet || sheet.length < 2) { reject(new Error('File harus memiliki header dan minimal 1 baris data')); return; }
+          const headers = sheet[0].map(h => String(h ?? '').trim().toLowerCase().replace(/"/g, ''));
+          const rows = sheet.slice(1)
+            .filter(r => r.some(v => v !== null && String(v).trim() !== ''))
+            .map(r => {
+              const row = {};
+              headers.forEach((h, idx) => {
+                const v = r[idx];
+                // tanggal Excel -> YYYY-MM-DD supaya sama dengan format CSV
+                row[h] = v instanceof Date ? v.toISOString().slice(0, 10) : String(v ?? '').trim();
+              });
+              return row;
             });
-            return normalized;
-          });
           resolve(rows);
-        } catch (err) {
-          reject(new Error('Gagal membaca file Excel'));
-        }
-      };
-      reader.onerror = () => reject(new Error('Gagal membaca file'));
-      reader.readAsArrayBuffer(file);
+        })
+        .catch(() => reject(new Error('Gagal membaca file Excel')));
     } else {
       // CSV
       const reader = new FileReader();

@@ -125,6 +125,22 @@ Peta memakai OpenStreetMap: gratis, tanpa kunci API, tanpa pengaturan.
 - "Petunjuk arah" / "Arah ke kios" membuka Google Maps di HP untuk navigasi.
 - GPS hanya berfungsi lewat alamat **https://** (pakai domain, bukan `http://IP-VPS`).
 
+## Keamanan
+
+- **Hak akses per peran dijaga di server.** Kasir hanya bisa memakai fitur kasir. Kanvaser
+  hanya bisa melihat dan mengubah pesanannya sendiri. Fitur lain ditolak walaupun alamatnya
+  diketik langsung.
+- **Tebak password diblokir.** Setelah 5 kali salah password untuk satu akun, login dari
+  perangkat itu dikunci 15 menit.
+- **Password minimal 8 karakter.** Setelah password diganti, semua HP/komputer yang masih
+  login dengan password lama otomatis keluar.
+- **Server cetak di komputer kasir** (`print_server.py`) sekarang hanya menerima perintah dari
+  aplikasi Aqin Tani di komputer itu sendiri. Unduh ulang lewat tombol unduh di halaman struk,
+  lalu jalankan versi baru. Bila memakai alamat selain `*.aqintani.online`, isi variabel
+  lingkungan `AQINTANI_ORIGINS` dengan alamat itu.
+- Impor Excel hanya menerima `.xlsx` atau `.csv`. File `.xls` lama perlu disimpan ulang
+  sebagai `.xlsx`.
+
 ## Susunan teknis
 
 - `deploy/docker-compose.yml`: tiga layanan — `mongo` (database, cache dibatasi 256 MB agar muat

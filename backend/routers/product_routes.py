@@ -1,3 +1,4 @@
+import re
 from fastapi import APIRouter, HTTPException, Depends, UploadFile, File, Request as FastAPIRequest, Response
 from typing import List, Optional
 import uuid
@@ -15,6 +16,19 @@ from storage import put_object, get_object, MIME_MAP, APP_NAME
 
 router = APIRouter()
 
+MAX_IMAGE_BYTES = 5 * 1024 * 1024
+SAFE_IMAGE_NAME = re.compile(r"^[A-Za-z0-9-]+\.(jpg|jpeg|png|webp)$")
+
+
+def image_kind(data: bytes):
+    if data[:3] == b"\xff\xd8\xff":
+        return "jpg"
+    if data[:8] == b"\x89PNG\r\n\x1a\n":
+        return "png"
+    if data[:4] == b"RIFF" and data[8:12] == b"WEBP":
+        return "webp"
+    return None
+
 
 @router.post("/products/upload-image/{product_id}")
 async def upload_product_image(product_id: str, file: UploadFile = File(...), admin: dict = Depends(require_admin_panel_access)):
@@ -22,11 +36,13 @@ async def upload_product_image(product_id: str, file: UploadFile = File(...), ad
     if not product:
         raise HTTPException(status_code=404, detail="Produk tidak ditemukan")
 
-    ext = file.filename.rsplit(".", 1)[-1].lower() if "." in file.filename else "jpg"
-    if ext not in ("jpg", "jpeg", "png", "webp"):
+    data = await file.read(MAX_IMAGE_BYTES + 1)
+    if len(data) > MAX_IMAGE_BYTES:
+        raise HTTPException(status_code=400, detail="Ukuran gambar maksimal 5 MB")
+    # tentukan jenis dari isi file, bukan dari nama file (cegah file HTML/skrip menyamar jadi gambar)
+    ext = image_kind(data)
+    if not ext:
         raise HTTPException(status_code=400, detail="Format gambar tidak didukung (jpg/png/webp)")
-
-    data = await file.read()
     content_type = MIME_MAP.get(ext, "application/octet-stream")
     path = f"{APP_NAME}/products/{product_id}.{ext}"
     try:
@@ -42,12 +58,16 @@ async def upload_product_image(product_id: str, file: UploadFile = File(...), ad
 @router.get("/products/image-file/{filename}")
 async def serve_product_image(filename: str):
     """Serve product image from object storage (public read for simplicity)."""
+    if not SAFE_IMAGE_NAME.match(filename):
+        raise HTTPException(status_code=404, detail="Gambar tidak ditemukan")
     path = f"{APP_NAME}/products/{filename}"
     try:
         data, ct = get_object(path)
     except Exception:
         raise HTTPException(status_code=404, detail="Gambar tidak ditemukan")
-    return Response(content=data, media_type=ct, headers={"Cache-Control": "public, max-age=86400"})
+    return Response(content=data, media_type=ct, headers={
+        "Cache-Control": "public, max-age=86400", "X-Content-Type-Options": "nosniff",
+        "Content-Security-Policy": "default-src 'none'"})
 
 
 @router.delete("/products/image/{product_id}")
@@ -110,8 +130,8 @@ async def get_products(
     query = {}
     if search:
         query["$or"] = [
-            {"name": {"$regex": search, "$options": "i"}},
-            {"barcode": {"$regex": search, "$options": "i"}}
+            {"name": {"$regex": re.escape(search), "$options": "i"}},
+            {"barcode": {"$regex": re.escape(search), "$options": "i"}}
         ]
     if category_id:
         query["category_id"] = category_id
@@ -138,8 +158,8 @@ async def search_products_autocomplete(q: str = "", current_user: dict = Depends
     if len(q) < 1:
         return []
     query = {"$or": [
-        {"name": {"$regex": q, "$options": "i"}},
-        {"barcode": {"$regex": q, "$options": "i"}}
+        {"name": {"$regex": re.escape(q), "$options": "i"}},
+        {"barcode": {"$regex": re.escape(q), "$options": "i"}}
     ]}
     products = await db.products.find(query, {"_id": 0}).sort("name", 1).limit(15).to_list(15)
     # Enrich with supplier name and warehouse stock

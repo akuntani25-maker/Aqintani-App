@@ -1,6 +1,5 @@
 from fastapi import FastAPI, APIRouter
 from fastapi.responses import PlainTextResponse
-from fastapi.staticfiles import StaticFiles
 from starlette.middleware.cors import CORSMiddleware
 from starlette.middleware.gzip import GZipMiddleware
 import os
@@ -9,6 +8,7 @@ import uuid
 from datetime import datetime, timezone
 
 from database import db, create_indexes
+from security import RejectMongoOperators
 from auth import hash_password
 from services import ensure_warehouse_stock, recalculate_product_stock
 
@@ -27,7 +27,8 @@ from routers import (
     vehicle_stock_routes,
 )
 
-app = FastAPI()
+# Dokumentasi API (/docs, /openapi.json) dimatikan: tidak perlu terlihat dari internet
+app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
 api_router = APIRouter(prefix="/api")
 
 # Include all routers
@@ -46,20 +47,23 @@ api_router.include_router(vehicle_stock_routes.router)
 
 app.include_router(api_router)
 
-# Serve uploaded product images
-os.makedirs("uploads/products", exist_ok=True)
-app.mount("/api/uploads", StaticFiles(directory="uploads"), name="uploads")
 
 # compress JSON responses (product lists, orders) — large lists shrink ~5-8x
 app.add_middleware(GZipMiddleware, minimum_size=1024)
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_credentials=True,
-    allow_origins=os.environ.get('CORS_ORIGINS', '*').split(','),
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# Aplikasi dan API ada di domain yang sama, jadi CORS hanya untuk domain yang disebut di .env.
+_origins = [o.strip() for o in os.environ.get('CORS_ORIGINS', '').split(',') if o.strip() and o.strip() != '*']
+if _origins:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_credentials=False,
+        allow_origins=_origins,
+        allow_methods=["GET", "POST", "PUT", "DELETE"],
+        allow_headers=["Authorization", "Content-Type"],
+    )
+
+# Tolak isi JSON yang memuat operator MongoDB ($ne, $gt, $where, ...) untuk mencegah NoSQL injection.
+app.add_middleware(RejectMongoOperators)
 
 logging.basicConfig(
     level=logging.INFO,
@@ -173,19 +177,3 @@ async def startup_db():
 async def shutdown_db_client():
     pass
 
-
-
-# Serve print_server.py for download
-PRINT_SERVER_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "print_server.py")
-
-@app.get("/api/download/print-server")
-async def download_print_server():
-    if os.path.exists(PRINT_SERVER_PATH):
-        with open(PRINT_SERVER_PATH, "r") as f:
-            content = f.read()
-        return PlainTextResponse(
-            content,
-            media_type="application/octet-stream",
-            headers={"Content-Disposition": "attachment; filename=print_server.py"}
-        )
-    return PlainTextResponse("File not found", status_code=404)

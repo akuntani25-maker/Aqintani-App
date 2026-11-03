@@ -1,3 +1,4 @@
+import re
 from fastapi import APIRouter, HTTPException, Depends
 from typing import List
 import uuid
@@ -139,7 +140,7 @@ async def get_my_recap(date: str = "", current_user: dict = Depends(get_current_
 async def canvasser_product_search(q: str = "", current_user: dict = Depends(get_current_user)):
     if not q or len(q) < 1:
         return []
-    query = {"name": {"$regex": q, "$options": "i"}}
+    query = {"name": {"$regex": re.escape(q), "$options": "i"}}
     products = await db.products.find(query, {"_id": 0}).sort("name", 1).to_list(50)
     warehouses = await db.warehouses.find({}, {"_id": 0}).to_list(100)
     wh_map = {w["id"]: w["name"] for w in warehouses}

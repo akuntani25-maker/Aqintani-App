@@ -13,6 +13,24 @@ from services import recalculate_product_stock, log_audit
 
 router = APIRouter()
 
+ORDER_STATUSES = ("pending", "delivered", "canceled", "cancelled")
+ADMIN_PANEL_ROLES = ("admin", "manager", "office_staff")
+
+
+def ensure_order_access(order: dict, user: dict):
+    """Kanvaser hanya boleh menyentuh pesanan miliknya sendiri; kasir tidak sama sekali."""
+    role = user.get("role")
+    if role in ADMIN_PANEL_ROLES:
+        return
+    if role == "canvasser" and user.get("canvasser_id") and order.get("canvasser_id") == user["canvasser_id"]:
+        return
+    raise HTTPException(status_code=403, detail="Tidak punya akses ke pesanan ini")
+
+
+def positive_amount(amount: float):
+    if amount is None or not (amount > 0) or amount > 1e12:
+        raise HTTPException(status_code=400, detail="Jumlah pembayaran harus lebih dari 0")
+
 
 @router.get("/partner-stores", response_model=List[PartnerStore])
 async def get_partner_stores(current_user: dict = Depends(get_current_user)):
@@ -48,6 +66,7 @@ async def delete_partner_store(store_id: str, admin: dict = Depends(require_admi
 
 @router.post("/partner-stores/{store_id}/pay")
 async def pay_partner_store(store_id: str, amount: float, notes: str = "", admin: dict = Depends(require_admin_panel_access)):
+    positive_amount(amount)
     store = await db.partner_stores.find_one({"id": store_id})
     if not store:
         raise HTTPException(status_code=404, detail="Partner store not found")
@@ -81,6 +100,11 @@ async def set_partner_store_location(store_id: str, req: FastAPIRequest, current
     store = await db.partner_stores.find_one({"id": store_id}, {"_id": 0, "name": 1, "latitude": 1, "longitude": 1})
     if not store:
         raise HTTPException(status_code=404, detail="Kios mitra tidak ditemukan")
+    if current_user.get("role") == "canvasser":
+        served = await db.partner_orders.find_one(
+            {"partner_store_id": store_id, "canvasser_id": current_user.get("canvasser_id") or "-"}, {"_id": 1})
+        if not served:
+            raise HTTPException(status_code=403, detail="Kios ini bukan kios pesanan Anda")
     await db.partner_stores.update_one({"id": store_id}, {"$set": {"latitude": lat, "longitude": lng}})
     await log_audit(current_user, "SET_LOKASI_KIOS", "partner_store", store_id, {
         "store_name": store.get("name", ""), "old": [store.get("latitude"), store.get("longitude")], "new": [lat, lng],
@@ -162,6 +186,7 @@ async def get_partner_order(order_id: str, current_user: dict = Depends(get_curr
     order = await db.partner_orders.find_one({"id": order_id}, {"_id": 0})
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
+    ensure_order_access(order, current_user)
     partner_store = await db.partner_stores.find_one({"id": order["partner_store_id"]}, {"_id": 0})
     order["partner_debt_total"] = partner_store.get("current_debt", 0) if partner_store else 0
     order["partner_phone"] = partner_store.get("phone", "") if partner_store else ""
@@ -298,9 +323,14 @@ async def create_partner_order(req: FastAPIRequest, current_user: dict = Depends
 
 @router.put("/partner-orders/{order_id}/status")
 async def update_order_status(order_id: str, order_status: str = Query(..., alias="status"), current_user: dict = Depends(get_current_user)):
+    if order_status not in ORDER_STATUSES:
+        raise HTTPException(status_code=400, detail="Status tidak valid")
     order = await db.partner_orders.find_one({"id": order_id}, {"_id": 0})
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
+    ensure_order_access(order, current_user)
+    if current_user.get("role") == "canvasser" and order_status != "delivered":
+        raise HTTPException(status_code=403, detail="Kanvaser hanya bisa menandai pesanan terkirim")
 
     old_status = order.get("status", "pending")
 
@@ -359,6 +389,7 @@ async def add_items_to_order(order_id: str, req: FastAPIRequest, current_user: d
     order = await db.partner_orders.find_one({"id": order_id}, {"_id": 0})
     if not order:
         raise HTTPException(status_code=404, detail="Pesanan tidak ditemukan")
+    ensure_order_access(order, current_user)
     if order.get("status") in ("canceled", "cancelled"):
         raise HTTPException(status_code=400, detail="Tidak bisa menambah item ke pesanan yang dibatalkan")
 
@@ -477,9 +508,11 @@ async def delete_partner_order(order_id: str, admin: dict = Depends(require_admi
 
 @router.post("/partner-orders/{order_id}/pay")
 async def pay_partner_order(order_id: str, amount: float, current_user: dict = Depends(get_current_user)):
+    positive_amount(amount)
     order = await db.partner_orders.find_one({"id": order_id})
     if not order:
         raise HTTPException(status_code=404, detail="Order not found")
+    ensure_order_access(order, current_user)
     new_paid = order["paid"] + amount
     new_remaining = order["total"] - new_paid
     result = await db.partner_orders.find_one_and_update(
@@ -544,6 +577,7 @@ async def settle_partner_order(order_id: str, data: SettlementRequest, current_u
     order = await db.partner_orders.find_one({"id": order_id}, {"_id": 0})
     if not order:
         raise HTTPException(status_code=404, detail="Pesanan tidak ditemukan")
+    ensure_order_access(order, current_user)
     if order.get("is_settled"):
         raise HTTPException(status_code=400, detail="Pesanan sudah diselesaikan")
 
@@ -717,6 +751,7 @@ async def transfer_partner_order(order_id: str, req: FastAPIRequest, current_use
     order = await db.partner_orders.find_one({"id": order_id}, {"_id": 0})
     if not order:
         raise HTTPException(status_code=404, detail="Pesanan tidak ditemukan")
+    ensure_order_access(order, current_user)
 
     new_store = await db.partner_stores.find_one({"id": new_store_id}, {"_id": 0})
     if not new_store:

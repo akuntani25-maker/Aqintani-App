@@ -1,3 +1,4 @@
+import re
 from fastapi import APIRouter, HTTPException, Depends, Request
 from typing import List, Optional
 from io import StringIO
@@ -23,7 +24,7 @@ async def get_suppliers(
 ):
     query = {}
     if search:
-        query["name"] = {"$regex": search, "$options": "i"}
+        query["name"] = {"$regex": re.escape(search), "$options": "i"}
     if page is not None:
         total = await db.suppliers.count_documents(query)
         skip = (page - 1) * per_page
@@ -206,6 +207,8 @@ async def create_purchase(data: PurchaseCreate, admin: dict = Depends(require_ad
 
 @router.post("/purchases/{purchase_id}/pay")
 async def pay_purchase(purchase_id: str, amount: float, admin: dict = Depends(require_admin_panel_access)):
+    if not (amount > 0) or amount > 1e12:
+        raise HTTPException(status_code=400, detail="Jumlah pembayaran harus lebih dari 0")
     purchase = await db.purchases.find_one({"id": purchase_id})
     if not purchase:
         raise HTTPException(status_code=404, detail="Purchase not found")
@@ -425,6 +428,8 @@ async def get_supplier_unpaid_purchases(supplier_id: str, show_all: bool = False
 
 @router.post("/supplier-debts/{supplier_id}/pay")
 async def pay_supplier_debt(supplier_id: str, amount: float, notes: str = "", admin: dict = Depends(require_admin_panel_access)):
+    if not (amount > 0) or amount > 1e12:
+        raise HTTPException(status_code=400, detail="Jumlah pembayaran harus lebih dari 0")
     supplier = await db.suppliers.find_one({"id": supplier_id}, {"_id": 0})
     if not supplier:
         raise HTTPException(status_code=404, detail="Supplier not found")
