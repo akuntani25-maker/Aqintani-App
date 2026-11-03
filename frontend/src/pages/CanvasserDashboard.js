@@ -34,6 +34,7 @@ export const CanvasserDashboard = () => {
   const [settleDialog, setSettleDialog] = useState(null);
   const [settleItems, setSettleItems] = useState([]);
   const [settleReturnTo, setSettleReturnTo] = useState('vehicle');
+  const [settling, setSettling] = useState(false);
 
   // My Recap
   const [myRecap, setMyRecap] = useState(null);
@@ -160,20 +161,29 @@ export const CanvasserDashboard = () => {
   const openSettlement = (order) => {
     setSettleDialog(order);
     setSettleReturnTo('vehicle');
-    setSettleItems(order.items.map(item => ({
-      product_id: item.product_id,
-      product_name: item.product_name,
-      original_qty: item.quantity,
-      price: item.price,
-      qty_sold: 0,
-      items_per_box: item.items_per_box || 1,
-      warehouse_id: item.warehouse_id || order.warehouse_id || 'gudang_utama',
-      warehouse_unit: item.warehouse_unit || 'satuan'
-    })));
+    setSettleItems(order.items.map(item => {
+      const isDus = (item.warehouse_unit || 'satuan') === 'dus';
+      const ipb = item.items_per_box || 1;
+      const totalPcs = isDus ? item.quantity * ipb : item.quantity;
+      // harga per pcs dihitung sama seperti di server: subtotal / jumlah pcs
+      const pricePcs = item.subtotal > 0 && totalPcs > 0 ? item.subtotal / totalPcs : (isDus ? item.price / ipb : item.price);
+      return {
+        product_id: item.product_id,
+        product_name: item.product_name,
+        original_qty: item.quantity,
+        price: item.price,
+        price_pcs: pricePcs,
+        qty_sold: 0,
+        items_per_box: ipb,
+        warehouse_id: item.warehouse_id || order.warehouse_id || 'gudang_utama',
+        warehouse_unit: item.warehouse_unit || 'satuan',
+      };
+    }));
   };
 
   const handleSettlement = async () => {
-    if (!settleDialog) return;
+    if (!settleDialog || settling) return;
+    setSettling(true);
     try {
       const res = await api.post(`/partner-orders/${settleDialog.id}/settle`, {
         items: settleItems.map(si => ({
@@ -185,16 +195,19 @@ export const CanvasserDashboard = () => {
         })),
         return_to: settleReturnTo
       });
-      const { return_items, new_total, debt_reduced } = res.data;
+      const { return_items, new_total, vehicle_name } = res.data;
+      const dest = settleReturnTo === 'vehicle' ? `stok ${vehicle_name || 'mobil box'}` : 'gudang';
       const returnMsg = return_items.length > 0
-        ? ` | Barang kembali: ${return_items.map(r => `${r.product_name} (${r.quantity} ${r.unit})`).join(', ')}`
+        ? ` | Masuk ${dest}: ${return_items.map(r => `${r.product_name} (${r.quantity} ${r.unit})`).join(', ')}`
         : '';
       toast.success(`Pesanan diselesaikan. Total baru: ${formatCurrency(new_total)}${returnMsg}`);
       setSettleDialog(null);
       fetchMyOrders();
       fetchMyRecap();
     } catch (error) {
-      toast.error(error.response?.data?.detail || 'Gagal menyelesaikan pesanan');
+      toast.error(error.response?.data?.detail || 'Gagal menyelesaikan pesanan', { duration: 8000 });
+    } finally {
+      setSettling(false);
     }
   };
 
@@ -778,10 +791,13 @@ export const CanvasserDashboard = () => {
                       {remaining > 0 && (
                         <div className="text-xs text-amber-700 bg-amber-50 p-2 rounded">
                           Sisa retur: <span className="font-semibold">{remaining} pcs</span>
+                          {isDus && ipb > 1 && remaining > 0 && (
+                            <span> ({fullBoxes > 0 ? `${fullBoxes} dus utuh` : ''}{fullBoxes > 0 && partialPcs > 0 ? ' + ' : ''}{partialPcs > 0 ? `${partialPcs} pcs lepas` : ''})</span>
+                          )}
                         </div>
                       )}
                       <p className="text-xs text-right font-semibold">
-                        Total: {formatCurrency(item.qty_sold * item.price)}
+                        Total: {formatCurrency(item.qty_sold * item.price_pcs)}
                       </p>
                     </div>
                   );
@@ -795,7 +811,7 @@ export const CanvasserDashboard = () => {
                 </div>
                 <div className="flex justify-between text-lg font-bold">
                   <span>Total Baru:</span>
-                  <span className="text-primary">{formatCurrency(settleItems.reduce((s, i) => s + (i.qty_sold * i.price), 0))}</span>
+                  <span className="text-primary">{formatCurrency(settleItems.reduce((s, i) => s + (i.qty_sold * i.price_pcs), 0))}</span>
                 </div>
               </div>
 
@@ -824,8 +840,8 @@ export const CanvasserDashboard = () => {
 
               <div className="flex gap-2 justify-end pt-2">
                 <Button variant="outline" onClick={() => setSettleDialog(null)}>Batal</Button>
-                <Button onClick={handleSettlement} data-testid="confirm-settlement-btn">
-                  Selesaikan Pesanan
+                <Button onClick={handleSettlement} disabled={settling} data-testid="confirm-settlement-btn">
+                  {settling ? 'Menyimpan…' : 'Selesaikan Pesanan'}
                 </Button>
               </div>
             </div>
