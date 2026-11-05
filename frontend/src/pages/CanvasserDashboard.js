@@ -35,6 +35,8 @@ export const CanvasserDashboard = () => {
   const [settleItems, setSettleItems] = useState([]);
   const [settleReturnTo, setSettleReturnTo] = useState('vehicle');
   const [settling, setSettling] = useState(false);
+  const [returnVehicles, setReturnVehicles] = useState([]);
+  const [settleVehicleId, setSettleVehicleId] = useState('');
 
   // My Recap
   const [myRecap, setMyRecap] = useState(null);
@@ -161,6 +163,14 @@ export const CanvasserDashboard = () => {
   const openSettlement = (order) => {
     setSettleDialog(order);
     setSettleReturnTo('vehicle');
+    setReturnVehicles([]);
+    setSettleVehicleId('');
+    api.get(`/partner-orders/${order.id}/return-vehicles`)
+      .then(res => {
+        setReturnVehicles(res.data.vehicles || []);
+        setSettleVehicleId(res.data.suggested_vehicle_id || '');
+      })
+      .catch(() => toast.error('Gagal memuat daftar mobil box'));
     setSettleItems(order.items.map(item => {
       const isDus = (item.warehouse_unit || 'satuan') === 'dus';
       const ipb = item.items_per_box || 1;
@@ -183,6 +193,14 @@ export const CanvasserDashboard = () => {
 
   const handleSettlement = async () => {
     if (!settleDialog || settling) return;
+    const hasReturn = settleItems.some(i => {
+      const totalPcs = i.warehouse_unit === 'dus' ? i.original_qty * (i.items_per_box || 1) : i.original_qty;
+      return totalPcs - i.qty_sold > 0;
+    });
+    if (hasReturn && settleReturnTo === 'vehicle' && !settleVehicleId) {
+      toast.error('Pilih mobil box tujuan untuk sisa barang');
+      return;
+    }
     setSettling(true);
     try {
       const res = await api.post(`/partner-orders/${settleDialog.id}/settle`, {
@@ -193,7 +211,8 @@ export const CanvasserDashboard = () => {
           original_qty: si.original_qty,
           price: si.price
         })),
-        return_to: settleReturnTo
+        return_to: settleReturnTo,
+        vehicle_id: settleReturnTo === 'vehicle' ? settleVehicleId : ''
       });
       const { return_items, new_total, vehicle_name } = res.data;
       const dest = settleReturnTo === 'vehicle' ? `stok ${vehicle_name || 'mobil box'}` : 'gudang';
@@ -835,6 +854,25 @@ export const CanvasserDashboard = () => {
                       Gudang
                     </label>
                   </div>
+                  {settleReturnTo === 'vehicle' && (
+                    <div className="space-y-1 pt-1">
+                      <Label className="text-xs">Masuk ke mobil box:</Label>
+                      <select
+                        value={settleVehicleId}
+                        onChange={(e) => setSettleVehicleId(e.target.value)}
+                        className="flex h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+                        data-testid="return-vehicle-select"
+                      >
+                        <option value="">— Pilih mobil box —</option>
+                        {returnVehicles.map(v => (
+                          <option key={v.id} value={v.id}>{v.name}{v.plate_number ? ` (${v.plate_number})` : ''}</option>
+                        ))}
+                      </select>
+                      {returnVehicles.length === 0 && (
+                        <p className="text-xs text-amber-700">Belum ada mobil box. Minta admin menambahkannya di menu Armada, atau pilih Gudang.</p>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
 

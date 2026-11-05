@@ -62,7 +62,7 @@ ROLE_PATH_ALLOWLIST = {
     "canvasser": [re.compile(f"^{p}$") for p in _COMMON + [
         r"/api/canvassers/(my-orders|notifications|my-recap|product-search)",
         r"/api/partner-stores", r"/api/partner-stores/[^/]+/location",
-        r"/api/partner-orders/[^/]+", r"/api/partner-orders/[^/]+/(status|pay|settle|transfer)",
+        r"/api/partner-orders/[^/]+", r"/api/partner-orders/[^/]+/(status|pay|settle|transfer|return-vehicles)",
     ]],
 }
 

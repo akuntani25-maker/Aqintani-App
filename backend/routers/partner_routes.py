@@ -566,6 +566,7 @@ class SettlementItem(PydanticBaseModel):
 class SettlementRequest(PydanticBaseModel):
     items: TypingList[SettlementItem]
     return_to: str = "vehicle"  # "vehicle" atau "warehouse"
+    vehicle_id: str = ""        # mobil box tujuan yang dipilih kanvaser
 
 
 async def find_order_vehicle(order: dict):
@@ -600,6 +601,18 @@ _settle_locks: dict = {}
 
 def _num(x):
     return int(x) if float(x).is_integer() else round(float(x), 4)
+
+
+@router.get("/partner-orders/{order_id}/return-vehicles")
+async def get_return_vehicles(order_id: str, current_user: dict = Depends(get_current_user)):
+    """Daftar mobil box untuk tujuan sisa barang, beserta usulan (mobil box kanvaser/kios)."""
+    order = await db.partner_orders.find_one({"id": order_id}, {"_id": 0})
+    if not order:
+        raise HTTPException(status_code=404, detail="Pesanan tidak ditemukan")
+    ensure_order_access(order, current_user)
+    vehicles = await db.vehicles.find({}, {"_id": 0, "id": 1, "name": 1, "plate_number": 1}).sort("name", 1).to_list(200)
+    suggested = await find_order_vehicle(order)
+    return {"vehicles": vehicles, "suggested_vehicle_id": (suggested or {}).get("id", "")}
 
 
 @router.post("/partner-orders/{order_id}/settle")
@@ -664,11 +677,16 @@ async def _settle_partner_order(order_id: str, data: SettlementRequest, current_
                      "external": oi.get("source") == "external"})
 
     needs_return = any(p["remaining"] > 0 and not p["external"] for p in plan)
-    vehicle = await find_order_vehicle(order) if (needs_return and data.return_to == "vehicle") else None
-    if needs_return and data.return_to == "vehicle" and not vehicle:
-        raise HTTPException(status_code=400, detail=(
-            "Mobil box untuk kanvaser ini belum diatur, jadi sisa barang tidak bisa masuk stok mobil box. "
-            "Pilih 'Kembali ke gudang', atau minta admin menautkan kanvaser ke mobil box di menu Armada."))
+    vehicle = None
+    if needs_return and data.return_to == "vehicle":
+        if data.vehicle_id:
+            vehicle = await db.vehicles.find_one({"id": data.vehicle_id}, {"_id": 0})
+            if not vehicle:
+                raise HTTPException(status_code=400, detail="Mobil box yang dipilih tidak ditemukan")
+        else:
+            vehicle = await find_order_vehicle(order)
+        if not vehicle:
+            raise HTTPException(status_code=400, detail="Pilih mobil box tujuan untuk sisa barang")
 
     # kunci pesanan supaya tombol yang tertekan dua kali tidak memasukkan stok dua kali
     lock = await db.partner_orders.update_one({"id": order_id, "is_settled": {"$ne": True}},
