@@ -5,6 +5,9 @@ UD. AQIN TANI - Local Print Server
 Server lokal untuk mencetak struk ke printer thermal USB
 menggunakan perintah ESC/POS (font firmware printer).
 
+=== Pasang library (sekali saja di tiap PC) ===
+  python -m pip install flask flask-cors pywin32
+
 === Jalankan langsung ===
   python print_server.py
 
@@ -20,8 +23,17 @@ import sys
 import os
 import platform
 import threading
-from flask import Flask, request, jsonify
-from flask_cors import CORS
+try:
+    from flask import Flask, request, jsonify
+    from flask_cors import CORS
+    if platform.system() == "Windows":
+        import win32print  # noqa: F401
+except ImportError as _e:
+    print("\nLibrary yang dibutuhkan server cetak belum terpasang (" + str(_e) + ").")
+    print("Jalankan perintah ini sekali, lalu ulangi perintah tadi:\n")
+    print("    python -m pip install flask flask-cors" + (" pywin32" if platform.system() == "Windows" else ""))
+    print()
+    sys.exit(1)
 
 # ========== KONFIGURASI ==========
 PORT = 9100
