@@ -9,6 +9,13 @@ const LOCAL_PRINT_SERVER = 'http://localhost:9100';
 const MAX_ITEMS_PER_PAGE = 10;
 const LINES_PER_PAGE = 33; // 14cm / (1/6 inch per line) ≈ 33 lines
 
+// Invoice kios mitra memakai huruf lebih kecil: 12 CPI (Elite) + spasi baris 33/216 inci.
+// 36 baris x 33/216 = 5,5 inci, sama persis dengan 33 baris x 1/6 inci, jadi batas potongan
+// kertas continuous form tidak bergeser. Lebar 90 karakter di 12 CPI = 7,5 inci (19 cm).
+const INVOICE_LINE_SPACING = 33;   // n/216 inci
+const INVOICE_LINES_PER_PAGE = 36;
+const INVOICE_W = 90;
+
 // === Terbilang ===
 const satuan = ['', 'Satu', 'Dua', 'Tiga', 'Empat', 'Lima', 'Enam', 'Tujuh', 'Delapan', 'Sembilan', 'Sepuluh', 'Sebelas'];
 function terbilang(n) {
@@ -37,6 +44,7 @@ class DotMatrixPrinter {
     ITALIC_ON: [0x1B, 0x34],
     ITALIC_OFF: [0x1B, 0x35],
     CPI_10: [0x1B, 0x50],
+    CPI_12: [0x1B, 0x4D],
     LINE_SPACING_1_6: [0x1B, 0x32], // 1/6 inch = 6 LPI
   };
 
@@ -77,8 +85,8 @@ class DotMatrixPrinter {
   }
 
   // Padding baris kosong sampai genap LINES_PER_PAGE (= batas potongan kertas)
-  padToPageEnd(d) {
-    while (this.lineCount < LINES_PER_PAGE) {
+  padToPageEnd(d, linesPerPage = LINES_PER_PAGE) {
+    while (this.lineCount < linesPerPage) {
       d.push(...this.cmd.LF);
       this.lineCount++;
     }
@@ -103,11 +111,11 @@ class DotMatrixPrinter {
 
   // ============================================================
   // BUILD INVOICE - ESC/P raw
-  // Continuous form: setiap halaman tepat 33 baris, tanpa FF
+  // Continuous form: setiap halaman tepat 36 baris (12 CPI, spasi 33/216"), tanpa FF
   // ============================================================
   buildPartnerInvoice(order, storeSettings = {}) {
     const d = [];
-    const W = this.W;
+    const W = INVOICE_W;
     const storeName = storeSettings?.store_name || 'UD. AQIN TANI';
     const storePhone = storeSettings?.phone || '';
     const tgl = this.fmtDate(order.created_at);
@@ -125,11 +133,11 @@ class DotMatrixPrinter {
 
     // Init
     d.push(...this.cmd.INIT);
-    d.push(...this.cmd.CPI_10);
-    d.push(...this.cmd.LINE_SPACING_1_6);
+    d.push(...this.cmd.CPI_12);
+    d.push(0x1B, 0x33, INVOICE_LINE_SPACING);
     this.lineCount = 0;
 
-    const R = 40; // kolom mulai sisi kanan
+    const R = 46; // kolom mulai sisi kanan
 
     for (let p = 0; p < totalPages; p++) {
       const pageItems = pages[p];
@@ -189,11 +197,11 @@ class DotMatrixPrinter {
       d.push(...this.cmd.BOLD_ON);
       this.writeLine(d,
         this.pad('No.', 4) +
-        this.pad('Nama Barang', 28) +
+        this.pad('Nama Barang', 36) +
         this.pad('Jumlah CTN', 12, 'center') +
         this.pad('Quantity', 10, 'center') +
         this.pad('Harga', 12, 'right') +
-        this.pad('Jumlah', 14, 'right')
+        this.pad('Jumlah', 16, 'right')
       );
       d.push(...this.cmd.BOLD_OFF);
       this.writeLine(d, sep);
@@ -206,11 +214,11 @@ class DotMatrixPrinter {
         const totalQty = isDus ? this.fmtN(item.qty * (item.ipb || 1)) : this.fmtN(item.qty);
         this.writeLine(d,
           this.pad(String(startIdx + i + 1), 4) +
-          this.pad(item.name, 28) +
+          this.pad(item.name, 36) +
           this.pad(jmlCtn, 12, 'center') +
           this.pad(totalQty, 10, 'center') +
           this.pad(this.fmtN(item.price), 12, 'right') +
-          this.pad(this.fmtN(item.subtotal), 14, 'right')
+          this.pad(this.fmtN(item.subtotal), 16, 'right')
         );
       });
 
@@ -220,9 +228,9 @@ class DotMatrixPrinter {
         // ===== FOOTER (halaman terakhir) =====
         d.push(...this.cmd.BOLD_ON);
         this.writeLine(d,
-          this.pad('', 54) +
+          this.pad('', 62) +
           this.pad('Sub Total', 12, 'right') +
-          this.pad(this.fmtN(order.total), 14, 'right')
+          this.pad(this.fmtN(order.total), 16, 'right')
         );
         d.push(...this.cmd.BOLD_OFF);
         this.writeLine(d, sep);
@@ -234,7 +242,7 @@ class DotMatrixPrinter {
         this.writeLine(d, sep);
 
         // Catatan (kiri) + Ringkasan (kanan)
-        const leftCol = 44;
+        const leftCol = 50;
         const rightCol = W - leftCol;
 
         const catatanLines = [
@@ -281,7 +289,8 @@ class DotMatrixPrinter {
           if (i < sumLines.length) {
             const s = sumLines[i];
             if (s.bold) d.push(...this.cmd.BOLD_ON);
-            d.push(...this.textToBytes(this.pad(s.label, rightCol - s.val.length - 2) + ': ' + s.val));
+            // label rata kiri, angka rata kanan: titik dua dan angka selalu lurus
+            d.push(...this.textToBytes(this.pad(s.label, 18) + ': ' + this.pad(s.val, rightCol - 20, 'right')));
             if (s.bold) d.push(...this.cmd.BOLD_OFF);
           }
           d.push(...this.cmd.LF);
@@ -289,7 +298,7 @@ class DotMatrixPrinter {
         }
 
         // Pad sisa halaman terakhir sampai batas potongan kertas
-        this.padToPageEnd(d);
+        this.padToPageEnd(d, INVOICE_LINES_PER_PAGE);
 
       } else {
         // Bersambung
@@ -297,8 +306,8 @@ class DotMatrixPrinter {
         this.writeLine(d, this.pad('Bersambung...   Hal ' + (p + 1) + '/' + totalPages, W, 'right'));
         d.push(...this.cmd.ITALIC_OFF);
 
-        // Pad baris kosong sampai genap 33 baris (batas potongan kertas)
-        this.padToPageEnd(d);
+        // Pad baris kosong sampai genap 36 baris (batas potongan kertas)
+        this.padToPageEnd(d, INVOICE_LINES_PER_PAGE);
       }
     }
 
@@ -354,23 +363,23 @@ class DotMatrixPrinter {
         const unitLabel = displayUnit(item.name, isDus ? 'dus' : 'pcs').toUpperCase();
         const jmlCtn = item.qty + ' ' + unitLabel;
         const totalQty = isDus ? fN(item.qty * item.ipb) : fN(item.qty);
-        return `<tr><td class="c">${startIdx + i + 1}</td><td>${eH(item.name)}</td><td class="c">${jmlCtn}</td><td class="c">${totalQty}</td><td class="r">${fN(item.price)}</td><td class="r">${fN(item.subtotal)}</td></tr>`;
+        return `<tr><td class="c">${startIdx + i + 1}</td><td class="nm">${eH(item.name)}</td><td class="c">${jmlCtn}</td><td class="c">${totalQty}</td><td class="r">${fN(item.price)}</td><td class="r">${fN(item.subtotal)}</td></tr>`;
       }).join('');
 
       let headerHtml = isFirst
         ? `<div class="head">
             <div class="head-left"><h1>INVOICE</h1><div class="kepada">Kepada :<br><strong>${eH(order.partner_store_name)}</strong><br>${eH(order.partner_address || '')}</div></div>
-            <div class="head-right"><h2>${eH(storeName)}</h2><div style="font-size:8.5pt">Jl. Raya Labuhan Lombok, Wanasaba</div>${storePhone ? `<div style="font-size:8.5pt">Telp: ${eH(storePhone)}</div>` : ''}<table style="margin-top:6pt"><tr><td>No Invoice</td><td>: <strong>${eH(order.order_number)}</strong></td></tr><tr><td>Tanggal</td><td>: ${eH(tgl)}</td></tr></table></div>
+            <div class="head-right"><h2>${eH(storeName)}</h2><div style="font-size:7.5pt">Jl. Raya Labuhan Lombok, Wanasaba</div>${storePhone ? `<div style="font-size:7.5pt">Telp: ${eH(storePhone)}</div>` : ''}<table style="margin-top:6pt"><tr><td>No Invoice</td><td>: <strong>${eH(order.order_number)}</strong></td></tr><tr><td>Tanggal</td><td>: ${eH(tgl)}</td></tr></table></div>
           </div>${order.canvasser_name ? `<div class="sales">Kode Sales: <strong>${eH(order.canvasser_name)}</strong></div>` : ''}`
-        : `<div style="margin-bottom:4pt"><strong>${eH(storeName)}</strong> &mdash; INVOICE ${eH(order.order_number)}<br><span style="font-size:9pt">Kepada: ${eH(order.partner_store_name)} &nbsp;&nbsp; Tanggal: ${eH(tgl)}</span></div>`;
+        : `<div style="margin-bottom:4pt"><strong>${eH(storeName)}</strong> &mdash; INVOICE ${eH(order.order_number)}<br><span style="font-size:8pt">Kepada: ${eH(order.partner_store_name)} &nbsp;&nbsp; Tanggal: ${eH(tgl)}</span></div>`;
 
       let footerHtml = isLast
         ? `<div class="terbilang">Terbilang: <em>${eH(totalWords)}</em></div>
           <div class="bottom"><div class="catatan"><h3>Catatan :</h3><ul><li>Barang yang sudah dibeli tidak dapat dikembalikan kecuali ada perjanjian.</li><li>Mohon diperiksa dengan teliti (karena kami tidak menerima komplain setelah barang diterima).</li><li>Terima kasih.</li></ul></div><div class="summary"><table>${summaryRows}</table></div></div>`
-        : `<div style="text-align:right;font-style:italic;font-size:8.5pt;margin-top:4pt">Bersambung...   Hal ${p + 1}/${totalPages}</div>`;
+        : `<div style="text-align:right;font-style:italic;font-size:7.5pt;margin-top:4pt">Bersambung...   Hal ${p + 1}/${totalPages}</div>`;
 
       pagesHtml += `<div class="page" style="${pageBreak}">${headerHtml}
-        <table class="items"><thead><tr><th style="width:5%;" class="c">No.</th><th style="width:31%;">Nama Barang</th><th style="width:13%;" class="c">Jumlah CTN</th><th style="width:11%;" class="c">Quantity</th><th style="width:17%;" class="r">Harga</th><th style="width:23%;" class="r">Jumlah</th></tr></thead>
+        <table class="items"><thead><tr><th style="width:5%;" class="c">No.</th><th style="width:43%;">Nama Barang</th><th style="width:12%;" class="c">Jumlah CTN</th><th style="width:9%;" class="c">Quantity</th><th style="width:14%;" class="r">Harga</th><th style="width:17%;" class="r">Jumlah</th></tr></thead>
         <tbody>${tableRows}${isLast ? `<tr class="sub-row"><td colspan="5" style="text-align:right"><strong>Sub Total</strong></td><td style="text-align:right"><strong>${fN(order.total)}</strong></td></tr>` : ''}</tbody></table>
         ${footerHtml}</div>`;
     }
@@ -379,25 +388,26 @@ class DotMatrixPrinter {
 <style>
   @page { size: 22cm 14cm; margin: 6mm 8mm; }
   * { margin:0; padding:0; box-sizing:border-box; }
-  body { font: 10pt/1.3 'Courier New', monospace; color:#000; }
+  body { font: 9pt/1.25 'Courier New', monospace; color:#000; }
   .head { display:flex; justify-content:space-between; margin-bottom:4pt; }
   .head-left { width:50%; } .head-right { width:48%; }
-  .head-right table { text-align:left; font-size:9pt; }
-  h1 { font-size:15pt; font-weight:bold; margin-bottom:2pt; }
-  h2 { font-size:14pt; font-weight:bold; margin-bottom:1pt; }
-  .kepada { font-size:9pt; } .kepada strong { font-size:10pt; }
-  .sales { font-size:9pt; margin:3pt 0 4pt; }
-  .items { width:100%; border-collapse:collapse; font-size:9pt; }
+  .head-right table { text-align:left; font-size:8pt; }
+  h1 { font-size:13.5pt; font-weight:bold; margin-bottom:2pt; }
+  h2 { font-size:12.5pt; font-weight:bold; margin-bottom:1pt; }
+  .kepada { font-size:8pt; } .kepada strong { font-size:9pt; }
+  .sales { font-size:8pt; margin:2pt 0 3pt; }
+  .items { width:100%; border-collapse:collapse; font-size:8pt; table-layout:fixed; }
+  .items td.nm { white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
   .items th { font-weight:bold; text-align:left; padding:2pt 3pt; border-top:1.5pt solid #000; border-bottom:1.5pt solid #000; }
-  .items td { padding:1.5pt 3pt; border-bottom:0.5pt dotted #999; }
+  .items td { padding:1pt 3pt; border-bottom:0.5pt dotted #999; }
   .items .c { text-align:center; } .items .r { text-align:right; }
   .items th.c { text-align:center; } .items th.r { text-align:right; }
   .sub-row td { font-weight:bold; border-top:1.5pt solid #000; border-bottom:none; }
-  .terbilang { font-size:8.5pt; font-style:italic; padding:3pt 0; border-top:1pt solid #000; border-bottom:1pt solid #000; margin:2pt 0; }
-  .bottom { display:flex; justify-content:space-between; margin-top:3pt; font-size:8.5pt; }
-  .catatan { width:52%; } .catatan h3 { font-size:9pt; font-weight:bold; margin-bottom:2pt; }
+  .terbilang { font-size:7.5pt; font-style:italic; padding:3pt 0; border-top:1pt solid #000; border-bottom:1pt solid #000; margin:2pt 0; }
+  .bottom { display:flex; justify-content:space-between; margin-top:3pt; font-size:7.5pt; }
+  .catatan { width:52%; } .catatan h3 { font-size:8pt; font-weight:bold; margin-bottom:2pt; }
   .catatan ul { list-style:none; padding:0; } .catatan li { margin-bottom:1pt; } .catatan li:before { content:"- "; }
-  .summary { width:44%; } .summary table { width:100%; font-size:9pt; border-collapse:collapse; }
+  .summary { width:44%; } .summary table { width:100%; font-size:8pt; border-collapse:collapse; }
   .summary td { padding:1pt 2pt; } .summary .r { text-align:right; }
   .summary .grand td { border-top:1.5pt solid #000; font-weight:bold; padding-top:2pt; }
 </style></head><body>${pagesHtml}</body></html>`;
