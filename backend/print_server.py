@@ -23,6 +23,19 @@ import sys
 import os
 import platform
 import threading
+
+# Saat berjalan tersembunyi (pythonw dari auto-start) tidak ada jendela untuk pesan error.
+# Semua pesan ditulis ke print_server.log di folder yang sama, supaya penyebab gagal bisa dilihat.
+LOG_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "print_server.log")
+if sys.stdout is None or sys.stderr is None:
+    try:
+        _log = open(LOG_PATH, "a", encoding="utf-8", buffering=1)
+        sys.stdout = sys.stdout or _log
+        sys.stderr = sys.stderr or _log
+        import datetime as _dt
+        print(f"\n===== {_dt.datetime.now():%Y-%m-%d %H:%M:%S} print server dijalankan otomatis =====")
+    except Exception:
+        pass
 try:
     from flask import Flask, request, jsonify
     from flask_cors import CORS
@@ -44,9 +57,13 @@ DOTMATRIX_PRINTER_NAME = None  # Nama printer dot matrix (Epson LX-310), None = 
 app = Flask(__name__)
 # Hanya halaman aplikasi Aqin Tani yang boleh menyuruh mencetak, bukan sembarang situs web.
 # Tambahkan alamat lain lewat variabel lingkungan AQINTANI_ORIGINS (dipisah koma) bila perlu.
-ALLOWED_ORIGINS = [r"^https://([a-z0-9-]+\.)*aqintani\.online$", r"^https?://localhost(:\d+)?$", r"^https?://127\.0\.0\.1(:\d+)?$"]
+ALLOWED_ORIGINS = [r"^https?://([a-z0-9-]+\.)*aqintani\.online$", r"^https?://localhost(:\d+)?$", r"^https?://127\.0\.0\.1(:\d+)?$"]
 ALLOWED_ORIGINS += [o.strip() for o in os.environ.get("AQINTANI_ORIGINS", "").split(",") if o.strip()]
-CORS(app, origins=ALLOWED_ORIGINS)
+try:
+    # izinkan permintaan "jaringan lokal" dari Chrome (situs https -> localhost)
+    CORS(app, origins=ALLOWED_ORIGINS, allow_private_network=True)
+except TypeError:  # flask-cors versi lama
+    CORS(app, origins=ALLOWED_ORIGINS)
 
 
 @app.before_request
@@ -56,7 +73,17 @@ def block_other_sites():
     from flask import request as rq
     origin = rq.headers.get("Origin")
     if origin and not any(re.match(p, origin) if p.startswith("^") else origin == p for p in ALLOWED_ORIGINS):
+        print(f"[DITOLAK] permintaan dari {origin}. Bila ini alamat aplikasi Anda, jalankan server dengan "
+              f"variabel AQINTANI_ORIGINS={origin}")
         return jsonify({"error": "Asal permintaan tidak diizinkan"}), 403
+
+
+@app.after_request
+def allow_private_network(resp):
+    # Chrome meminta izin khusus sebelum situs https boleh menghubungi server di komputer ini
+    if request.headers.get("Access-Control-Request-Private-Network") == "true" and resp.headers.get("Access-Control-Allow-Origin"):
+        resp.headers.set("Access-Control-Allow-Private-Network", "true")
+    return resp
 
 
 # ========== PRINTER HANDLER ==========
@@ -284,9 +311,27 @@ def test_print():
         return jsonify({'error': str(e)}), 500
 
 
+def server_running():
+    """True bila print server sudah menjawab di port 9100."""
+    import urllib.request
+    try:
+        with urllib.request.urlopen(f"http://127.0.0.1:{PORT}/status", timeout=2) as r:
+            return r.status == 200
+    except Exception:
+        return False
+
+
 def run_server():
-    # hanya bisa diakses dari komputer kasir ini, tidak dari komputer lain di jaringan
-    app.run(host='127.0.0.1', port=PORT, debug=False, use_reloader=False)
+    if server_running():
+        print(f"Print server SUDAH berjalan di http://localhost:{PORT} (mungkin dari auto-start). Tidak perlu dijalankan lagi.")
+        return
+    try:
+        # hanya bisa diakses dari komputer kasir ini, tidak dari komputer lain di jaringan
+        app.run(host='127.0.0.1', port=PORT, debug=False, use_reloader=False)
+    except OSError as e:
+        print(f"GAGAL menjalankan server di port {PORT}: {e}")
+        print("Port mungkin dipakai program lain. Restart PC lalu coba lagi.")
+        raise
 
 
 # ========== AUTO-START SETUP (Windows Startup Folder) ==========
@@ -357,6 +402,23 @@ def install_autostart():
         print(f"  Untuk hapus auto-start:")
         print(f"    python print_server.py remove")
         print("=" * 55)
+        # langsung jalankan sekarang juga, tidak perlu restart PC
+        if not server_running():
+            try:
+                os.startfile(vbs_path)
+                import time
+                for _ in range(15):
+                    time.sleep(1)
+                    if server_running():
+                        break
+            except Exception as e:
+                print(f"  (Gagal menjalankan otomatis: {e})")
+        if server_running():
+            print(f"  Print server SUDAH BERJALAN di http://localhost:{PORT}")
+        else:
+            print("  PERINGATAN: print server belum berjalan.")
+            print(f"  Lihat penyebabnya di {LOG_PATH}")
+            print("  atau jalankan langsung: python print_server.py")
         return True
     except Exception as e:
         print(f"ERROR: Gagal menulis file: {e}")
@@ -385,8 +447,26 @@ def remove_autostart():
 
 
 def check_autostart_status():
-    """Cek apakah auto-start sudah aktif."""
+    """Cek auto-start dan apakah server benar-benar berjalan."""
     vbs_path = get_vbs_path()
+    print("")
+    if server_running():
+        print(f"  SERVER: BERJALAN di http://localhost:{PORT}")
+        print("  Bila aplikasi tetap bilang tidak aktif: di Chrome, klik ikon di kiri alamat aplikasi")
+        print("  -> Setelan situs -> izinkan 'Akses jaringan lokal' (Local network access), lalu muat ulang.")
+    else:
+        print("  SERVER: TIDAK BERJALAN")
+        print(f"  Lihat penyebabnya di: {LOG_PATH}")
+        print("  Atau jalankan langsung untuk melihat pesannya: python print_server.py")
+    if os.path.exists(vbs_path):
+        try:
+            content = open(vbs_path, encoding="utf-8", errors="ignore").read()
+            if os.path.abspath(__file__) not in content:
+                print("  PERINGATAN: auto-start menunjuk ke file print_server.py di lokasi lain.")
+                print("  Jalankan ulang 'python print_server.py install' dari folder ini.")
+        except Exception:
+            pass
+    print("")
     if os.path.exists(vbs_path):
         print("=" * 55)
         print("  STATUS: AUTO-START AKTIF")

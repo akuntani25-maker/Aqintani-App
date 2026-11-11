@@ -9,6 +9,7 @@ import { thermalPrinter } from '../utils/ThermalPrinter';
 import { dotMatrixPrinter } from '../utils/DotMatrixPrinter';
 import { escapeHtml as e } from '../utils/htmlEscape';
 import { displayUnit } from '../utils/unitDisplay';
+import PrintServerHelp from '../components/PrintServerHelp';
 
 const SEP = '================================';
 const CHAR_W = 32;
@@ -253,6 +254,7 @@ export const PartnerOrderReceipt = () => {
           ) : (
             <div>
               <p><strong>Print Server tidak aktif.</strong> Jalankan <a href={`${process.env.REACT_APP_BACKEND_URL}/api/download/print-server`} download="print_server.py" className="underline font-semibold">print_server.py</a> di PC untuk cetak struk thermal & faktur dot matrix dengan font bawaan printer.</p>
+              <PrintServerHelp />
             </div>
           )}
         </div>

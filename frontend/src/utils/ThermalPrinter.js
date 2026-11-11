@@ -2,7 +2,9 @@
 // Supports various thermal printers (58mm, 48mm)
 import { displayUnit } from './unitDisplay';
 
-const LOCAL_PRINT_SERVER = 'http://localhost:9100';
+// Coba 'localhost' dulu, lalu 127.0.0.1 (sebagian PC Windows mengarahkan localhost ke IPv6)
+const PRINT_SERVER_CANDIDATES = ['http://localhost:9100', 'http://127.0.0.1:9100'];
+let LOCAL_PRINT_SERVER = PRINT_SERVER_CANDIDATES[0];
 
 class ThermalPrinter {
   constructor() {
@@ -142,8 +144,13 @@ class ThermalPrinter {
   // ======= LOCAL PRINT SERVER =======
   async checkLocalServer() {
     try {
-      const res = await fetch(`${LOCAL_PRINT_SERVER}/status`, { signal: AbortSignal.timeout(2000) });
-      return res.ok;
+      for (const base of PRINT_SERVER_CANDIDATES) {
+        try {
+          const res = await fetch(`${base}/status`, { signal: AbortSignal.timeout(2000) });
+          if (res.ok) { LOCAL_PRINT_SERVER = base; return true; }
+        } catch { /* coba alamat berikutnya */ }
+      }
+      return false;
     } catch { return false; }
   }
 

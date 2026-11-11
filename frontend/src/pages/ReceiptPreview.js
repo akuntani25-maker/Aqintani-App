@@ -7,6 +7,7 @@ import { ArrowLeft, Bluetooth, Loader2, Printer } from '../components/icons';
 import { toast } from 'sonner';
 import { thermalPrinter } from '../utils/ThermalPrinter';
 import { escapeHtml as e } from '../utils/htmlEscape';
+import PrintServerHelp from '../components/PrintServerHelp';
 
 const SEP = '================================';
 const CHAR_W = 32;
@@ -200,6 +201,7 @@ export const ReceiptPreview = () => {
             <div>
               <p><strong>Print Server tidak aktif.</strong> "Cetak Struk" akan menggunakan browser print.</p>
               <p className="mt-1">Untuk kualitas terbaik, <a href={`${process.env.REACT_APP_BACKEND_URL}/api/download/print-server`} download="print_server.py" className="underline font-semibold hover:text-amber-900">download print_server.py</a> dan jalankan di PC Anda.</p>
+              <PrintServerHelp />
             </div>
           )}
         </div>
